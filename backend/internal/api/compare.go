@@ -9,12 +9,12 @@ import (
 )
 
 type compareBody struct {
-	SourceRunID string                   `json:"source_run_id"`
-	TargetRunID string                   `json:"target_run_id"`
-	Source      []comparison.ObjectItem  `json:"source"`
-	Target      []comparison.ObjectItem  `json:"target"`
-	Statuses    []string                 `json:"statuses"`
-	ObjectType  string                   `json:"object_type"`
+	SourceRunID string                  `json:"source_run_id"`
+	TargetRunID string                  `json:"target_run_id"`
+	Source      []comparison.ObjectItem `json:"source"`
+	Target      []comparison.ObjectItem `json:"target"`
+	Statuses    []string                `json:"statuses"`
+	ObjectType  string                  `json:"object_type"`
 }
 
 func registerCompareRoutes(mux *http.ServeMux) {
