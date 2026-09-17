@@ -3,6 +3,7 @@ import { navigationSections, Shell } from "./components/layout/Shell";
 import {
   AuditRunsPage,
   EnvironmentsPage,
+  FindingsPage,
   InventoryPage,
   MappingsPage,
   OverviewPage,
@@ -26,6 +27,8 @@ export function App() {
     content = <MappingsPage />;
   } else if (section === "Schema Drift") {
     content = <SchemaDriftPage />;
+  } else if (section === "Findings") {
+    content = <FindingsPage />;
   }
 
   return (
