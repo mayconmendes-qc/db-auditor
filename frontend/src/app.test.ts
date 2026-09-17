@@ -8,6 +8,7 @@ describe("navigationSections", () => {
       "Ambientes",
       "Audit runs",
       "Inventário",
+      "Mappings",
       "Findings",
     ]);
   });

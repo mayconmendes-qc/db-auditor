@@ -10,6 +10,8 @@ import type {
   HypertableSnapshot,
   ItemsResponse,
   JobSnapshot,
+  MappingCandidate,
+  ObjectMapping,
   PolicySnapshot,
   SchemaSnapshot,
 } from "../types";
@@ -27,6 +29,19 @@ async function getJSON<T>(path: string): Promise<T> {
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `API ${path} failed with ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function patchJSON<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -102,4 +117,34 @@ export const api = {
       environment_id: environmentId,
       profile,
     }),
+  mappings: (params?: {
+    source_environment_id?: string;
+    target_environment_id?: string;
+    status?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.source_environment_id) {
+      q.set("source_environment_id", params.source_environment_id);
+    }
+    if (params?.target_environment_id) {
+      q.set("target_environment_id", params.target_environment_id);
+    }
+    if (params?.status) {
+      q.set("status", params.status);
+    }
+    const qs = q.toString();
+    return getJSON<ItemsResponse<ObjectMapping>>(
+      `/api/v1/mappings${qs ? `?${qs}` : ""}`,
+    );
+  },
+  createMapping: (body: Partial<ObjectMapping>) =>
+    postJSON<ObjectMapping>("/api/v1/mappings", body),
+  updateMappingStatus: (id: string, status: string, notes?: string) =>
+    patchJSON<ObjectMapping>(`/api/v1/mappings/${id}`, { status, notes }),
+  suggestMappings: (body: {
+    source: Array<Record<string, string>>;
+    target: Array<Record<string, string>>;
+    target_default_db?: string;
+  }) =>
+    postJSON<ItemsResponse<MappingCandidate>>("/api/v1/mappings/suggest", body),
 };
