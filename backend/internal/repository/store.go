@@ -31,7 +31,8 @@ func (s *Store) WithTx(ctx context.Context, fn func(q *sqlc.Queries) error) erro
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	// Rollback is a no-op after Commit; discard error to satisfy errcheck.
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := fn(s.q.WithTx(tx)); err != nil {
 		return err
