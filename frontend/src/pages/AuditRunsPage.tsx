@@ -115,18 +115,18 @@ export function AuditRunsPage() {
             <div className="w-full sm:max-w-md">
               <label className="mb-1 block text-xs text-slate-400">
                 Ambiente
+                <select
+                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  value={triggerEnv}
+                  onChange={(e) => setTriggerEnv(e.target.value)}
+                >
+                  {(envs ?? []).map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <select
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                value={triggerEnv}
-                onChange={(e) => setTriggerEnv(e.target.value)}
-              >
-                {(envs ?? []).map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </select>
             </div>
             <Button onClick={onTrigger} disabled={busy || !triggerEnv}>
               {busy ? "Executando…" : "Executar agora"}
