@@ -115,7 +115,7 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 			}
 			out = append(out, f)
 		}
-		if !hasCompression[key] && ht.SizeBytes > (1 << 30) {
+		if !hasCompression[key] && ht.SizeBytes > (1<<30) {
 			title := fmt.Sprintf("Large hypertable without compression policy: %s", key)
 			f := Finding{
 				EnvironmentID: facts.EnvironmentID,
