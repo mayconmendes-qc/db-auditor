@@ -30,6 +30,10 @@ type InventoryStore interface {
 	ListObjectMappings(ctx context.Context, sourceEnv, targetEnv, status string) ([]repository.ObjectMapping, error)
 	CreateObjectMapping(ctx context.Context, p repository.CreateObjectMappingParams) (*repository.ObjectMapping, error)
 	UpdateObjectMappingStatus(ctx context.Context, id, status string, notes string) (*repository.ObjectMapping, error)
+	ListFindings(ctx context.Context, environmentID, findingType, severity, status string, limit int) ([]repository.Finding, error)
+	GetFinding(ctx context.Context, id string) (*repository.Finding, error)
+	UpdateFindingStatus(ctx context.Context, id, status, notes string) (*repository.Finding, error)
+	UpsertFinding(ctx context.Context, p repository.UpsertFindingParams) (*repository.Finding, error)
 }
 
 // HandlerOptions wires optional run trigger support.
@@ -57,6 +61,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerRunRoutes(mux, store, opts.Runner)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
+	registerFindingRoutes(mux, store)
 	return mux
 }
 
@@ -72,7 +77,7 @@ func ready(store readinessChecker) http.HandlerFunc {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ready"})
 	}
 }
 
