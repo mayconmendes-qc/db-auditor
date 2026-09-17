@@ -14,8 +14,8 @@ import (
 type DiscoveryMode string
 
 const (
-	ModeSingleDatabase DiscoveryMode = "single_database" // Tiger-style: one DB, many schemas
-	ModeMultiDatabase  DiscoveryMode = "multi_database"  // Unifique-style: many DBs
+	ModeSingleDatabase DiscoveryMode = "single_database"
+	ModeMultiDatabase  DiscoveryMode = "multi_database"
 )
 
 // DiscoveryResult holds topology facts plus partial errors (T-030).
@@ -27,8 +27,6 @@ type DiscoveryResult struct {
 }
 
 // DiscoverTopology connects to the target and collects server/database/schema facts.
-// In multi_database mode it opens a controlled connection per eligible database for schemas.
-// Inaccessible databases are recorded as PartialError and do not abort the whole discovery.
 func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, scope config.Scope) (DiscoveryResult, error) {
 	var result DiscoveryResult
 
@@ -65,14 +63,14 @@ func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, s
 			dbURL, err := rewriteDatabase(baseURL, db.Name)
 			if err != nil {
 				result.Errors = append(result.Errors, PartialError{
-					Database: db.Name, Op: "rewrite_url", Err: err.Error(),
+					Database: db.Name, Op: "rewrite_url", Message: err.Error(),
 				})
 				continue
 			}
 			dbConn, err := pgx.Connect(ctx, dbURL)
 			if err != nil {
 				result.Errors = append(result.Errors, PartialError{
-					Database: db.Name, Op: "connect", Err: err.Error(),
+					Database: db.Name, Op: "connect", Message: err.Error(),
 				})
 				continue
 			}
@@ -80,7 +78,7 @@ func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, s
 			_ = dbConn.Close(ctx)
 			if err != nil {
 				result.Errors = append(result.Errors, PartialError{
-					Database: db.Name, Op: "collect_schemas", Err: err.Error(),
+					Database: db.Name, Op: "collect_schemas", Message: err.Error(),
 				})
 				continue
 			}

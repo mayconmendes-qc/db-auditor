@@ -1,13 +1,12 @@
 package postgres
 
 // SQL kept in sync with backend/sql/collectors/postgres/*.sql (source of truth for review).
-// go:embed cannot reference paths outside this package directory.
 
 const serverSQL = `
 SELECT
   current_setting('server_version') AS server_version,
   pg_postmaster_start_time() AS started_at,
-  now() - pg_postmaster_start_time() AS uptime,
+  (now() - pg_postmaster_start_time())::text AS uptime,
   current_setting('TimeZone') AS timezone,
   current_setting('server_encoding') AS server_encoding,
   current_setting('max_connections')::int AS max_connections,
