@@ -12,6 +12,7 @@ import (
 	"github.com/mayconmendes-qc/timescale-auditor/internal/api"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/database"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
 
 func main() {
@@ -24,12 +25,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	store, err := database.NewPool(ctx, cfg.Database)
+	pool, err := database.NewPool(ctx, cfg.Database)
 	if err != nil {
 		slog.Error("could not connect to snapshot store", "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer pool.Close()
+
+	store := repository.NewStore(pool)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddress,
