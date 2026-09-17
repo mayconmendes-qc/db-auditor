@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
 import { api } from "../services/api";
 import type { Finding } from "../types";
@@ -33,7 +33,7 @@ function statusTone(
   return "neutral";
 }
 
-/** Demo facts so analyze works without live inventory load. */
+/** Demo facts covering Sprint 6 + Sprint 7 analyzers. */
 const demoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
   tables: [
@@ -92,6 +92,57 @@ const demoFacts = {
       size_bytes: 900_000_000,
     },
   ],
+  caggs: [
+    {
+      database: "app",
+      schema: "public",
+      view_name: "metrics_1h",
+      has_refresh_policy: false,
+      materialization_schema: "_timescaledb_internal",
+      materialization_hypertable: "_materialized_hypertable_1",
+    },
+    {
+      database: "app",
+      schema: "public",
+      view_name: "metrics_1d",
+      has_refresh_policy: true,
+    },
+  ],
+  policies: [
+    {
+      database: "app",
+      job_id: 101,
+      policy_type: "retention",
+      hypertable_schema: "public",
+      hypertable_name: "metrics",
+      last_run_status: "failed",
+      schedule_interval: "1 day",
+      proc_name: "policy_retention",
+    },
+  ],
+  jobs: [
+    {
+      database: "app",
+      job_id: 202,
+      proc_name: "custom_cleanup",
+      last_run_status: "failed",
+      total_failures: 4,
+      scheduled: true,
+    },
+  ],
+  activity: [
+    {
+      database: "app",
+      schema: "public",
+      name: "legacy_events",
+      object_type: "table",
+      days_since_dml: 180,
+      n_live_tup: 1000,
+      n_tup_ins: 0,
+      n_tup_upd: 0,
+      n_tup_del: 0,
+    },
+  ],
 };
 
 export function FindingsPage() {
@@ -148,24 +199,46 @@ export function FindingsPage() {
     }
   };
 
+  const health = useMemo(() => {
+    const open = items.filter((f) => f.status === "open");
+    const byPrefix = (prefix: string) =>
+      open.filter((f) => f.finding_type.startsWith(prefix)).length;
+    return {
+      open: open.length,
+      cagg: byPrefix("cagg."),
+      policy: byPrefix("policy.") + byPrefix("job."),
+      inactivity: byPrefix("inactivity."),
+      storage: byPrefix("storage."),
+      index: byPrefix("index."),
+      chunk: byPrefix("chunk."),
+    };
+  }, [items]);
+
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 6
+        SPRINT 6 + 7
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Findings
       </h1>
       <p className="mt-3 max-w-2xl text-slate-400">
-        Diagnósticos gerados por analyzers (storage, índices, chunks) com
-        triagem, evidências e deduplicação por first_seen/last_seen.
+        Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e
+        inatividade (POSSIBLY_INACTIVE — sem exclusão automática).
       </p>
 
       <div className="mt-8 space-y-6">
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Card title="Open" subtitle={String(health.open)} />
+          <Card title="CAGG" subtitle={String(health.cagg)} />
+          <Card title="Policies/Jobs" subtitle={String(health.policy)} />
+          <Card title="Inatividade" subtitle={String(health.inactivity)} />
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-3">
           <Input
             label="Finding type"
-            placeholder="storage.top_consumer"
+            placeholder="cagg.missing_refresh_policy"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
           />
@@ -264,6 +337,12 @@ export function FindingsPage() {
                   : "—"}
               </li>
             </ul>
+            {selected.finding_type.startsWith("inactivity.") ? (
+              <p className="mt-3 text-xs text-amber-300">
+                Classificação POSSIBLY_INACTIVE — o auditor nunca recomenda
+                DROP, TRUNCATE ou exclusão automática.
+              </p>
+            ) : null}
             {selected.evidence ? (
               <pre className="mt-3 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-400">
                 {JSON.stringify(selected.evidence, null, 2)}
