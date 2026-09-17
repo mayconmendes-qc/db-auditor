@@ -66,42 +66,42 @@ type SnapshotFacts struct {
 
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {
-	Database   string
-	Schema     string
-	Name       string
-	SizeBytes  int64
-	CollectedAt time.Time
+	Database    string    `json:"database"`
+	Schema      string    `json:"schema"`
+	Name        string    `json:"name"`
+	SizeBytes   int64     `json:"size_bytes"`
+	CollectedAt time.Time `json:"collected_at,omitempty"`
 }
 
 // IndexFact carries scan counters when available.
 type IndexFact struct {
-	Database   string
-	Schema     string
-	TableName  string
-	IndexName  string
-	IdxScan    int64
-	SizeBytes  int64
-	IsPrimary  bool
-	IsUnique   bool
-	Definition string
+	Database   string `json:"database"`
+	Schema     string `json:"schema"`
+	TableName  string `json:"table_name"`
+	IndexName  string `json:"index_name"`
+	IdxScan    int64  `json:"idx_scan"`
+	SizeBytes  int64  `json:"size_bytes"`
+	IsPrimary  bool   `json:"is_primary"`
+	IsUnique   bool   `json:"is_unique"`
+	Definition string `json:"definition"`
 }
 
 // HypertableFact summarizes chunk topology.
 type HypertableFact struct {
-	Database   string
-	Schema     string
-	Name       string
-	NumChunks  int
-	SizeBytes  int64
+	Database  string `json:"database"`
+	Schema    string `json:"schema"`
+	Name      string `json:"name"`
+	NumChunks int    `json:"num_chunks"`
+	SizeBytes int64  `json:"size_bytes"`
 }
 
 // ChunkFact is a single chunk size observation.
 type ChunkFact struct {
-	Database       string
-	Schema         string
-	HypertableName string
-	ChunkName      string
-	SizeBytes      int64
+	Database       string `json:"database"`
+	Schema         string `json:"schema"`
+	HypertableName string `json:"hypertable_name"`
+	ChunkName      string `json:"chunk_name"`
+	SizeBytes      int64  `json:"size_bytes"`
 }
 
 // Analyzer produces findings from snapshot facts.
