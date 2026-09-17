@@ -43,15 +43,27 @@ services:
       retries: 5
       start_period: 5s
 
+  # Bun state lives only in the named volume frontend-bun-home (never on the repo root).
   frontend:
     image: oven/bun:1.2-alpine
     working_dir: /app
+    environment:
+      HOME: /bun-home
+      BUN_INSTALL: /bun-home/.bun
+      BUN_INSTALL_CACHE_DIR: /bun-home/.bun/install/cache
+      XDG_CONFIG_HOME: /bun-home/.config
+      XDG_CACHE_HOME: /bun-home/.cache
+      XDG_DATA_HOME: /bun-home/.local/share
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     volumes:
       - ./frontend:/app
-      - frontend-bun-cache:/root/.bun
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
-    command: ["sh", "-c", "bun install && bun run dev --host 0.0.0.0 --port 5173"]
+      - frontend-bun-home:/bun-home
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p \"$$HOME/.bun/install/cache\" \"$$HOME/.config\" \"$$HOME/.cache\" \"$$HOME/.local/share\" && bun install && bun run dev --host 0.0.0.0 --port 5173",
+      ]
     ports:
       - "${FRONTEND_HTTP_PORT:-5173}:5173"
     networks: [auditor]
@@ -73,9 +85,16 @@ services:
   frontend-tools:
     image: oven/bun:1.2-alpine
     working_dir: /app
+    environment:
+      HOME: /bun-home
+      BUN_INSTALL: /bun-home/.bun
+      BUN_INSTALL_CACHE_DIR: /bun-home/.bun/install/cache
+      XDG_CONFIG_HOME: /bun-home/.config
+      XDG_CACHE_HOME: /bun-home/.cache
+      XDG_DATA_HOME: /bun-home/.local/share
     volumes:
       - ./frontend:/app
-      - frontend-bun-cache:/root/.bun
+      - frontend-bun-home:/bun-home
     networks: [auditor]
     profiles: ["tools"]
 
@@ -94,7 +113,7 @@ networks:
 
 volumes:
   snapshot-store:
-  frontend-bun-cache:
+  frontend-bun-home:
   go-mod-cache:
   go-build-cache:
   golangci-cache:
