@@ -61,6 +61,18 @@ func (s *stubStore) CreateObjectMapping(context.Context, repository.CreateObject
 func (s *stubStore) UpdateObjectMappingStatus(context.Context, string, string, string) (*repository.ObjectMapping, error) {
 	return &repository.ObjectMapping{}, nil
 }
+func (s *stubStore) ListFindings(context.Context, string, string, string, string, int) ([]repository.Finding, error) {
+	return []repository.Finding{}, nil
+}
+func (s *stubStore) GetFinding(context.Context, string) (*repository.Finding, error) {
+	return nil, nil
+}
+func (s *stubStore) UpdateFindingStatus(context.Context, string, string, string) (*repository.Finding, error) {
+	return &repository.Finding{}, nil
+}
+func (s *stubStore) UpsertFinding(context.Context, repository.UpsertFindingParams) (*repository.Finding, error) {
+	return &repository.Finding{}, nil
+}
 
 func TestHealth(t *testing.T) {
 	t.Parallel()
@@ -84,6 +96,17 @@ func TestListMappingsEmpty(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&stubStore{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/mappings", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+}
+
+func TestListFindingsEmpty(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/findings", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
