@@ -270,9 +270,7 @@ export function FindingsPage() {
               </pre>
             ) : null}
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                onClick={() => void triage(selected.id, "acknowledged")}
-              >
+              <Button onClick={() => void triage(selected.id, "acknowledged")}>
                 Acknowledge
               </Button>
               <Button onClick={() => void triage(selected.id, "resolved")}>
