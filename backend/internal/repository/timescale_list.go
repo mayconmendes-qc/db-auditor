@@ -37,17 +37,17 @@ type DimensionSnapshotRow struct {
 }
 
 type ChunkSnapshotRow struct {
-	ID            string     `json:"id"`
-	DatabaseName  string     `json:"database_name"`
-	SchemaName    string     `json:"schema_name"`
-	HypertableName string    `json:"hypertable_name"`
-	ChunkSchema   string     `json:"chunk_schema"`
-	ChunkName     string     `json:"chunk_name"`
-	RangeStart    *time.Time `json:"range_start"`
-	RangeEnd      *time.Time `json:"range_end"`
-	IsCompressed  bool       `json:"is_compressed"`
-	TotalSizeBytes int64     `json:"total_size_bytes"`
-	CollectedAt   time.Time  `json:"collected_at"`
+	ID             string     `json:"id"`
+	DatabaseName   string     `json:"database_name"`
+	SchemaName     string     `json:"schema_name"`
+	HypertableName string     `json:"hypertable_name"`
+	ChunkSchema    string     `json:"chunk_schema"`
+	ChunkName      string     `json:"chunk_name"`
+	RangeStart     *time.Time `json:"range_start"`
+	RangeEnd       *time.Time `json:"range_end"`
+	IsCompressed   bool       `json:"is_compressed"`
+	TotalSizeBytes int64      `json:"total_size_bytes"`
+	CollectedAt    time.Time  `json:"collected_at"`
 }
 
 type CAGGSnapshotRow struct {

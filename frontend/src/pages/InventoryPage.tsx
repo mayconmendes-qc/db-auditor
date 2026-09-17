@@ -229,7 +229,9 @@ export function InventoryPage() {
                     <td className="px-4 py-3 text-slate-300">
                       {h.database_name}
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{h.schema_name}</td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {h.schema_name}
+                    </td>
                     <td className="px-4 py-3 text-slate-100">
                       {h.hypertable_name}
                     </td>
@@ -357,7 +359,9 @@ export function InventoryPage() {
             )}
           </div>
           <div>
-            <h3 className="mb-2 text-sm font-medium text-slate-300">Policies</h3>
+            <h3 className="mb-2 text-sm font-medium text-slate-300">
+              Policies
+            </h3>
             {policies === null ? (
               <Skeleton className="h-32 w-full" />
             ) : policies.length === 0 ? (
@@ -366,7 +370,9 @@ export function InventoryPage() {
               <Table headers={["Tipo", "Hypertable"]}>
                 {policies.map((p) => (
                   <tr key={p.id} className="border-t border-slate-800">
-                    <td className="px-4 py-3 text-slate-100">{p.policy_type}</td>
+                    <td className="px-4 py-3 text-slate-100">
+                      {p.policy_type}
+                    </td>
                     <td className="px-4 py-3 text-slate-300">
                       {p.hypertable_name ?? "—"}
                     </td>
