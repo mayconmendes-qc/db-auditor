@@ -9,7 +9,6 @@ import (
 	"github.com/mayconmendes-qc/timescale-auditor/internal/collectors/postgres"
 )
 
-// Environment is a list projection for the API.
 type Environment struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
@@ -20,7 +19,6 @@ type Environment struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// DatabaseSnapshot is a persisted database inventory row.
 type DatabaseSnapshot struct {
 	ID               string    `json:"id"`
 	AuditRunID       string    `json:"audit_run_id"`
@@ -35,7 +33,6 @@ type DatabaseSnapshot struct {
 	CollectedAt      time.Time `json:"collected_at"`
 }
 
-// SchemaSnapshot is a persisted schema inventory row.
 type SchemaSnapshot struct {
 	ID                    string    `json:"id"`
 	AuditRunID            string    `json:"audit_run_id"`
@@ -72,21 +69,6 @@ func (s *Store) ListEnvironmentsAPI(ctx context.Context) ([]Environment, error) 
 	return out, nil
 }
 
-// SaveDiscoverySnapshots persists database and schema facts for an audit run.
-func (s *Store) SaveDiscoverySnapshots(
-	ctx context.Context,
-	environmentID, auditRunID pgtype.UUID,
-	databases []postgres.DatabaseFacts,
-	schemas []postgres.SchemaFacts,
-) error {
-	return s.WithTx(ctx, func(q interface {
-		// placeholder — use pool via outer store
-	}) error {
-		return nil
-	}) // replaced below
-}
-
-// SaveDiscovery persists discovery facts in one transaction.
 func (s *Store) SaveDiscovery(
 	ctx context.Context,
 	environmentID, auditRunID pgtype.UUID,
@@ -189,7 +171,7 @@ func uuidString(id pgtype.UUID) string {
 		return ""
 	}
 	b := id.Bytes
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func nullString(s string) any {
