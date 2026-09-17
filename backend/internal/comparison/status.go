@@ -5,11 +5,11 @@ package comparison
 type DriftStatus string
 
 const (
-	StatusMatch       DriftStatus = "MATCH"
-	StatusDrift       DriftStatus = "DRIFT"
-	StatusOnlySource  DriftStatus = "ONLY_SOURCE"
-	StatusOnlyTarget  DriftStatus = "ONLY_TARGET"
-	StatusUnknown     DriftStatus = "UNKNOWN"
+	StatusMatch      DriftStatus = "MATCH"
+	StatusDrift      DriftStatus = "DRIFT"
+	StatusOnlySource DriftStatus = "ONLY_SOURCE"
+	StatusOnlyTarget DriftStatus = "ONLY_TARGET"
+	StatusUnknown    DriftStatus = "UNKNOWN"
 )
 
 // FieldDiff records a single field difference when status is DRIFT.
@@ -21,14 +21,14 @@ type FieldDiff struct {
 
 // ObjectDiff is one compared object pair (or singleton).
 type ObjectDiff struct {
-	ObjectType   string      `json:"object_type"`
-	ObjectKey    string      `json:"object_key"`
-	Status       DriftStatus `json:"status"`
-	SourceName   string      `json:"source_name,omitempty"`
-	TargetName   string      `json:"target_name,omitempty"`
-	SourceFP     string      `json:"source_fingerprint,omitempty"`
-	TargetFP     string      `json:"target_fingerprint,omitempty"`
-	FieldDiffs   []FieldDiff `json:"field_diffs,omitempty"`
+	ObjectType string      `json:"object_type"`
+	ObjectKey  string      `json:"object_key"`
+	Status     DriftStatus `json:"status"`
+	SourceName string      `json:"source_name,omitempty"`
+	TargetName string      `json:"target_name,omitempty"`
+	SourceFP   string      `json:"source_fingerprint,omitempty"`
+	TargetFP   string      `json:"target_fingerprint,omitempty"`
+	FieldDiffs []FieldDiff `json:"field_diffs,omitempty"`
 }
 
 // Summary aggregates counts by status.
