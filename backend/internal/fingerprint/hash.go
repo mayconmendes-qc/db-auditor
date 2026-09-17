@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // HashPayload returns sha256 hex of a deterministic JSON encoding of v.
@@ -20,11 +21,11 @@ func HashPayload(v any) (string, error) {
 
 // TableFingerprintInput is the structural material for a table fingerprint.
 type TableFingerprintInput struct {
-	Schema      string                   `json:"schema"`
-	Name        string                   `json:"name"`
-	Columns     []ColumnFingerprintPart  `json:"columns"`
-	Constraints []string                 `json:"constraints"`
-	Indexes     []string                 `json:"indexes"`
+	Schema      string                     `json:"schema"`
+	Name        string                     `json:"name"`
+	Columns     []ColumnFingerprintPart    `json:"columns"`
+	Constraints []string                   `json:"constraints"`
+	Indexes     []string                   `json:"indexes"`
 	Hypertable  *HypertableFingerprintPart `json:"hypertable,omitempty"`
 }
 
@@ -39,22 +40,22 @@ type ColumnFingerprintPart struct {
 
 // HypertableFingerprintPart captures Timescale-specific table config.
 type HypertableFingerprintPart struct {
-	NumDimensions       int      `json:"num_dimensions"`
-	CompressionEnabled  bool     `json:"compression_enabled"`
-	DimensionColumns    []string `json:"dimension_columns"`
-	DimensionIntervals  []string `json:"dimension_intervals"`
+	NumDimensions      int      `json:"num_dimensions"`
+	CompressionEnabled bool     `json:"compression_enabled"`
+	DimensionColumns   []string `json:"dimension_columns"`
+	DimensionIntervals []string `json:"dimension_intervals"`
 }
 
 // FunctionFingerprintInput is the structural material for functions/procedures.
 type FunctionFingerprintInput struct {
-	Schema    string `json:"schema"`
-	Name      string `json:"name"`
-	Args      string `json:"args"`
-	Language  string `json:"language"`
-	Kind      string `json:"kind"`
-	Volatility string `json:"volatility"`
-	SecurityDefiner bool `json:"security_definer"`
-	Definition string `json:"definition"`
+	Schema          string `json:"schema"`
+	Name            string `json:"name"`
+	Args            string `json:"args"`
+	Language        string `json:"language"`
+	Kind            string `json:"kind"`
+	Volatility      string `json:"volatility"`
+	SecurityDefiner bool   `json:"security_definer"`
+	Definition      string `json:"definition"`
 }
 
 // ViewFingerprintInput is the structural material for views/matviews.
@@ -67,8 +68,8 @@ type ViewFingerprintInput struct {
 
 // FingerprintResult is the hash plus algorithm metadata.
 type FingerprintResult struct {
-	Hash              string `json:"hash"`
-	AlgorithmVersion  string `json:"algorithm_version"`
+	Hash             string `json:"hash"`
+	AlgorithmVersion string `json:"algorithm_version"`
 }
 
 // TableFingerprint builds a stable hash for a table structure.
