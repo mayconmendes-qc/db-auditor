@@ -1,71 +1,74 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
 
-type stubStore struct{}
+type stubStore struct {
+	pingErr error
+}
 
-func (stubStore) Ping(context.Context) error { return nil }
+func (s *stubStore) Ping(context.Context) error { return s.pingErr }
 
-func (stubStore) ListEnvironmentsAPI(context.Context) ([]repository.Environment, error) {
+func (s *stubStore) ListEnvironmentsAPI(context.Context) ([]repository.Environment, error) {
 	return []repository.Environment{}, nil
 }
-
-func (stubStore) ListDatabaseSnapshots(context.Context, string) ([]repository.DatabaseSnapshot, error) {
+func (s *stubStore) ListDatabaseSnapshots(context.Context, string) ([]repository.DatabaseSnapshot, error) {
 	return []repository.DatabaseSnapshot{}, nil
 }
-
-func (stubStore) ListSchemaSnapshots(context.Context, string) ([]repository.SchemaSnapshot, error) {
+func (s *stubStore) ListSchemaSnapshots(context.Context, string) ([]repository.SchemaSnapshot, error) {
 	return []repository.SchemaSnapshot{}, nil
 }
-
-type captureWriter struct {
-	code int
-	body bytes.Buffer
-	hdr  http.Header
+func (s *stubStore) ListHypertableSnapshots(context.Context, string) ([]repository.HypertableSnapshotRow, error) {
+	return []repository.HypertableSnapshotRow{}, nil
 }
-
-func (c *captureWriter) Header() http.Header {
-	if c.hdr == nil {
-		c.hdr = make(http.Header)
-	}
-	return c.hdr
+func (s *stubStore) ListDimensionSnapshots(context.Context, string) ([]repository.DimensionSnapshotRow, error) {
+	return []repository.DimensionSnapshotRow{}, nil
 }
-
-func (c *captureWriter) Write(b []byte) (int, error) {
-	if c.code == 0 {
-		c.code = http.StatusOK
-	}
-	return c.body.Write(b)
+func (s *stubStore) ListChunkSnapshots(context.Context, string) ([]repository.ChunkSnapshotRow, error) {
+	return []repository.ChunkSnapshotRow{}, nil
 }
-
-func (c *captureWriter) WriteHeader(statusCode int) {
-	c.code = statusCode
+func (s *stubStore) ListCAGGSnapshots(context.Context, string) ([]repository.CAGGSnapshotRow, error) {
+	return []repository.CAGGSnapshotRow{}, nil
+}
+func (s *stubStore) ListJobSnapshots(context.Context, string) ([]repository.JobSnapshotRow, error) {
+	return []repository.JobSnapshotRow{}, nil
+}
+func (s *stubStore) ListPolicySnapshots(context.Context, string) ([]repository.PolicySnapshotRow, error) {
+	return []repository.PolicySnapshotRow{}, nil
 }
 
 func TestHealth(t *testing.T) {
-	h := NewHandler(stubStore{})
-	w := &captureWriter{}
-	r, err := http.NewRequest(http.MethodGet, "/health", nil)
-	if err != nil {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	h.ServeHTTP(w, r)
-	if w.code != http.StatusOK {
-		t.Fatalf("status %d", w.code)
+	if body["status"] != "ok" {
+		t.Fatalf("body = %v", body)
 	}
-	var payload map[string]string
-	if err := json.Unmarshal(w.body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload["status"] != "ok" {
-		t.Fatalf("unexpected payload %#v", payload)
+}
+
+func TestListHypertablesEmpty(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/00000000-0000-0000-0000-000000000001/hypertables", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
 	}
 }

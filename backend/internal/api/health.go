@@ -18,6 +18,12 @@ type InventoryStore interface {
 	ListEnvironmentsAPI(ctx context.Context) ([]repository.Environment, error)
 	ListDatabaseSnapshots(ctx context.Context, environmentID string) ([]repository.DatabaseSnapshot, error)
 	ListSchemaSnapshots(ctx context.Context, environmentID string) ([]repository.SchemaSnapshot, error)
+	ListHypertableSnapshots(ctx context.Context, environmentID string) ([]repository.HypertableSnapshotRow, error)
+	ListDimensionSnapshots(ctx context.Context, environmentID string) ([]repository.DimensionSnapshotRow, error)
+	ListChunkSnapshots(ctx context.Context, environmentID string) ([]repository.ChunkSnapshotRow, error)
+	ListCAGGSnapshots(ctx context.Context, environmentID string) ([]repository.CAGGSnapshotRow, error)
+	ListJobSnapshots(ctx context.Context, environmentID string) ([]repository.JobSnapshotRow, error)
+	ListPolicySnapshots(ctx context.Context, environmentID string) ([]repository.PolicySnapshotRow, error)
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -27,6 +33,12 @@ func NewHandler(store InventoryStore) http.Handler {
 	mux.HandleFunc("GET /api/v1/environments", listEnvironments(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/databases", listDatabases(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/schemas", listSchemas(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/hypertables", listHypertables(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/dimensions", listDimensions(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/chunks", listChunks(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/continuous-aggregates", listCAGGs(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/jobs", listJobs(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/policies", listPolicies(store))
 	return mux
 }
 
@@ -61,38 +73,100 @@ func listEnvironments(store InventoryStore) http.HandlerFunc {
 }
 
 func listDatabases(store InventoryStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
-			return
-		}
-		items, err := store.ListDatabaseSnapshots(r.Context(), id)
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list databases failed"})
-			return
-		}
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListDatabaseSnapshots(ctx, id)
 		if items == nil {
 			items = []repository.DatabaseSnapshot{}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items})
-	}
+		return items, err
+	}, "list databases failed")
 }
 
 func listSchemas(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListSchemaSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.SchemaSnapshot{}
+		}
+		return items, err
+	}, "list schemas failed")
+}
+
+func listHypertables(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListHypertableSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.HypertableSnapshotRow{}
+		}
+		return items, err
+	}, "list hypertables failed")
+}
+
+func listDimensions(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListDimensionSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.DimensionSnapshotRow{}
+		}
+		return items, err
+	}, "list dimensions failed")
+}
+
+func listChunks(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListChunkSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.ChunkSnapshotRow{}
+		}
+		return items, err
+	}, "list chunks failed")
+}
+
+func listCAGGs(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListCAGGSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.CAGGSnapshotRow{}
+		}
+		return items, err
+	}, "list continuous aggregates failed")
+}
+
+func listJobs(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListJobSnapshots(ctx, id)
+		if items == nil {
+			items = []repository.JobSnapshotRow{}
+		}
+		return items, err
+	}, "list jobs failed")
+}
+
+func listPolicies(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id string) (any, error) {
+		items, err := store.ListPolicySnapshots(ctx, id)
+		if items == nil {
+			items = []repository.PolicySnapshotRow{}
+		}
+		return items, err
+	}, "list policies failed")
+}
+
+func envItems(
+	_ InventoryStore,
+	load func(ctx context.Context, id string) (any, error),
+	errMsg string,
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
 			return
 		}
-		items, err := store.ListSchemaSnapshots(r.Context(), id)
+		items, err := load(r.Context(), id)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list schemas failed"})
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errMsg})
 			return
-		}
-		if items == nil {
-			items = []repository.SchemaSnapshot{}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	}
