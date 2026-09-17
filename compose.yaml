@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - snapshot-store:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d:ro
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
     networks: [auditor]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -18,7 +18,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Containerfile
     environment:
       AUDITOR_HTTP_ADDRESS: :8080
