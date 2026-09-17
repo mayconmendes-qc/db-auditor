@@ -98,7 +98,9 @@ export function InventoryPage() {
       .catch((err: unknown) => {
         if (!cancelled) {
           setDetailError(
-            err instanceof Error ? err.message : "Falha no inventário Timescale",
+            err instanceof Error
+              ? err.message
+              : "Falha no inventário Timescale",
           );
           setHypertables([]);
           setDimensions([]);
