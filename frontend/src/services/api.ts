@@ -1,4 +1,4 @@
-import type { HealthResponse } from "../types";
+import type { EnvironmentsResponse, HealthResponse } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
@@ -14,4 +14,5 @@ async function getJSON<T>(path: string): Promise<T> {
 export const api = {
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
+  environments: () => getJSON<EnvironmentsResponse>("/api/v1/environments"),
 };

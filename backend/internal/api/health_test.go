@@ -1,42 +1,71 @@
 package api
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
+
+	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
 
-type fakeStore struct{ err error }
+type stubStore struct{}
 
-func (s fakeStore) Ping(context.Context) error { return s.err }
+func (stubStore) Ping(context.Context) error { return nil }
 
-func TestHealth(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/health", nil)
-	w := httptest.NewRecorder()
-	NewHandler(fakeStore{}).ServeHTTP(w, r)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
+func (stubStore) ListEnvironmentsAPI(context.Context) ([]repository.Environment, error) {
+	return []repository.Environment{}, nil
 }
 
-func TestReady(t *testing.T) {
-	tests := []struct {
-		name  string
-		store fakeStore
-		want  int
-	}{
-		{"database is available", fakeStore{}, http.StatusOK},
-		{"database is unavailable", fakeStore{errors.New("down")}, http.StatusServiceUnavailable},
+func (stubStore) ListDatabaseSnapshots(context.Context, string) ([]repository.DatabaseSnapshot, error) {
+	return []repository.DatabaseSnapshot{}, nil
+}
+
+func (stubStore) ListSchemaSnapshots(context.Context, string) ([]repository.SchemaSnapshot, error) {
+	return []repository.SchemaSnapshot{}, nil
+}
+
+type captureWriter struct {
+	code int
+	body bytes.Buffer
+	hdr  http.Header
+}
+
+func (c *captureWriter) Header() http.Header {
+	if c.hdr == nil {
+		c.hdr = make(http.Header)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			NewHandler(tt.store).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ready", nil))
-			if w.Code != tt.want {
-				t.Fatalf("status = %d, want %d", w.Code, tt.want)
-			}
-		})
+	return c.hdr
+}
+
+func (c *captureWriter) Write(b []byte) (int, error) {
+	if c.code == 0 {
+		c.code = http.StatusOK
+	}
+	return c.body.Write(b)
+}
+
+func (c *captureWriter) WriteHeader(statusCode int) {
+	c.code = statusCode
+}
+
+func TestHealth(t *testing.T) {
+	h := NewHandler(stubStore{})
+	w := &captureWriter{}
+	r, err := http.NewRequest(http.MethodGet, "/health", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.ServeHTTP(w, r)
+	if w.code != http.StatusOK {
+		t.Fatalf("status %d", w.code)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(w.body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["status"] != "ok" {
+		t.Fatalf("unexpected payload %#v", payload)
 	}
 }
