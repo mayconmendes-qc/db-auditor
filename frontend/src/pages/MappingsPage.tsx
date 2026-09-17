@@ -30,7 +30,9 @@ export function MappingsPage() {
       .mappings({ status: statusFilter || undefined })
       .then((res) => setItems(res.items))
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Falha ao listar mappings");
+        setError(
+          err instanceof Error ? err.message : "Falha ao listar mappings",
+        );
         setItems([]);
       });
   };

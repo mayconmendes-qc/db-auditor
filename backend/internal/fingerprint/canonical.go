@@ -113,13 +113,9 @@ func (c CanonicalObjectID) Validate() error {
 	if c.Environment == "" || c.Database == "" || c.ObjectType == "" || c.ObjectName == "" {
 		return fmt.Errorf("canonical id requires environment, database, object_type and object_name")
 	}
-	switch c.ObjectType {
-	case ObjectTypeDatabase:
-		return nil
-	default:
-		if c.Schema == "" && c.ObjectType != ObjectTypeExtension {
-			// extensions may live without a meaningful schema in some inventories
-		}
+	needsSchema := c.ObjectType != ObjectTypeDatabase && c.ObjectType != ObjectTypeExtension
+	if needsSchema && c.Schema == "" {
+		return fmt.Errorf("canonical id for %s requires schema", c.ObjectType)
 	}
 	return nil
 }
