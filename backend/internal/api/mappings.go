@@ -42,9 +42,9 @@ type updateMappingBody struct {
 }
 
 type suggestBody struct {
-	Source []fingerprint.ObjectRef `json:"source"`
-	Target []fingerprint.ObjectRef `json:"target"`
-	TargetDefaultDB string         `json:"target_default_db"`
+	Source          []fingerprint.ObjectRef `json:"source"`
+	Target          []fingerprint.ObjectRef `json:"target"`
+	TargetDefaultDB string                  `json:"target_default_db"`
 }
 
 func registerMappingRoutes(mux *http.ServeMux, store MappingStore) {

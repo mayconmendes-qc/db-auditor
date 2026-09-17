@@ -145,5 +145,6 @@ export const api = {
     source: Array<Record<string, string>>;
     target: Array<Record<string, string>>;
     target_default_db?: string;
-  }) => postJSON<ItemsResponse<MappingCandidate>>("/api/v1/mappings/suggest", body),
+  }) =>
+    postJSON<ItemsResponse<MappingCandidate>>("/api/v1/mappings/suggest", body),
 };

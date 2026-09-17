@@ -6,18 +6,18 @@ import (
 
 // MappingCandidate is a suggested correspondence between source and target objects.
 type MappingCandidate struct {
-	SourceDatabase   string  `json:"source_database"`
-	SourceSchema     string  `json:"source_schema"`
-	SourceObjectType string  `json:"source_object_type"`
-	SourceObjectName string  `json:"source_object_name"`
-	TargetDatabase   string  `json:"target_database"`
-	TargetSchema     string  `json:"target_schema"`
-	TargetObjectType string  `json:"target_object_type"`
-	TargetObjectName string  `json:"target_object_name"`
-	RelationType     string  `json:"relation_type"`
-	Confidence       float64 `json:"confidence"`
-	SourceFingerprint string `json:"source_fingerprint,omitempty"`
-	TargetFingerprint string `json:"target_fingerprint,omitempty"`
+	SourceDatabase    string  `json:"source_database"`
+	SourceSchema      string  `json:"source_schema"`
+	SourceObjectType  string  `json:"source_object_type"`
+	SourceObjectName  string  `json:"source_object_name"`
+	TargetDatabase    string  `json:"target_database"`
+	TargetSchema      string  `json:"target_schema"`
+	TargetObjectType  string  `json:"target_object_type"`
+	TargetObjectName  string  `json:"target_object_name"`
+	RelationType      string  `json:"relation_type"`
+	Confidence        float64 `json:"confidence"`
+	SourceFingerprint string  `json:"source_fingerprint,omitempty"`
+	TargetFingerprint string  `json:"target_fingerprint,omitempty"`
 }
 
 // ObjectRef is a lightweight inventory reference used for suggestions.
