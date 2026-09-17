@@ -12,7 +12,7 @@ CREATE TABLE audit_environment (
 
 CREATE TABLE audit_run (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  environment_id uuid NOT NULL REFERENCES audit_run(id),
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
   profile text NOT NULL CHECK (profile IN ('fast', 'daily', 'weekly', 'monthly', 'manual')),
   status text NOT NULL CHECK (status IN ('running', 'success', 'partial_success', 'failed', 'cancelled')),
   service_version text NOT NULL,
