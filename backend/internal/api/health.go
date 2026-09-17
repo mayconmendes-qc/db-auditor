@@ -24,9 +24,21 @@ type InventoryStore interface {
 	ListCAGGSnapshots(ctx context.Context, environmentID string) ([]repository.CAGGSnapshotRow, error)
 	ListJobSnapshots(ctx context.Context, environmentID string) ([]repository.JobSnapshotRow, error)
 	ListPolicySnapshots(ctx context.Context, environmentID string) ([]repository.PolicySnapshotRow, error)
+	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
+	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
+	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+}
+
+// HandlerOptions wires optional run trigger support.
+type HandlerOptions struct {
+	Runner ManualRunner
 }
 
 func NewHandler(store InventoryStore) http.Handler {
+	return NewHandlerWithOptions(store, HandlerOptions{})
+}
+
+func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /ready", ready(store))
@@ -39,6 +51,7 @@ func NewHandler(store InventoryStore) http.Handler {
 	mux.HandleFunc("GET /api/v1/environments/{id}/continuous-aggregates", listCAGGs(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/jobs", listJobs(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/policies", listPolicies(store))
+	registerRunRoutes(mux, store, opts.Runner)
 	return mux
 }
 
