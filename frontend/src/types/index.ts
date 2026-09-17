@@ -139,6 +139,32 @@ export interface PolicySnapshot {
   collected_at: string;
 }
 
+export interface AuditRun {
+  id: string;
+  environment_id: string;
+  profile: string;
+  status: string;
+  service_version: string;
+  collector_version: string;
+  started_at: string;
+  finished_at?: string | null;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface CollectorRun {
+  id: string;
+  audit_run_id: string;
+  collector_name: string;
+  collector_version: string;
+  status: string;
+  started_at: string;
+  finished_at?: string | null;
+  rows_collected: number;
+  warning?: string | null;
+  error?: string | null;
+}
+
 export interface ItemsResponse<T> {
   items: T[];
 }

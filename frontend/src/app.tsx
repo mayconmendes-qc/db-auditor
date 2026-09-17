@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { navigationSections, Shell } from "./components/layout/Shell";
-import { EnvironmentsPage, InventoryPage, OverviewPage } from "./pages";
+import {
+  AuditRunsPage,
+  EnvironmentsPage,
+  InventoryPage,
+  OverviewPage,
+} from "./pages";
 import type { NavigationSection } from "./types";
 
 export { navigationSections };
@@ -13,6 +18,8 @@ export function App() {
     content = <EnvironmentsPage />;
   } else if (section === "Inventário") {
     content = <InventoryPage />;
+  } else if (section === "Audit runs") {
+    content = <AuditRunsPage />;
   }
 
   return (

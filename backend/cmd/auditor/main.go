@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/mayconmendes-qc/timescale-auditor/internal/api"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/database"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/scheduler"
 )
 
 func main() {
@@ -33,12 +35,38 @@ func main() {
 	defer pool.Close()
 
 	store := repository.NewStore(pool)
+	runStore := &repository.AuditRunStore{Store: store}
+	registry := audit.NewDefaultRegistry()
+	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
+		ServiceVersion:   "0.3.0",
+		CollectorVersion: "1.0.0",
+		MaxWorkers:       4,
+	})
+	sch := scheduler.New(runner)
 
 	server := &http.Server{
-		Addr:              cfg.HTTPAddress,
-		Handler:           api.NewHandler(store),
+		Addr: cfg.HTTPAddress,
+		Handler: api.NewHandlerWithOptions(store, api.HandlerOptions{
+			Runner: sch,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n := sch.TickDue(ctx)
+				if n > 0 {
+					slog.Info("scheduler triggered runs", "count", n)
+				}
+			}
+		}
+	}()
 
 	go func() {
 		slog.Info("HTTP server listening", "address", cfg.HTTPAddress)
