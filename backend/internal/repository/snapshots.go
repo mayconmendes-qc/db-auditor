@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/collectors/postgres"
 )
@@ -171,11 +170,8 @@ func uuidString(id pgtype.UUID) string {
 	if !id.Valid {
 		return ""
 	}
-	u, err := uuid.FromBytes(id.Bytes[:])
-	if err != nil {
-		return ""
-	}
-	return u.String()
+	b := id.Bytes
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func nullString(s string) any {
