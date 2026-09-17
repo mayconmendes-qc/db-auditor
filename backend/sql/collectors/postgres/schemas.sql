@@ -1,4 +1,5 @@
 -- Schema inventory facts for the current database (read-only).
+-- size_bytes is the sum of relation sizes in the schema (bytes).
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -8,7 +9,12 @@ SELECT
   COALESCE(c.matview_count, 0) AS materialized_view_count,
   COALESCE(c.sequence_count, 0) AS sequence_count,
   COALESCE(f.function_count, 0) AS function_count,
-  COALESCE(pg_catalog.pg_namespace_size(n.oid), 0) AS size_bytes
+  COALESCE((
+    SELECT sum(pg_total_relation_size(cl.oid))
+    FROM pg_class cl
+    WHERE cl.relnamespace = n.oid
+      AND cl.relkind IN ('r', 'm', 'i', 'S', 't')
+  ), 0) AS size_bytes
 FROM pg_namespace n
 LEFT JOIN LATERAL (
   SELECT
