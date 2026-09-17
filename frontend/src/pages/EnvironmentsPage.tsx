@@ -2,11 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Card, Input, Skeleton, Table } from "../components/ui";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { api } from "../services/api";
-import type {
-  DatabaseSnapshot,
-  Environment,
-  SchemaSnapshot,
-} from "../types";
+import type { DatabaseSnapshot, Environment, SchemaSnapshot } from "../types";
 
 export function EnvironmentsPage() {
   const [items, setItems] = useState<Environment[] | null>(null);
@@ -63,9 +59,7 @@ export function EnvironmentsPage() {
       .catch((err: unknown) => {
         if (!cancelled) {
           const message =
-            err instanceof Error
-              ? err.message
-              : "Falha ao carregar topologia";
+            err instanceof Error ? err.message : "Falha ao carregar topologia";
           setDetailError(message);
           setDatabases([]);
           setSchemas([]);
@@ -80,9 +74,7 @@ export function EnvironmentsPage() {
     if (!databases) {
       return null;
     }
-    return databases.filter((db) =>
-      matchesSearch(db.database_name, filter),
-    );
+    return databases.filter((db) => matchesSearch(db.database_name, filter));
   }, [databases, filter]);
 
   const filteredSchemas = useMemo(() => {

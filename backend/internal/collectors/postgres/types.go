@@ -142,11 +142,11 @@ type FunctionFacts struct {
 
 // ExtensionFacts is one row from the extension collector.
 type ExtensionFacts struct {
-	DatabaseName      string `json:"database_name"`
-	ExtensionName     string `json:"extension_name"`
-	ExtensionVersion  string `json:"extension_version"`
-	SchemaName        string `json:"schema_name"`
-	IsRelocatable     bool   `json:"is_relocatable"`
+	DatabaseName     string `json:"database_name"`
+	ExtensionName    string `json:"extension_name"`
+	ExtensionVersion string `json:"extension_version"`
+	SchemaName       string `json:"schema_name"`
+	IsRelocatable    bool   `json:"is_relocatable"`
 }
 
 // PartialError records a non-fatal failure for one database during discovery.
