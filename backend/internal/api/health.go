@@ -27,6 +27,9 @@ type InventoryStore interface {
 	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
 	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
 	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+	ListObjectMappings(ctx context.Context, sourceEnv, targetEnv, status string) ([]repository.ObjectMapping, error)
+	CreateObjectMapping(ctx context.Context, p repository.CreateObjectMappingParams) (*repository.ObjectMapping, error)
+	UpdateObjectMappingStatus(ctx context.Context, id, status string, notes string) (*repository.ObjectMapping, error)
 }
 
 // HandlerOptions wires optional run trigger support.
@@ -52,6 +55,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	mux.HandleFunc("GET /api/v1/environments/{id}/jobs", listJobs(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/policies", listPolicies(store))
 	registerRunRoutes(mux, store, opts.Runner)
+	registerMappingRoutes(mux, store)
 	return mux
 }
 
