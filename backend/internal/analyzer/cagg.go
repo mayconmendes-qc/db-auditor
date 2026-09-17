@@ -30,7 +30,7 @@ func (CAGGAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, 
 				SchemaName:    c.Schema,
 				ObjectName:    c.ViewName,
 				Evidence: map[string]any{
-					"materialization": fmt.Sprintf("%s.%s", c.MaterializationSchema, c.MaterializationHypertable),
+					"materialization":   fmt.Sprintf("%s.%s", c.MaterializationSchema, c.MaterializationHypertable),
 					"materialized_only": c.MaterializedOnly,
 				},
 				DedupKey: DedupKey("cagg.missing_refresh_policy", key, title),

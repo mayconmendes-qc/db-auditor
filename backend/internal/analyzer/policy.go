@@ -35,11 +35,11 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 			SchemaName:    p.HypertableSchema,
 			ObjectName:    p.HypertableName,
 			Evidence: map[string]any{
-				"job_id":           p.JobID,
-				"policy_type":      p.PolicyType,
-				"last_run_status":  p.LastRunStatus,
+				"job_id":            p.JobID,
+				"policy_type":       p.PolicyType,
+				"last_run_status":   p.LastRunStatus,
 				"schedule_interval": p.ScheduleInterval,
-				"proc_name":        p.ProcName,
+				"proc_name":         p.ProcName,
 			},
 			DedupKey: DedupKey("policy.job_failed", key, title),
 		}

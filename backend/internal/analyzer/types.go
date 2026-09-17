@@ -110,14 +110,14 @@ type ChunkFact struct {
 
 // CAGGFact describes a continuous aggregate.
 type CAGGFact struct {
-	Database                 string `json:"database"`
-	Schema                   string `json:"schema"`
-	ViewName                 string `json:"view_name"`
-	MaterializationSchema    string `json:"materialization_schema"`
+	Database                  string `json:"database"`
+	Schema                    string `json:"schema"`
+	ViewName                  string `json:"view_name"`
+	MaterializationSchema     string `json:"materialization_schema"`
 	MaterializationHypertable string `json:"materialization_hypertable"`
-	MaterializedOnly         bool   `json:"materialized_only"`
-	HasRefreshPolicy         bool   `json:"has_refresh_policy"`
-	ViewDefinition           string `json:"view_definition"`
+	MaterializedOnly          bool   `json:"materialized_only"`
+	HasRefreshPolicy          bool   `json:"has_refresh_policy"`
+	ViewDefinition            string `json:"view_definition"`
 }
 
 // PolicyFact describes a Timescale retention/compression/refresh policy.
