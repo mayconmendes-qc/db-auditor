@@ -30,6 +30,10 @@ type analyzeBody struct {
 	Indexes       []analyzer.IndexFact      `json:"indexes"`
 	Hypertables   []analyzer.HypertableFact `json:"hypertables"`
 	Chunks        []analyzer.ChunkFact      `json:"chunks"`
+	CAGGs         []analyzer.CAGGFact       `json:"caggs"`
+	Policies      []analyzer.PolicyFact     `json:"policies"`
+	Jobs          []analyzer.JobFact        `json:"jobs"`
+	Activity      []analyzer.ActivityFact   `json:"activity"`
 }
 
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore) {
@@ -113,6 +117,10 @@ func analyzeFindings(store FindingStore) http.HandlerFunc {
 			Indexes:       body.Indexes,
 			Hypertables:   body.Hypertables,
 			Chunks:        body.Chunks,
+			CAGGs:         body.CAGGs,
+			Policies:      body.Policies,
+			Jobs:          body.Jobs,
+			Activity:      body.Activity,
 		}
 		produced, err := runner.Run(r.Context(), facts)
 		if err != nil {

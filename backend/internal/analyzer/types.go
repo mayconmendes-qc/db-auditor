@@ -62,6 +62,10 @@ type SnapshotFacts struct {
 	Indexes       []IndexFact
 	Hypertables   []HypertableFact
 	Chunks        []ChunkFact
+	CAGGs         []CAGGFact
+	Policies      []PolicyFact
+	Jobs          []JobFact
+	Activity      []ActivityFact
 }
 
 // TableFact is a minimal table size fact for storage analysis.
@@ -102,6 +106,59 @@ type ChunkFact struct {
 	HypertableName string `json:"hypertable_name"`
 	ChunkName      string `json:"chunk_name"`
 	SizeBytes      int64  `json:"size_bytes"`
+}
+
+// CAGGFact describes a continuous aggregate.
+type CAGGFact struct {
+	Database                  string `json:"database"`
+	Schema                    string `json:"schema"`
+	ViewName                  string `json:"view_name"`
+	MaterializationSchema     string `json:"materialization_schema"`
+	MaterializationHypertable string `json:"materialization_hypertable"`
+	MaterializedOnly          bool   `json:"materialized_only"`
+	HasRefreshPolicy          bool   `json:"has_refresh_policy"`
+	ViewDefinition            string `json:"view_definition"`
+}
+
+// PolicyFact describes a Timescale retention/compression/refresh policy.
+type PolicyFact struct {
+	Database         string `json:"database"`
+	JobID            int64  `json:"job_id"`
+	PolicyType       string `json:"policy_type"` // retention, compression, refresh, reorder
+	ProcName         string `json:"proc_name"`
+	HypertableSchema string `json:"hypertable_schema"`
+	HypertableName   string `json:"hypertable_name"`
+	ScheduleInterval string `json:"schedule_interval"`
+	Config           string `json:"config"`
+	Scheduled        bool   `json:"scheduled"`
+	LastRunStatus    string `json:"last_run_status"`
+}
+
+// JobFact describes a background job.
+type JobFact struct {
+	Database      string `json:"database"`
+	JobID         int64  `json:"job_id"`
+	Application   string `json:"application_name"`
+	ProcName      string `json:"proc_name"`
+	Scheduled     bool   `json:"scheduled"`
+	LastRunStatus string `json:"last_run_status"`
+	TotalFailures int64  `json:"total_failures"`
+}
+
+// ActivityFact carries DML / temporal signals for inactivity analysis.
+// Classification is always POSSIBLY_INACTIVE — never triggers deletion.
+type ActivityFact struct {
+	Database       string     `json:"database"`
+	Schema         string     `json:"schema"`
+	Name           string     `json:"name"`
+	ObjectType     string     `json:"object_type"` // table, hypertable
+	NLiveTup       int64      `json:"n_live_tup"`
+	NTupIns        int64      `json:"n_tup_ins"`
+	NTupUpd        int64      `json:"n_tup_upd"`
+	NTupDel        int64      `json:"n_tup_del"`
+	LastDataChange *time.Time `json:"last_data_change,omitempty"`
+	MaxTimeValue   *time.Time `json:"max_time_value,omitempty"`
+	DaysSinceDML   int        `json:"days_since_dml"`
 }
 
 // Analyzer produces findings from snapshot facts.
