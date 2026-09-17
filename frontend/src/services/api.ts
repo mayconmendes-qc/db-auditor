@@ -1,4 +1,5 @@
 import type {
+  AnalyzeResult,
   AuditRun,
   CAGGSnapshot,
   ChunkSnapshot,
@@ -8,6 +9,7 @@ import type {
   DatabaseSnapshot,
   DimensionSnapshot,
   EnvironmentsResponse,
+  Finding,
   HealthResponse,
   HypertableSnapshot,
   ItemsResponse,
@@ -157,4 +159,43 @@ export const api = {
     statuses?: string[];
     object_type?: string;
   }) => postJSON<CompareResult>("/api/v1/compare", body),
+  findings: (params?: {
+    environment_id?: string;
+    finding_type?: string;
+    severity?: string;
+    status?: string;
+    limit?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.environment_id) {
+      q.set("environment_id", params.environment_id);
+    }
+    if (params?.finding_type) {
+      q.set("finding_type", params.finding_type);
+    }
+    if (params?.severity) {
+      q.set("severity", params.severity);
+    }
+    if (params?.status) {
+      q.set("status", params.status);
+    }
+    if (params?.limit) {
+      q.set("limit", String(params.limit));
+    }
+    const qs = q.toString();
+    return getJSON<ItemsResponse<Finding>>(
+      `/api/v1/findings${qs ? `?${qs}` : ""}`,
+    );
+  },
+  finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
+  updateFindingStatus: (id: string, status: string, notes?: string) =>
+    patchJSON<Finding>(`/api/v1/findings/${id}`, { status, notes }),
+  analyzeFindings: (body: {
+    environment_id: string;
+    audit_run_id?: string;
+    tables?: unknown[];
+    indexes?: unknown[];
+    hypertables?: unknown[];
+    chunks?: unknown[];
+  }) => postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
 };

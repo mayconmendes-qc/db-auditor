@@ -246,6 +246,36 @@ export interface CompareResult {
   objects: ObjectDiff[];
 }
 
+export interface Finding {
+  id: string;
+  environment_id: string;
+  audit_run_id?: string | null;
+  finding_type: string;
+  severity: string;
+  status: string;
+  title: string;
+  summary: string;
+  object_type?: string;
+  object_key?: string;
+  database_name?: string;
+  schema_name?: string;
+  object_name?: string;
+  evidence?: Record<string, unknown>;
+  dedup_key: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnalyzeResult {
+  produced: number;
+  saved: number;
+  items: Finding[];
+}
+
 export interface ItemsResponse<T> {
   items: T[];
 }
