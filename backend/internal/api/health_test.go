@@ -43,6 +43,15 @@ func (s *stubStore) ListJobSnapshots(context.Context, string) ([]repository.JobS
 func (s *stubStore) ListPolicySnapshots(context.Context, string) ([]repository.PolicySnapshotRow, error) {
 	return []repository.PolicySnapshotRow{}, nil
 }
+func (s *stubStore) ListAuditRuns(context.Context, string, string, string, int) ([]repository.AuditRunRow, error) {
+	return []repository.AuditRunRow{}, nil
+}
+func (s *stubStore) GetAuditRun(context.Context, string) (*repository.AuditRunRow, error) {
+	return nil, nil
+}
+func (s *stubStore) ListCollectorRuns(context.Context, string) ([]repository.CollectorRunRow, error) {
+	return []repository.CollectorRunRow{}, nil
+}
 
 func TestHealth(t *testing.T) {
 	t.Parallel()
@@ -66,6 +75,17 @@ func TestListHypertablesEmpty(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&stubStore{})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/00000000-0000-0000-0000-000000000001/hypertables", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+}
+
+func TestListAuditRunsEmpty(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit-runs", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
