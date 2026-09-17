@@ -1,0 +1,65 @@
+package timescale
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
+)
+
+// CollectChunks lists chunks and applies schema scope on the parent hypertable schema.
+func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]ChunkFacts, error) {
+	rows, err := conn.Query(ctx, chunksSQL)
+	if err != nil {
+		return nil, fmt.Errorf("chunk collector: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ChunkFacts, 0)
+	for rows.Next() {
+		var f ChunkFacts
+		var rangeStart, rangeEnd *time.Time
+		var rangeStartInt, rangeEndInt *int64
+		if err := rows.Scan(
+			&f.DatabaseName,
+			&f.SchemaName,
+			&f.HypertableName,
+			&f.ChunkSchema,
+			&f.ChunkName,
+			&rangeStart,
+			&rangeEnd,
+			&rangeStartInt,
+			&rangeEndInt,
+			&f.IsCompressed,
+			&f.ChunkTablespace,
+			&f.TotalSizeBytes,
+			&f.DataSizeBytes,
+			&f.IndexSizeBytes,
+		); err != nil {
+			return nil, fmt.Errorf("chunk collector scan: %w", err)
+		}
+		f.RangeStart = rangeStart
+		f.RangeEnd = rangeEnd
+		f.RangeStartInteger = rangeStartInt
+		f.RangeEndInteger = rangeEndInt
+		if f.TotalSizeBytes < 0 {
+			f.TotalSizeBytes = 0
+		}
+		if f.DataSizeBytes < 0 {
+			f.DataSizeBytes = 0
+		}
+		if f.IndexSizeBytes < 0 {
+			f.IndexSizeBytes = 0
+		}
+		if !scope.AllowsSchema(f.SchemaName) {
+			continue
+		}
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chunk collector rows: %w", err)
+	}
+	return out, nil
+}
