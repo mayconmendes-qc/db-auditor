@@ -35,11 +35,11 @@ type Entry struct {
 
 // Scheduler prevents overlap and tracks next/last execution.
 type Scheduler struct {
-	mu      sync.Mutex
-	runner  Runner
-	entries map[string]*Entry
+	mu       sync.Mutex
+	runner   Runner
+	entries  map[string]*Entry
 	inFlight map[string]struct{}
-	now     func() time.Time
+	now      func() time.Time
 }
 
 // New creates a scheduler bound to a runner.

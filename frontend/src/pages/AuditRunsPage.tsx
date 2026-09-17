@@ -3,7 +3,9 @@ import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
 import { api } from "../services/api";
 import type { AuditRun, CollectorRun, Environment } from "../types";
 
-function statusTone(status: string): "success" | "warning" | "danger" | "neutral" {
+function statusTone(
+  status: string,
+): "success" | "warning" | "danger" | "neutral" {
   if (status === "success") {
     return "success";
   }
@@ -192,7 +194,9 @@ export function AuditRunsPage() {
               subtitle={`id ${selected.id}`}
             >
               <ul className="mt-3 space-y-1 text-sm text-slate-300">
-                <li>Início: {new Date(selected.started_at).toLocaleString()}</li>
+                <li>
+                  Início: {new Date(selected.started_at).toLocaleString()}
+                </li>
                 <li>
                   Fim:{" "}
                   {selected.finished_at
