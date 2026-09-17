@@ -77,6 +77,73 @@ func TestChunkAnalyzerHighCount(t *testing.T) {
 	}
 }
 
+func TestCAGGMissingRefreshPolicy(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		CAGGs: []CAGGFact{
+			{Database: "db", Schema: "public", ViewName: "metrics_1h", HasRefreshPolicy: false},
+			{Database: "db", Schema: "public", ViewName: "ok", HasRefreshPolicy: true},
+		},
+	}
+	out, err := CAGGAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected 1 missing_refresh_policy, got %d", len(out))
+	}
+	if out[0].FindingType != "cagg.missing_refresh_policy" {
+		t.Fatalf("type = %s", out[0].FindingType)
+	}
+}
+
+func TestPolicyJobFailed(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		Policies: []PolicyFact{
+			{Database: "db", JobID: 1, PolicyType: "retention", LastRunStatus: "failed", HypertableSchema: "public", HypertableName: "m"},
+		},
+		Jobs: []JobFact{
+			{Database: "db", JobID: 2, ProcName: "custom", LastRunStatus: "failed", TotalFailures: 5},
+		},
+	}
+	out, err := PolicyAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) < 2 {
+		t.Fatalf("expected policy + job findings, got %d", len(out))
+	}
+}
+
+func TestInactivityPossiblyInactiveOnly(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		Activity: []ActivityFact{
+			{Database: "db", Schema: "public", Name: "old_events", ObjectType: "table", DaysSinceDML: 120, NLiveTup: 10},
+			{Database: "db", Schema: "public", Name: "hot", ObjectType: "table", DaysSinceDML: 1},
+		},
+	}
+	out, err := InactivityAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected 1 possibly_inactive, got %d", len(out))
+	}
+	if out[0].FindingType != "inactivity.possibly_inactive" {
+		t.Fatalf("type = %s", out[0].FindingType)
+	}
+	cls, _ := out[0].Evidence["classification"].(string)
+	if cls != "POSSIBLY_INACTIVE" {
+		t.Fatalf("classification = %q", cls)
+	}
+	note, _ := out[0].Evidence["safety_note"].(string)
+	if note == "" {
+		t.Error("expected safety note against auto-delete")
+	}
+}
+
 func TestRunnerAggregates(t *testing.T) {
 	r := NewRunner(DefaultRegistry())
 	out, err := r.Run(context.Background(), SnapshotFacts{
