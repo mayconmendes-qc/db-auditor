@@ -1,0 +1,40 @@
+package config
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestSanitizeConnectionString(t *testing.T) {
+	raw := "postgresql://auditor:s3cret@postgres:5432/timescale_auditor?sslmode=disable&password=also"
+	got := SanitizeConnectionString(raw)
+	if strings.Contains(got, "s3cret") || strings.Contains(got, "also") {
+		t.Fatalf("secret leaked in sanitized string: %s", got)
+	}
+}
+
+func TestScopeAllowsDatabase(t *testing.T) {
+	s := Scope{
+		DatabaseDenylist:  []string{"template0", "postgres"},
+		DatabaseAllowlist: []string{"app_db"},
+	}
+	if s.AllowsDatabase("postgres") {
+		t.Fatal("denylist should block postgres")
+	}
+	if !s.AllowsDatabase("app_db") {
+		t.Fatal("allowlist should permit app_db")
+	}
+	if s.AllowsDatabase("other") {
+		t.Fatal("non-allowlisted name should be blocked when allowlist is set")
+	}
+}
+
+func TestScopeAllowsSchema(t *testing.T) {
+	s := Scope{SchemaDenylist: []string{"pg_catalog"}}
+	if s.AllowsSchema("pg_catalog") {
+		t.Fatal("denylist should block pg_catalog")
+	}
+	if !s.AllowsSchema("public") {
+		t.Fatal("public should be allowed by default")
+	}
+}

@@ -43,14 +43,20 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: staticcheck
+        run: staticcheck ./...
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: latest
           working-directory: backend
 
-      - name: Test
-        run: go test ./...
+      - name: Test with coverage
+        run: go test ./... -coverprofile=coverage.out
 
       - name: Trivy filesystem (backend)
         uses: aquasecurity/trivy-action@v0.36.0

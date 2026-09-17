@@ -4,42 +4,50 @@ Serviço **read-only** de inventário, comparação e diagnóstico dos ambientes
 
 ## Estrutura canônica do repositório
 
-Monorepo com **dois pacotes** e artefatos de operação na raiz:
-
 ```text
 .
-├── backend/                 # API Go (única fonte de verdade do backend)
-│   ├── cmd/auditor/         # entrypoint
-│   ├── internal/            # api, config, database, …
-│   ├── migrations/          # SQL do Snapshot Store
-│   ├── sql/                 # queries sqlc
+├── backend/
+│   ├── cmd/auditor/              # entrypoint HTTP
+│   ├── internal/
+│   │   ├── api/                  # handlers HTTP (sem regra de domínio pesada)
+│   │   ├── config/               # env, timeouts, allow/deny lists
+│   │   ├── database/             # pool pgx + sqlc gerado
+│   │   └── repository/           # transações e repositórios mínimos
+│   ├── migrations/               # schema do Snapshot Store
+│   ├── sql/queries/              # SQL fonte do sqlc
 │   ├── Containerfile
 │   ├── go.mod / go.sum
 │   ├── Makefile
 │   ├── sqlc.yaml
 │   └── .golangci.yml
-├── frontend/                # UI React + TS + Tailwind (Bun)
+├── frontend/
 │   ├── src/
-│   ├── package.json
-│   ├── biome.json
-│   ├── vite.config.ts
-│   └── tsconfig.json
-├── .github/workflows/ci.yml # CI (lint, testes, Trivy)
-├── compose.yaml             # Podman Compose (api + postgres)
-├── Makefile                 # atalhos raiz (backend-*, frontend-*)
+│   │   ├── components/           # layout + primitives UI
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   ├── services/             # cliente HTTP tipado
+│   │   └── types/
+│   ├── package.json              # Bun
+│   └── …
+├── .github/workflows/ci.yml
+├── compose.yaml
+├── Makefile
 ├── .env.example
-├── .gitignore
 └── README.md
 ```
 
-### O que **não** deve existir na raiz
+### Responsabilidades dos packages (backend)
 
-| Path legado | Destino correto |
-|-------------|-----------------|
-| `internal/`, `cmd/`, `migrations/`, `sql/`, `sqlc.yaml`, `go.mod` | `backend/` |
-| `web/` (npm) | `frontend/` (Bun) |
+| Package | Responsabilidade |
+|---------|------------------|
+| `cmd/auditor` | Bootstrap do processo: config, pool, HTTP server, shutdown |
+| `internal/api` | Fronteira HTTP; serialização JSON; sem SQL direto |
+| `internal/config` | Validação de env; sanitização de secrets; allow/deny de escopo |
+| `internal/database` | `pgxpool` e runtime params (`statement_timeout`, …) |
+| `internal/database/sqlc` | Código **gerado** por sqlc — não editar à mão |
+| `internal/repository` | Orquestra queries tipadas e `pgx.Tx` |
 
-A CI, o Compose e o Makefile apontam **apenas** para `backend/` e `frontend/`.
+Regra: preferir Go idiomático e packages pequenos; evitar camadas sem necessidade.
 
 ## Stack
 
@@ -55,51 +63,65 @@ A CI, o Compose e o Makefile apontam **apenas** para `backend/` e `frontend/`.
 2. Suba a API e o Snapshot Store:
 
 ```bash
-podman compose up -d --build
+make up
+# ou: podman compose up -d --build
 ```
 
-3. Verifique:
+3. Smoke check:
 
 ```bash
-curl http://localhost:8080/health
-curl http://localhost:8080/ready
+make smoke
+# equivale a: curl /health e /ready
 ```
 
+Logs e parada:
+
 ```bash
-podman compose down
+make logs
+make down
+```
+
+Reset **destrutivo** do volume local do Postgres:
+
+```bash
+make reset-volume   # podman compose down -v
 ```
 
 ### Frontend (Bun)
 
 ```bash
-cd frontend
-bun install
-bun run dev
+cd frontend && bun install && bun run dev
 ```
 
-O frontend consome **apenas** a API HTTP — nunca PostgreSQL/TimescaleDB diretamente.
+O frontend consome **apenas** a API HTTP.
 
 ## Qualidade
 
 ```bash
-make backend-fmt backend-check backend-lint backend-test
+make backend-fmt backend-check backend-staticcheck backend-lint backend-test
+make backend-test-cover
 make frontend-install frontend-check frontend-typecheck frontend-test
 ```
 
-## CI (GitHub Actions)
+Regenerar sqlc (requer `sqlc` instalado):
 
-`.github/workflows/ci.yml`:
+```bash
+cd backend && make sqlc
+```
 
-- **Backend:** `gofmt`, `go vet`, `golangci-lint`, `go test`, Trivy FS em `backend/`
-- **Frontend:** Biome, TypeScript, Vitest (Bun), Trivy FS em `frontend/`
+## CI
+
+- Backend: gofmt, vet, **staticcheck**, golangci-lint, `go test -cover`, Trivy
+- Frontend: Biome, typecheck, Vitest, Trivy
 
 ## Segurança
 
 - Ambientes auditados: somente leitura
-- Secrets fora do repositório (`.env` no `.gitignore`)
+- Secrets fora do repositório
 - Connection strings sanitizadas em logs
-- `statement_timeout`, `lock_timeout`, `application_name` configuráveis
+- Allowlist/denylist de databases e schemas via env
+- `statement_timeout`, `lock_timeout`, `application_name`
 
 ## Documentação de produto
 
-Especificação funcional, backlog e fluxo de desenvolvimento: Notion (*Anotações / Timescale Auditor*).
+Notion: *Anotações / Timescale Auditor* (EF, Backlog, Fluxo de Desenvolvimento).
