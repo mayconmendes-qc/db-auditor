@@ -5,7 +5,13 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   options: Array<{ value: string; label: string }>;
 }
 
-export function Select({ label, options, className = "", id, ...props }: SelectProps) {
+export function Select({
+  label,
+  options,
+  className = "",
+  id,
+  ...props
+}: SelectProps) {
   const selectId = id ?? props.name;
   return (
     <label className="grid gap-1.5 text-sm text-slate-300">

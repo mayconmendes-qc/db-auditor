@@ -1,12 +1,14 @@
+import { navigationSections, Shell } from "./components/layout/Shell";
 import { Card } from "./components/ui";
-import { Shell, navigationSections } from "./components/layout/Shell";
 
 export { navigationSections };
 
 export function App() {
   return (
     <Shell activeSection="Visão geral">
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">SPRINT 0</p>
+      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
+        SPRINT 0
+      </p>
       <h1 className="mt-2 max-w-2xl text-3xl font-semibold leading-tight text-slate-50 md:text-5xl">
         Auditoria com evidências, não mudanças automáticas.
       </h1>
