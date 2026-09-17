@@ -102,9 +102,8 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 
 	outcomes := make([]CollectorOutcome, len(collectors))
 	var (
-		mu       sync.Mutex
-		wg       sync.WaitGroup
-		sem      = make(chan struct{}, r.opts.MaxWorkers)
+		wg        sync.WaitGroup
+		sem       = make(chan struct{}, r.opts.MaxWorkers)
 		cancelled bool
 	)
 
@@ -146,7 +145,6 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			warnings = append(warnings, fmt.Sprintf("%s: %s", o.Name, o.Warning))
 		}
 	}
-	_ = mu // reserved if we extend shared state
 	status := AggregateRunStatus(success, failed, skipped, cancelled)
 	if err := r.store.FinishAuditRun(ctx, auditRunID, status, warnings, errs); err != nil {
 		return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs},
@@ -188,24 +186,21 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 			break
 		}
 		warning = fmt.Sprintf("retry %d after: %v", attempt+1, runErr)
+		timer := time.NewTimer(r.opts.RetryBackoff)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			runErr = ctx.Err()
-			break
-		case <-time.After(r.opts.RetryBackoff):
+			attempt = attempts // force exit
+		case <-timer.C:
 		}
 	}
 
 	status := CollectorStatusSuccess
 	errMsg := ""
 	if runErr != nil {
-		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
-			status = CollectorStatusFailed
-			errMsg = runErr.Error()
-		} else {
-			status = CollectorStatusFailed
-			errMsg = runErr.Error()
-		}
+		status = CollectorStatusFailed
+		errMsg = runErr.Error()
 	}
 	if ferr := r.store.FinishCollectorRun(ctx, collectorRunID, status, rows, warning, errMsg); ferr != nil && errMsg == "" {
 		errMsg = ferr.Error()
@@ -221,7 +216,6 @@ func isRetryable(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	// transient marker used by tests and callers
 	var t *TransientError
 	return errors.As(err, &t)
 }
