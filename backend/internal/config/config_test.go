@@ -1,11 +1,14 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSanitizeConnectionString(t *testing.T) {
 	raw := "postgresql://auditor:s3cret@postgres:5432/timescale_auditor?sslmode=disable&password=also"
 	got := SanitizeConnectionString(raw)
-	if contains(got, "s3cret") || contains(got, "also") {
+	if strings.Contains(got, "s3cret") || strings.Contains(got, "also") {
 		t.Fatalf("secret leaked in sanitized string: %s", got)
 	}
 }
@@ -34,15 +37,4 @@ func TestScopeAllowsSchema(t *testing.T) {
 	if !s.AllowsSchema("public") {
 		t.Fatal("public should be allowed by default")
 	}
-}
-
-func contains(s, sub string) bool {
-	return len(sub) > 0 && (s == sub || len(s) >= len(sub) && (func() bool {
-		for i := 0; i+len(sub) <= len(s); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
-		}
-		return false
-	})())
 }
