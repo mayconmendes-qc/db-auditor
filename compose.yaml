@@ -5,8 +5,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-timescale_auditor}
       POSTGRES_USER: ${POSTGRES_USER:-auditor}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # PostgreSQL 18+ official image: VOLUME is /var/lib/postgresql (not .../data).
+    # PGDATA defaults to /var/lib/postgresql/18/docker inside the volume.
     volumes:
-      - snapshot-store:/var/lib/postgresql/data
+      - snapshot-store:/var/lib/postgresql
       - ./backend/migrations:/docker-entrypoint-initdb.d:ro
     networks: [auditor]
     healthcheck:
@@ -26,6 +28,8 @@ services:
       AUDITOR_STATEMENT_TIMEOUT: ${AUDITOR_STATEMENT_TIMEOUT:-15s}
       AUDITOR_LOCK_TIMEOUT: ${AUDITOR_LOCK_TIMEOUT:-5s}
       AUDITOR_APPLICATION_NAME: timescale-auditor
+      AUDITOR_DATABASE_DENYLIST: ${AUDITOR_DATABASE_DENYLIST:-template0,template1,postgres}
+      AUDITOR_SCHEMA_DENYLIST: ${AUDITOR_SCHEMA_DENYLIST:-pg_catalog,information_schema}
     ports:
       - "${AUDITOR_HTTP_PORT:-8080}:8080"
     networks: [auditor]
@@ -39,9 +43,60 @@ services:
       retries: 5
       start_period: 5s
 
+  frontend:
+    image: oven/bun:1.2-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend-bun-cache:/root/.bun
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    command: ["sh", "-c", "bun install && bun run dev --host 0.0.0.0 --port 5173"]
+    ports:
+      - "${FRONTEND_HTTP_PORT:-5173}:5173"
+    networks: [auditor]
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles: ["frontend"]
+
+  # One-shot tool images used by Makefile targets (no local Go/Bun required).
+  backend-tools:
+    image: golang:1.27-alpine
+    working_dir: /src
+    volumes:
+      - ./backend:/src
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    networks: [auditor]
+    profiles: ["tools"]
+
+  frontend-tools:
+    image: oven/bun:1.2-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - frontend-bun-cache:/root/.bun
+    networks: [auditor]
+    profiles: ["tools"]
+
+  golangci-lint:
+    image: golangci/golangci-lint:v2.13.2-alpine
+    working_dir: /src
+    volumes:
+      - ./backend:/src
+      - golangci-cache:/root/.cache
+    networks: [auditor]
+    profiles: ["tools"]
+
 networks:
   auditor:
-    internal: true
+    # Not fully internal: host must reach published ports; tools may pull modules.
+    driver: bridge
 
 volumes:
   snapshot-store:
+  frontend-bun-cache:
+  go-mod-cache:
+  go-build-cache:
+  golangci-cache:

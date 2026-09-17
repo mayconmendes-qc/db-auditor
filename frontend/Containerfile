@@ -1,0 +1,13 @@
+# Optional production-style image for the SPA. Day-to-day dev uses compose profile "frontend".
+FROM oven/bun:1.2-alpine AS build
+WORKDIR /app
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile || bun install
+COPY . .
+RUN bun run build
+
+FROM oven/bun:1.2-alpine
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+EXPOSE 4173
+CMD ["bun", "x", "vite", "preview", "--host", "0.0.0.0", "--port", "4173"]
