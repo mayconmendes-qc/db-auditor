@@ -24,12 +24,12 @@ type updateFindingBody struct {
 }
 
 type analyzeBody struct {
-	EnvironmentID string                   `json:"environment_id"`
-	AuditRunID    string                   `json:"audit_run_id"`
-	Tables        []analyzer.TableFact     `json:"tables"`
-	Indexes       []analyzer.IndexFact     `json:"indexes"`
+	EnvironmentID string                    `json:"environment_id"`
+	AuditRunID    string                    `json:"audit_run_id"`
+	Tables        []analyzer.TableFact      `json:"tables"`
+	Indexes       []analyzer.IndexFact      `json:"indexes"`
 	Hypertables   []analyzer.HypertableFact `json:"hypertables"`
-	Chunks        []analyzer.ChunkFact     `json:"chunks"`
+	Chunks        []analyzer.ChunkFact      `json:"chunks"`
 }
 
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore) {
