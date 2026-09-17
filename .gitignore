@@ -5,6 +5,7 @@
 coverage/
 dist/
 bin/
+node_modules/
 
 # Backend
 backend/bin/
@@ -15,8 +16,3 @@ frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 frontend/bun.lockb
-
-# Legacy paths
-web/node_modules/
-web/dist/
-node_modules/
