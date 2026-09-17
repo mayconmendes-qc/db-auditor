@@ -46,28 +46,28 @@ type SchemaFacts struct {
 
 // TableFacts is one row from the table collector (current database).
 type TableFacts struct {
-	DatabaseName   string     `json:"database_name"`
-	SchemaName     string     `json:"schema_name"`
-	TableName      string     `json:"table_name"`
-	Owner          string     `json:"owner_name"`
-	Relkind        string     `json:"relkind"`
-	DataSizeBytes  int64      `json:"data_size_bytes"`
-	IndexSizeBytes int64      `json:"index_size_bytes"`
-	TotalSizeBytes int64      `json:"total_size_bytes"`
-	RowEstimate    int64      `json:"row_estimate"`
-	NLiveTup       int64      `json:"n_live_tup"`
-	NDeadTup       int64      `json:"n_dead_tup"`
-	NTupIns        int64      `json:"n_tup_ins"`
-	NTupUpd        int64      `json:"n_tup_upd"`
-	NTupDel        int64      `json:"n_tup_del"`
-	SeqScan        int64      `json:"seq_scan"`
-	IdxScan        int64      `json:"idx_scan"`
-	LastVacuum     *time.Time `json:"last_vacuum,omitempty"`
-	LastAutovacuum *time.Time `json:"last_autovacuum,omitempty"`
-	LastAnalyze    *time.Time `json:"last_analyze,omitempty"`
+	DatabaseName    string     `json:"database_name"`
+	SchemaName      string     `json:"schema_name"`
+	TableName       string     `json:"table_name"`
+	Owner           string     `json:"owner_name"`
+	Relkind         string     `json:"relkind"`
+	DataSizeBytes   int64      `json:"data_size_bytes"`
+	IndexSizeBytes  int64      `json:"index_size_bytes"`
+	TotalSizeBytes  int64      `json:"total_size_bytes"`
+	RowEstimate     int64      `json:"row_estimate"`
+	NLiveTup        int64      `json:"n_live_tup"`
+	NDeadTup        int64      `json:"n_dead_tup"`
+	NTupIns         int64      `json:"n_tup_ins"`
+	NTupUpd         int64      `json:"n_tup_upd"`
+	NTupDel         int64      `json:"n_tup_del"`
+	SeqScan         int64      `json:"seq_scan"`
+	IdxScan         int64      `json:"idx_scan"`
+	LastVacuum      *time.Time `json:"last_vacuum,omitempty"`
+	LastAutovacuum  *time.Time `json:"last_autovacuum,omitempty"`
+	LastAnalyze     *time.Time `json:"last_analyze,omitempty"`
 	LastAutoanalyze *time.Time `json:"last_autoanalyze,omitempty"`
-	ColumnCount    int        `json:"column_count"`
-	HasPrimaryKey  bool       `json:"has_primary_key"`
+	ColumnCount     int        `json:"column_count"`
+	HasPrimaryKey   bool       `json:"has_primary_key"`
 }
 
 // ColumnFacts is one row from the column collector (current database).
