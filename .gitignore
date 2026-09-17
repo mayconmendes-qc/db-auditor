@@ -4,8 +4,19 @@
 .DS_Store
 coverage/
 dist/
-node_modules/
+bin/
+
+# Backend
+backend/bin/
+backend/coverage/
+
+# Frontend (Bun)
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+frontend/bun.lockb
+
+# Legacy paths (if present locally)
 web/node_modules/
 web/dist/
-web/tsconfig.tsbuildinfo
-bin/
+node_modules/

@@ -1,19 +1,4 @@
-.PHONY: test check staticcheck lint fmt up down logs web-check web-test web-typecheck web-install
-
-fmt:
-	gofmt -w $$(find . -name '*.go' -not -path './web/*')
-
-test:
-	go test ./...
-
-check:
-	go vet ./...
-
-staticcheck:
-	staticcheck ./...
-
-lint:
-	golangci-lint run
+.PHONY: up down logs backend-fmt backend-test backend-check backend-lint frontend-install frontend-check frontend-test frontend-typecheck
 
 up:
 	podman compose up -d --build
@@ -24,14 +9,26 @@ down:
 logs:
 	podman compose logs -f
 
-web-install:
-	cd web && npm install
+backend-fmt:
+	cd backend && $(MAKE) fmt
 
-web-check:
-	cd web && npm run check
+backend-test:
+	cd backend && $(MAKE) test
 
-web-test:
-	cd web && npm run test
+backend-check:
+	cd backend && $(MAKE) check
 
-web-typecheck:
-	cd web && npm run typecheck
+backend-lint:
+	cd backend && $(MAKE) lint
+
+frontend-install:
+	cd frontend && bun install
+
+frontend-check:
+	cd frontend && bun run check
+
+frontend-test:
+	cd frontend && bun run test
+
+frontend-typecheck:
+	cd frontend && bun run typecheck
