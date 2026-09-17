@@ -2,6 +2,11 @@
 # No local Go, Bun, Node, sqlc, or curl installation is needed for day-to-day work.
 
 COMPOSE ?= podman compose
+AUDITOR_HTTP_PORT ?= 8080
+FRONTEND_HTTP_PORT ?= 5173
+
+export AUDITOR_HTTP_PORT
+export FRONTEND_HTTP_PORT
 
 .PHONY: up down logs reset-volume smoke ps \
 	backend-fmt backend-test backend-test-cover backend-check backend-lint backend-staticcheck \
@@ -10,12 +15,12 @@ COMPOSE ?= podman compose
 ## Runtime -----------------------------------------------------------------
 
 # Starts postgres + api (backend) + frontend.
+# Override ports: FRONTEND_HTTP_PORT=5174 make up
 up:
+	@echo "API      → http://localhost:$(AUDITOR_HTTP_PORT)"
+	@echo "Frontend → http://localhost:$(FRONTEND_HTTP_PORT)"
+	@echo "(override with AUDITOR_HTTP_PORT / FRONTEND_HTTP_PORT in .env or the environment)"
 	$(COMPOSE) up -d --build postgres api frontend
-	@echo ""
-	@echo "postgres : internal only (snapshot-store)"
-	@echo "api      : http://localhost:$${AUDITOR_HTTP_PORT:-8080}"
-	@echo "frontend : http://localhost:$${FRONTEND_HTTP_PORT:-5173}"
 
 down:
 	$(COMPOSE) --profile tools down
