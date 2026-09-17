@@ -65,3 +65,103 @@ LEFT JOIN LATERAL (
 WHERE n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
 ORDER BY n.nspname
 `
+
+const tablesSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  c.relname AS table_name,
+  pg_catalog.pg_get_userbyid(c.relowner) AS owner_name,
+  c.relkind::text AS relkind,
+  COALESCE(pg_relation_size(c.oid), 0) AS data_size_bytes,
+  COALESCE(pg_indexes_size(c.oid), 0) AS index_size_bytes,
+  COALESCE(pg_total_relation_size(c.oid), 0) AS total_size_bytes,
+  COALESCE(c.reltuples, 0)::bigint AS row_estimate,
+  COALESCE(s.n_live_tup, 0)::bigint AS n_live_tup,
+  COALESCE(s.n_dead_tup, 0)::bigint AS n_dead_tup,
+  COALESCE(s.n_tup_ins, 0)::bigint AS n_tup_ins,
+  COALESCE(s.n_tup_upd, 0)::bigint AS n_tup_upd,
+  COALESCE(s.n_tup_del, 0)::bigint AS n_tup_del,
+  COALESCE(s.seq_scan, 0)::bigint AS seq_scan,
+  COALESCE(s.idx_scan, 0)::bigint AS idx_scan,
+  s.last_vacuum,
+  s.last_autovacuum,
+  s.last_analyze,
+  s.last_autoanalyze,
+  (
+    SELECT count(*)
+    FROM pg_attribute a
+    WHERE a.attrelid = c.oid
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+  )::int AS column_count,
+  EXISTS (
+    SELECT 1
+    FROM pg_index i
+    WHERE i.indrelid = c.oid AND i.indisprimary
+  ) AS has_primary_key
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_stat_user_tables s
+  ON s.relid = c.oid
+WHERE c.relkind = 'r'
+  AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, c.relname
+`
+
+const columnsSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  c.relname AS table_name,
+  a.attname AS column_name,
+  a.attnum AS ordinal_position,
+  pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+  NOT a.attnotnull AS is_nullable,
+  pg_catalog.pg_get_expr(ad.adbin, ad.adrelid) AS column_default,
+  a.attgenerated <> '' AS is_generated,
+  CASE
+    WHEN a.attidentity = 'a' THEN 'always'
+    WHEN a.attidentity = 'd' THEN 'by default'
+    ELSE NULL
+  END AS identity_generation,
+  col.collname AS collation_name
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+LEFT JOIN pg_collation col ON col.oid = a.attcollation
+WHERE a.attnum > 0
+  AND NOT a.attisdropped
+  AND c.relkind = 'r'
+  AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, c.relname, a.attnum
+`
+
+const indexesSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  t.relname AS table_name,
+  i.relname AS index_name,
+  pg_catalog.pg_get_indexdef(ix.indexrelid) AS index_definition,
+  am.amname AS access_method,
+  ix.indisunique AS is_unique,
+  ix.indisprimary AS is_primary,
+  COALESCE(pg_relation_size(i.oid), 0) AS size_bytes,
+  COALESCE(st.idx_scan, 0)::bigint AS idx_scan,
+  COALESCE(st.idx_tup_read, 0)::bigint AS idx_tup_read,
+  COALESCE(st.idx_tup_fetch, 0)::bigint AS idx_tup_fetch
+FROM pg_index ix
+JOIN pg_class i ON i.oid = ix.indexrelid
+JOIN pg_class t ON t.oid = ix.indrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+JOIN pg_am am ON am.oid = i.relam
+LEFT JOIN pg_stat_user_indexes st ON st.indexrelid = ix.indexrelid
+WHERE t.relkind = 'r'
+  AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, t.relname, i.relname
+`
