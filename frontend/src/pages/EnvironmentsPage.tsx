@@ -19,7 +19,9 @@ export function EnvironmentsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Falha ao carregar ambientes");
+          const message =
+            err instanceof Error ? err.message : "Falha ao carregar ambientes";
+          setError(message);
           setItems([]);
         }
       });
@@ -30,10 +32,15 @@ export function EnvironmentsPage() {
 
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">SPRINT 1</p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">Ambientes</h1>
+      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
+        SPRINT 1
+      </p>
+      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
+        Ambientes
+      </h1>
       <p className="mt-3 max-w-2xl text-slate-400">
-        Topologia registrada no Snapshot Store. Dados vêm exclusivamente da API Go.
+        Topologia registrada no Snapshot Store. Dados vêm exclusivamente da API
+        Go.
       </p>
 
       <div className="mt-8">
@@ -52,7 +59,9 @@ export function EnvironmentsPage() {
               <tr key={env.id} className="border-t border-slate-800">
                 <td className="px-4 py-3 text-slate-100">{env.name}</td>
                 <td className="px-4 py-3 text-slate-300">{env.type}</td>
-                <td className="px-4 py-3 text-slate-300">{env.discovery_mode}</td>
+                <td className="px-4 py-3 text-slate-300">
+                  {env.discovery_mode}
+                </td>
                 <td className="px-4 py-3">
                   <Badge tone={env.active ? "success" : "neutral"}>
                     {env.active ? "ativo" : "inativo"}

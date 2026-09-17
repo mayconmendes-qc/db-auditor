@@ -26,7 +26,10 @@ export function Shell({
         <strong className="text-sm font-semibold tracking-wide text-slate-50">
           Timescale Auditor
         </strong>
-        <nav className="mt-6 grid grid-cols-2 gap-1 md:grid-cols-1" aria-label="Principal">
+        <nav
+          className="mt-6 grid grid-cols-2 gap-1 md:grid-cols-1"
+          aria-label="Principal"
+        >
           {navigationSections.map((section) => {
             const isActive = section === activeSection;
             return (
@@ -46,7 +49,9 @@ export function Shell({
           })}
         </nav>
       </aside>
-      <main className="mx-auto w-full max-w-5xl px-6 py-12 md:px-12 md:py-16">{children}</main>
+      <main className="mx-auto w-full max-w-5xl px-6 py-12 md:px-12 md:py-16">
+        {children}
+      </main>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	testing "testing"
+	"testing"
 
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
@@ -46,7 +46,9 @@ func (c *captureWriter) Write(b []byte) (int, error) {
 	return c.body.Write(b)
 }
 
-func (c *captureWriter) WriteHeader(statusCode int) { c.code = statusCode }
+func (c *captureWriter) WriteHeader(statusCode int) {
+	c.code = statusCode
+}
 
 func TestHealth(t *testing.T) {
 	h := NewHandler(stubStore{})
