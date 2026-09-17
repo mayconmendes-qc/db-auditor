@@ -1,4 +1,10 @@
-import type { EnvironmentsResponse, HealthResponse } from "../types";
+import type {
+  DatabaseSnapshot,
+  EnvironmentsResponse,
+  HealthResponse,
+  ItemsResponse,
+  SchemaSnapshot,
+} from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
@@ -15,4 +21,12 @@ export const api = {
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
   environments: () => getJSON<EnvironmentsResponse>("/api/v1/environments"),
+  databases: (environmentId: string) =>
+    getJSON<ItemsResponse<DatabaseSnapshot>>(
+      `/api/v1/environments/${environmentId}/databases`,
+    ),
+  schemas: (environmentId: string) =>
+    getJSON<ItemsResponse<SchemaSnapshot>>(
+      `/api/v1/environments/${environmentId}/schemas`,
+    ),
 };

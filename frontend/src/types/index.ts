@@ -22,3 +22,37 @@ export interface Environment {
 export interface EnvironmentsResponse {
   items: Environment[];
 }
+
+export interface DatabaseSnapshot {
+  id: string;
+  audit_run_id: string;
+  environment_id: string;
+  database_name: string;
+  owner_name: string | null;
+  encoding: string | null;
+  size_bytes: number;
+  connection_count: number;
+  allow_connections: boolean;
+  is_template: boolean;
+  collected_at: string;
+}
+
+export interface SchemaSnapshot {
+  id: string;
+  audit_run_id: string;
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  owner_name: string | null;
+  table_count: number;
+  view_count: number;
+  materialized_view_count: number;
+  sequence_count: number;
+  function_count: number;
+  size_bytes: number;
+  collected_at: string;
+}
+
+export interface ItemsResponse<T> {
+  items: T[];
+}

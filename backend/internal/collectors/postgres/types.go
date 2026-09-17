@@ -101,6 +101,54 @@ type IndexFacts struct {
 	IdxTupFetch     int64  `json:"idx_tup_fetch"`
 }
 
+// ConstraintFacts is one row from the constraint collector.
+type ConstraintFacts struct {
+	DatabaseName         string `json:"database_name"`
+	SchemaName           string `json:"schema_name"`
+	TableName            string `json:"table_name"`
+	ConstraintName       string `json:"constraint_name"`
+	ConstraintType       string `json:"constraint_type"`
+	ConstraintDefinition string `json:"constraint_definition"`
+	IsValidated          bool   `json:"is_validated"`
+	IsDeferrable         bool   `json:"is_deferrable"`
+	IsDeferred           bool   `json:"is_deferred"`
+}
+
+// ViewFacts is one row from the view collector (views and matviews).
+type ViewFacts struct {
+	DatabaseName   string `json:"database_name"`
+	SchemaName     string `json:"schema_name"`
+	ViewName       string `json:"view_name"`
+	Owner          string `json:"owner_name"`
+	Relkind        string `json:"relkind"`
+	ViewDefinition string `json:"view_definition"`
+	SizeBytes      int64  `json:"size_bytes"`
+}
+
+// FunctionFacts is one row from the function/procedure collector.
+type FunctionFacts struct {
+	DatabaseName       string `json:"database_name"`
+	SchemaName         string `json:"schema_name"`
+	FunctionName       string `json:"function_name"`
+	IdentityArguments  string `json:"identity_arguments"`
+	Owner              string `json:"owner_name"`
+	LanguageName       string `json:"language_name"`
+	IsSecurityDefiner  bool   `json:"is_security_definer"`
+	Volatility         string `json:"volatility"`
+	ParallelSafety     string `json:"parallel_safety"`
+	Kind               string `json:"kind"`
+	FunctionDefinition string `json:"function_definition"`
+}
+
+// ExtensionFacts is one row from the extension collector.
+type ExtensionFacts struct {
+	DatabaseName     string `json:"database_name"`
+	ExtensionName    string `json:"extension_name"`
+	ExtensionVersion string `json:"extension_version"`
+	SchemaName       string `json:"schema_name"`
+	IsRelocatable    bool   `json:"is_relocatable"`
+}
+
 // PartialError records a non-fatal failure for one database during discovery.
 type PartialError struct {
 	Database string `json:"database"`
