@@ -38,58 +38,58 @@ const demoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
   tables: [
     {
-      Database: "app",
-      Schema: "public",
-      Name: "events",
-      SizeBytes: 3_000_000_000,
+      database: "app",
+      schema: "public",
+      name: "events",
+      size_bytes: 3_000_000_000,
     },
     {
-      Database: "app",
-      Schema: "public",
-      Name: "orders",
-      SizeBytes: 50_000_000,
+      database: "app",
+      schema: "public",
+      name: "orders",
+      size_bytes: 50_000_000,
     },
   ],
   indexes: [
     {
-      Database: "app",
-      Schema: "public",
-      TableName: "orders",
-      IndexName: "idx_orders_legacy",
-      IdxScan: 0,
-      SizeBytes: 12_000_000,
+      database: "app",
+      schema: "public",
+      table_name: "orders",
+      index_name: "idx_orders_legacy",
+      idx_scan: 0,
+      size_bytes: 12_000_000,
     },
   ],
   hypertables: [
     {
-      Database: "app",
-      Schema: "public",
-      Name: "metrics",
-      NumChunks: 620,
-      SizeBytes: 8_000_000_000,
+      database: "app",
+      schema: "public",
+      name: "metrics",
+      num_chunks: 620,
+      size_bytes: 8_000_000_000,
     },
   ],
   chunks: [
     {
-      Database: "app",
-      Schema: "public",
-      HypertableName: "metrics",
-      ChunkName: "_hyper_1_1",
-      SizeBytes: 100_000_000,
+      database: "app",
+      schema: "public",
+      hypertable_name: "metrics",
+      chunk_name: "_hyper_1_1",
+      size_bytes: 100_000_000,
     },
     {
-      Database: "app",
-      Schema: "public",
-      HypertableName: "metrics",
-      ChunkName: "_hyper_1_2",
-      SizeBytes: 100_000_000,
+      database: "app",
+      schema: "public",
+      hypertable_name: "metrics",
+      chunk_name: "_hyper_1_2",
+      size_bytes: 100_000_000,
     },
     {
-      Database: "app",
-      Schema: "public",
-      HypertableName: "metrics",
-      ChunkName: "_hyper_1_3",
-      SizeBytes: 900_000_000,
+      database: "app",
+      schema: "public",
+      hypertable_name: "metrics",
+      chunk_name: "_hyper_1_3",
+      size_bytes: 900_000_000,
     },
   ],
 };
@@ -242,7 +242,10 @@ export function FindingsPage() {
         ) : null}
 
         {selected ? (
-          <Card title={`Detalhe · ${selected.severity}`} subtitle={selected.title}>
+          <Card
+            title={`Detalhe · ${selected.severity}`}
+            subtitle={selected.title}
+          >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
               <li>Tipo: {selected.finding_type}</li>
               <li>Status: {selected.status}</li>
