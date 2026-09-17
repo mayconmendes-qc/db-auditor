@@ -16,9 +16,18 @@ type Database struct {
 	ApplicationName  string
 }
 
+// Scope filters which databases/schemas collectors may touch on audited environments.
+type Scope struct {
+	DatabaseAllowlist []string
+	DatabaseDenylist  []string
+	SchemaAllowlist   []string
+	SchemaDenylist    []string
+}
+
 type Config struct {
 	HTTPAddress string
 	Database    Database
+	Scope       Scope
 }
 
 func Load() (Config, error) {
@@ -38,6 +47,12 @@ func Load() (Config, error) {
 			LockTimeout:      lockTimeout,
 			ApplicationName:  env("AUDITOR_APPLICATION_NAME", "timescale-auditor"),
 		},
+		Scope: Scope{
+			DatabaseAllowlist: splitCSV(env("AUDITOR_DATABASE_ALLOWLIST", "")),
+			DatabaseDenylist:  splitCSV(env("AUDITOR_DATABASE_DENYLIST", "template0,template1,postgres")),
+			SchemaAllowlist:   splitCSV(env("AUDITOR_SCHEMA_ALLOWLIST", "")),
+			SchemaDenylist:    splitCSV(env("AUDITOR_SCHEMA_DENYLIST", "pg_catalog,information_schema")),
+		},
 	}
 	if cfg.Database.URL == "" {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is required")
@@ -46,6 +61,45 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is invalid: %w", err)
 	}
 	return cfg, nil
+}
+
+// AllowsDatabase reports whether a database name may be collected.
+// Denylist wins; empty allowlist means all non-denied names are allowed.
+func (s Scope) AllowsDatabase(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, denied := range s.DatabaseDenylist {
+		if strings.EqualFold(denied, name) {
+			return false
+		}
+	}
+	if len(s.DatabaseAllowlist) == 0 {
+		return true
+	}
+	for _, allowed := range s.DatabaseAllowlist {
+		if strings.EqualFold(allowed, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// AllowsSchema reports whether a schema name may be collected.
+func (s Scope) AllowsSchema(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, denied := range s.SchemaDenylist {
+		if strings.EqualFold(denied, name) {
+			return false
+		}
+	}
+	if len(s.SchemaAllowlist) == 0 {
+		return true
+	}
+	for _, allowed := range s.SchemaAllowlist {
+		if strings.EqualFold(allowed, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func SanitizeConnectionString(raw string) string {
@@ -83,4 +137,19 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func splitCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
