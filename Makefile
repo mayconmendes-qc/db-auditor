@@ -1,4 +1,4 @@
-.PHONY: test check staticcheck lint fmt up down logs
+.PHONY: test check staticcheck lint fmt up down logs web-check web-test web-typecheck web-install
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './web/*')
@@ -23,3 +23,15 @@ down:
 
 logs:
 	podman compose logs -f
+
+web-install:
+	cd web && npm install
+
+web-check:
+	cd web && npm run check
+
+web-test:
+	cd web && npm run test
+
+web-typecheck:
+	cd web && npm run typecheck

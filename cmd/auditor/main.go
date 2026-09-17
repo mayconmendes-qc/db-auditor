@@ -9,9 +9,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mayconmendes/timescale-auditor/internal/api"
-	"github.com/mayconmendes/timescale-auditor/internal/config"
-	"github.com/mayconmendes/timescale-auditor/internal/database"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/api"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/database"
 )
 
 func main() {
