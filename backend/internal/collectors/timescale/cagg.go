@@ -10,15 +10,15 @@ import (
 
 // ContinuousAggregateFacts is one continuous aggregate row.
 type ContinuousAggregateFacts struct {
-	DatabaseName             string `json:"database_name"`
-	SchemaName               string `json:"schema_name"`
-	ViewName                 string `json:"view_name"`
-	Owner                    string `json:"owner_name"`
-	MaterializationSchema    string `json:"materialization_schema"`
+	DatabaseName              string `json:"database_name"`
+	SchemaName                string `json:"schema_name"`
+	ViewName                  string `json:"view_name"`
+	Owner                     string `json:"owner_name"`
+	MaterializationSchema     string `json:"materialization_schema"`
 	MaterializationHypertable string `json:"materialization_hypertable"`
-	MaterializedOnly         bool   `json:"materialized_only"`
-	CompressionEnabled       bool   `json:"compression_enabled"`
-	Finalized                *bool  `json:"finalized,omitempty"`
+	MaterializedOnly          bool   `json:"materialized_only"`
+	CompressionEnabled        bool   `json:"compression_enabled"`
+	Finalized                 *bool  `json:"finalized,omitempty"`
 }
 
 // CollectContinuousAggregates lists CAGGs and applies schema scope on view schema.

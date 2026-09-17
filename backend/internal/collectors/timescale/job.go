@@ -11,25 +11,25 @@ import (
 
 // JobFacts is one timescaledb_information.jobs row.
 type JobFacts struct {
-	DatabaseName      string     `json:"database_name"`
-	JobID             int64      `json:"job_id"`
-	ApplicationName   string     `json:"application_name"`
-	ScheduleInterval  string     `json:"schedule_interval"`
-	MaxRuntime        string     `json:"max_runtime"`
-	MaxRetries        int        `json:"max_retries"`
-	RetryPeriod       string     `json:"retry_period"`
-	ProcSchema        string     `json:"proc_schema"`
-	ProcName          string     `json:"proc_name"`
-	Owner             string     `json:"owner_name"`
-	Scheduled         bool       `json:"scheduled"`
-	FixedSchedule     bool       `json:"fixed_schedule"`
-	ConfigJSON        *string    `json:"config_json,omitempty"`
-	NextStart         *time.Time `json:"next_start,omitempty"`
-	InitialStart      *time.Time `json:"initial_start,omitempty"`
-	HypertableSchema  *string    `json:"hypertable_schema,omitempty"`
-	HypertableName    *string    `json:"hypertable_name,omitempty"`
-	CheckSchema       *string    `json:"check_schema,omitempty"`
-	CheckName         *string    `json:"check_name,omitempty"`
+	DatabaseName     string     `json:"database_name"`
+	JobID            int64      `json:"job_id"`
+	ApplicationName  string     `json:"application_name"`
+	ScheduleInterval string     `json:"schedule_interval"`
+	MaxRuntime       string     `json:"max_runtime"`
+	MaxRetries       int        `json:"max_retries"`
+	RetryPeriod      string     `json:"retry_period"`
+	ProcSchema       string     `json:"proc_schema"`
+	ProcName         string     `json:"proc_name"`
+	Owner            string     `json:"owner_name"`
+	Scheduled        bool       `json:"scheduled"`
+	FixedSchedule    bool       `json:"fixed_schedule"`
+	ConfigJSON       *string    `json:"config_json,omitempty"`
+	NextStart        *time.Time `json:"next_start,omitempty"`
+	InitialStart     *time.Time `json:"initial_start,omitempty"`
+	HypertableSchema *string    `json:"hypertable_schema,omitempty"`
+	HypertableName   *string    `json:"hypertable_name,omitempty"`
+	CheckSchema      *string    `json:"check_schema,omitempty"`
+	CheckName        *string    `json:"check_name,omitempty"`
 }
 
 // CollectJobs lists background jobs. Schema scope filters jobs tied to a hypertable schema when present.
