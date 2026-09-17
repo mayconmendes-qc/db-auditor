@@ -4,6 +4,7 @@ export type NavigationSection =
   | "Audit runs"
   | "Inventário"
   | "Mappings"
+  | "Schema Drift"
   | "Findings";
 
 export interface HealthResponse {
@@ -202,6 +203,47 @@ export interface MappingCandidate {
   confidence: number;
   source_fingerprint?: string;
   target_fingerprint?: string;
+}
+
+export interface CompareObjectItem {
+  object_type: string;
+  key: string;
+  name: string;
+  fingerprint?: string;
+  fields?: Record<string, string>;
+}
+
+export interface FieldDiff {
+  field: string;
+  source?: string;
+  target?: string;
+}
+
+export interface ObjectDiff {
+  object_type: string;
+  object_key: string;
+  status: string;
+  source_name?: string;
+  target_name?: string;
+  source_fingerprint?: string;
+  target_fingerprint?: string;
+  field_diffs?: FieldDiff[];
+}
+
+export interface CompareSummary {
+  match: number;
+  drift: number;
+  only_source: number;
+  only_target: number;
+  unknown: number;
+  total: number;
+}
+
+export interface CompareResult {
+  source_run_id?: string;
+  target_run_id?: string;
+  summary: CompareSummary;
+  objects: ObjectDiff[];
 }
 
 export interface ItemsResponse<T> {
