@@ -29,7 +29,7 @@ type CollectorSpec struct {
 
 // Registry holds named collectors available to the AuditRunner.
 type Registry struct {
-	mu   sync.RWMutex
+	mu     sync.RWMutex
 	byName map[string]CollectorSpec
 }
 
@@ -96,16 +96,5 @@ func DefaultProfiles() map[string]struct{} {
 		ProfileWeekly:  {},
 		ProfileMonthly: {},
 		ProfileManual:  {},
-	}
-}
-
-// FastOnlyProfiles is used for lightweight collectors.
-func FastOnlyProfiles() map[string]struct{} {
-	return map[string]struct{}{
-		ProfileFast:   {},
-		ProfileDaily:  {},
-		ProfileWeekly: {},
-		ProfileMonthly: {},
-		ProfileManual: {},
 	}
 }

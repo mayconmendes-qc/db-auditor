@@ -2,11 +2,11 @@ package audit
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // MemoryRunStore is an in-memory RunStore for unit tests and local dry-runs.
@@ -30,16 +30,16 @@ type memAuditRun struct {
 }
 
 type memCollectorRun struct {
-	ID            string
-	AuditRunID    string
-	Name          string
-	Version       string
-	Status        string
-	Rows          int64
-	Warning       string
-	Error         string
-	StartedAt     time.Time
-	FinishedAt    *time.Time
+	ID         string
+	AuditRunID string
+	Name       string
+	Version    string
+	Status     string
+	Rows       int64
+	Warning    string
+	Error      string
+	StartedAt  time.Time
+	FinishedAt *time.Time
 }
 
 // NewMemoryRunStore creates an empty memory store.
@@ -50,10 +50,16 @@ func NewMemoryRunStore() *MemoryRunStore {
 	}
 }
 
+func newID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func (m *MemoryRunStore) StartAuditRun(_ context.Context, environmentID, profile, serviceVersion, collectorVersion string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id := uuid.NewString()
+	id := newID()
 	m.AuditRuns[id] = &memAuditRun{
 		ID:               id,
 		EnvironmentID:    environmentID,
@@ -87,7 +93,7 @@ func (m *MemoryRunStore) StartCollectorRun(_ context.Context, auditRunID, name, 
 	if _, ok := m.AuditRuns[auditRunID]; !ok {
 		return "", fmt.Errorf("audit run %s not found", auditRunID)
 	}
-	id := uuid.NewString()
+	id := newID()
 	m.CollectorRuns[id] = &memCollectorRun{
 		ID:         id,
 		AuditRunID: auditRunID,
