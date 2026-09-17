@@ -75,7 +75,10 @@ export function SchemaDriftPage() {
     setSelected(null);
     try {
       const statuses = statusFilter
-        ? statusFilter.split(",").map((s) => s.trim()).filter(Boolean)
+        ? statusFilter
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
         : undefined;
       const res = await api.compare({
         source: demoSource,
@@ -146,7 +149,10 @@ export function SchemaDriftPage() {
 
         {result && !busy ? (
           result.objects.length === 0 ? (
-            <Card title="Sem diferenças" subtitle="Nenhum objeto após filtros." />
+            <Card
+              title="Sem diferenças"
+              subtitle="Nenhum objeto após filtros."
+            />
           ) : (
             <Table headers={["Tipo", "Key", "Status", "Origem", "Destino"]}>
               {result.objects.map((o) => (
