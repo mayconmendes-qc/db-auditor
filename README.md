@@ -2,36 +2,24 @@
 
 Serviço **read-only** de inventário, comparação e diagnóstico dos ambientes TimescaleDB (Tiger Cloud e Datacenter Unifique).
 
+## Pré-requisito no host
+
+Apenas **Podman** (ou Docker) com **Compose**. Não é necessário instalar Go, Bun, Node, sqlc ou curl na máquina local — o `Makefile` executa ferramentas em containers.
+
+```bash
+# exemplo Fedora / RHEL
+sudo dnf install podman podman-compose
+# ou Docker Desktop / docker compose plugin
+```
+
 ## Estrutura canônica do repositório
 
 ```text
 .
-├── backend/
-│   ├── cmd/auditor/              # entrypoint HTTP
-│   ├── internal/
-│   │   ├── api/                  # handlers HTTP (sem regra de domínio pesada)
-│   │   ├── config/               # env, timeouts, allow/deny lists
-│   │   ├── database/             # pool pgx + sqlc gerado
-│   │   └── repository/           # transações e repositórios mínimos
-│   ├── migrations/               # schema do Snapshot Store
-│   ├── sql/queries/              # SQL fonte do sqlc
-│   ├── Containerfile
-│   ├── go.mod / go.sum
-│   ├── Makefile
-│   ├── sqlc.yaml
-│   └── .golangci.yml
-├── frontend/
-│   ├── src/
-│   │   ├── components/           # layout + primitives UI
-│   │   ├── hooks/
-│   │   ├── pages/
-│   │   ├── services/             # cliente HTTP tipado
-│   │   └── types/
-│   ├── package.json              # Bun
-│   └── …
-├── .github/workflows/ci.yml
-├── compose.yaml
-├── Makefile
+├── backend/          # API Go + sqlc + migrations + Containerfile
+├── frontend/         # React + TS + Tailwind + Bun (+ Containerfile opcional)
+├── compose.yaml      # postgres, api, frontend (profile), tools (profile)
+├── Makefile          # todos os comandos via containers
 ├── .env.example
 └── README.md
 ```
@@ -47,31 +35,43 @@ Serviço **read-only** de inventário, comparação e diagnóstico dos ambientes
 | `internal/database/sqlc` | Código **gerado** por sqlc — não editar à mão |
 | `internal/repository` | Orquestra queries tipadas e `pgx.Tx` |
 
-Regra: preferir Go idiomático e packages pequenos; evitar camadas sem necessidade.
-
 ## Stack
 
 | Camada | Tecnologia |
 |--------|------------|
-| Backend | Go 1.27.x, `net/http`, `pgx`/`pgxpool`, `sqlc`, PostgreSQL |
+| Backend | Go 1.27.x, `net/http`, `pgx`/`pgxpool`, `sqlc`, PostgreSQL **18** |
 | Frontend | React, TypeScript strict, Tailwind CSS, Vitest, Biome, **Bun** |
-| Runtime local | Podman Compose |
+| Runtime local | Podman / Docker Compose |
 
-## Ambiente local
+## Ambiente local (container-first)
 
-1. `cp .env.example .env` e defina `POSTGRES_PASSWORD`.
-2. Suba a API e o Snapshot Store:
+1. Configure o ambiente:
+
+```bash
+cp .env.example .env
+# edite POSTGRES_PASSWORD
+```
+
+2. Suba API + Snapshot Store (PostgreSQL 18):
 
 ```bash
 make up
-# ou: podman compose up -d --build
+# podman compose up -d --build postgres api
 ```
 
-3. Smoke check:
+> **PostgreSQL 18:** o volume nomeado monta em `/var/lib/postgresql` (não mais `/var/lib/postgresql/data`). O cluster fica em `…/18/docker` dentro do volume.
+
+3. Smoke check (sem curl no host):
 
 ```bash
 make smoke
-# equivale a: curl /health e /ready
+```
+
+4. Frontend de desenvolvimento (profile `frontend`):
+
+```bash
+make frontend-up
+# http://localhost:5173 — API em http://localhost:8080
 ```
 
 Logs e parada:
@@ -81,37 +81,27 @@ make logs
 make down
 ```
 
-Reset **destrutivo** do volume local do Postgres:
+Reset **destrutivo** de volumes (dados do Postgres + caches de ferramentas):
 
 ```bash
-make reset-volume   # podman compose down -v
+make reset-volume
 ```
 
-### Frontend (Bun)
+Se você já tentou subir com o mount antigo (`…/data`), rode `make reset-volume` antes de `make up` para recriar o volume no path correto.
 
-```bash
-cd frontend && bun install && bun run dev
-```
-
-O frontend consome **apenas** a API HTTP.
-
-## Qualidade
+## Qualidade (também via containers)
 
 ```bash
 make backend-fmt backend-check backend-staticcheck backend-lint backend-test
 make backend-test-cover
-make frontend-install frontend-check frontend-typecheck frontend-test
+make frontend-check frontend-typecheck frontend-test
 ```
 
-Regenerar sqlc (requer `sqlc` instalado):
-
-```bash
-cd backend && make sqlc
-```
+Esses alvos usam os serviços `backend-tools`, `frontend-tools` e `golangci-lint` do `compose.yaml` (profile `tools`).
 
 ## CI
 
-- Backend: gofmt, vet, **staticcheck**, golangci-lint, `go test -cover`, Trivy
+- Backend: gofmt, vet, staticcheck, golangci-lint, `go test -cover`, Trivy
 - Frontend: Biome, typecheck, Vitest, Trivy
 
 ## Segurança
