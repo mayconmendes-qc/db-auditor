@@ -10,7 +10,6 @@ import (
 	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
 )
 
-// DiscoveryMode matches audit_environment.discovery_mode.
 type DiscoveryMode string
 
 const (
@@ -18,7 +17,6 @@ const (
 	ModeMultiDatabase  DiscoveryMode = "multi_database"
 )
 
-// DiscoveryResult holds topology facts plus partial errors (T-030).
 type DiscoveryResult struct {
 	Server    ServerFacts
 	Databases []DatabaseFacts
@@ -34,7 +32,7 @@ func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, s
 	if err != nil {
 		return result, fmt.Errorf("connect target: %w", err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 
 	server, err := CollectServer(ctx, conn)
 	if err != nil {
