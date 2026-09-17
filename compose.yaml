@@ -58,7 +58,6 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    profiles: ["frontend"]
 
   # One-shot tool images used by Makefile targets (no local Go/Bun required).
   backend-tools:
@@ -91,7 +90,6 @@ services:
 
 networks:
   auditor:
-    # Not fully internal: host must reach published ports; tools may pull modules.
     driver: bridge
 
 volumes:

@@ -17,8 +17,8 @@ sudo dnf install podman podman-compose
 ```text
 .
 ├── backend/          # API Go + sqlc + migrations + Containerfile
-├── frontend/         # React + TS + Tailwind + Bun (+ Containerfile opcional)
-├── compose.yaml      # postgres, api, frontend (profile), tools (profile)
+├── frontend/         # React + TS + Tailwind + Bun
+├── compose.yaml      # postgres, api, frontend + profile tools
 ├── Makefile          # todos os comandos via containers
 ├── .env.example
 └── README.md
@@ -52,42 +52,34 @@ cp .env.example .env
 # edite POSTGRES_PASSWORD
 ```
 
-2. Suba API + Snapshot Store (PostgreSQL 18):
+2. Suba **postgres + api + frontend** com um único comando:
 
 ```bash
 make up
-# podman compose up -d --build postgres api
 ```
 
-> **PostgreSQL 18:** o volume nomeado monta em `/var/lib/postgresql` (não mais `/var/lib/postgresql/data`). O cluster fica em `…/18/docker` dentro do volume.
+| Serviço | URL / nota |
+|---------|------------|
+| Frontend | http://localhost:5173 |
+| API | http://localhost:8080 |
+| Postgres | só na rede interna do compose (volume `snapshot-store` em `/var/lib/postgresql`) |
+
+> **PostgreSQL 18:** o volume monta em `/var/lib/postgresql` (não `/var/lib/postgresql/data`). Se você já usou o path antigo, rode `make reset-volume` antes de `make up`.
 
 3. Smoke check (sem curl no host):
 
 ```bash
 make smoke
-```
-
-4. Frontend de desenvolvimento (profile `frontend`):
-
-```bash
-make frontend-up
-# http://localhost:5173 — API em http://localhost:8080
-```
-
-Logs e parada:
-
-```bash
+make ps
 make logs
-make down
 ```
 
-Reset **destrutivo** de volumes (dados do Postgres + caches de ferramentas):
+Parada e reset:
 
 ```bash
-make reset-volume
+make down
+make reset-volume   # destrutivo: apaga volumes nomeados
 ```
-
-Se você já tentou subir com o mount antigo (`…/data`), rode `make reset-volume` antes de `make up` para recriar o volume no path correto.
 
 ## Qualidade (também via containers)
 
@@ -96,8 +88,6 @@ make backend-fmt backend-check backend-staticcheck backend-lint backend-test
 make backend-test-cover
 make frontend-check frontend-typecheck frontend-test
 ```
-
-Esses alvos usam os serviços `backend-tools`, `frontend-tools` e `golangci-lint` do `compose.yaml` (profile `tools`).
 
 ## CI
 

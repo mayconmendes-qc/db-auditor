@@ -3,38 +3,38 @@
 
 COMPOSE ?= podman compose
 
-.PHONY: up down logs reset-volume smoke frontend-up \
+.PHONY: up down logs reset-volume smoke ps \
 	backend-fmt backend-test backend-test-cover backend-check backend-lint backend-staticcheck \
-	frontend-install frontend-check frontend-test frontend-typecheck frontend-dev
+	frontend-install frontend-check frontend-test frontend-typecheck
 
 ## Runtime -----------------------------------------------------------------
 
+# Starts postgres + api (backend) + frontend.
 up:
-	$(COMPOSE) up -d --build postgres api
+	$(COMPOSE) up -d --build postgres api frontend
+	@echo ""
+	@echo "postgres : internal only (snapshot-store)"
+	@echo "api      : http://localhost:$${AUDITOR_HTTP_PORT:-8080}"
+	@echo "frontend : http://localhost:$${FRONTEND_HTTP_PORT:-5173}"
 
 down:
-	$(COMPOSE) --profile frontend --profile tools down
+	$(COMPOSE) --profile tools down
 
 logs:
-	$(COMPOSE) logs -f postgres api
+	$(COMPOSE) logs -f postgres api frontend
+
+ps:
+	$(COMPOSE) ps
 
 # Destructive: removes named volumes (Postgres data + tool caches).
 reset-volume:
-	$(COMPOSE) --profile frontend --profile tools down -v
+	$(COMPOSE) --profile tools down -v
 
 # Smoke via the API container (no host curl required).
 smoke:
 	@$(COMPOSE) exec -T api /busybox wget -q -O - http://localhost:8080/health >/dev/null
 	@$(COMPOSE) exec -T api /busybox wget -q -O - http://localhost:8080/ready >/dev/null
 	@echo "smoke ok: API healthy and ready"
-
-## Frontend runtime --------------------------------------------------------
-
-frontend-up:
-	$(COMPOSE) --profile frontend up -d --build frontend
-
-frontend-dev: frontend-up
-	@echo "frontend: http://localhost:$${FRONTEND_HTTP_PORT:-5173}"
 
 ## Backend quality (containers) --------------------------------------------
 
