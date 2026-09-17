@@ -5,9 +5,9 @@ import "testing"
 func TestParseVersion(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		in            string
+		in                  string
 		major, minor, patch int
-		wantErr       bool
+		wantErr             bool
 	}{
 		{"2.17.2", 2, 17, 2, false},
 		{"2.14.2-dev", 2, 14, 2, false},
