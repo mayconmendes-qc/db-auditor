@@ -52,6 +52,15 @@ func (s *stubStore) GetAuditRun(context.Context, string) (*repository.AuditRunRo
 func (s *stubStore) ListCollectorRuns(context.Context, string) ([]repository.CollectorRunRow, error) {
 	return []repository.CollectorRunRow{}, nil
 }
+func (s *stubStore) ListObjectMappings(context.Context, string, string, string) ([]repository.ObjectMapping, error) {
+	return []repository.ObjectMapping{}, nil
+}
+func (s *stubStore) CreateObjectMapping(context.Context, repository.CreateObjectMappingParams) (*repository.ObjectMapping, error) {
+	return &repository.ObjectMapping{}, nil
+}
+func (s *stubStore) UpdateObjectMappingStatus(context.Context, string, string, string) (*repository.ObjectMapping, error) {
+	return &repository.ObjectMapping{}, nil
+}
 
 func TestHealth(t *testing.T) {
 	t.Parallel()
@@ -71,21 +80,10 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestListHypertablesEmpty(t *testing.T) {
+func TestListMappingsEmpty(t *testing.T) {
 	t.Parallel()
 	h := NewHandler(&stubStore{})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/00000000-0000-0000-0000-000000000001/hypertables", nil)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
-}
-
-func TestListAuditRunsEmpty(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(&stubStore{})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit-runs", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/mappings", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

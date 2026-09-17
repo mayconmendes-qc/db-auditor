@@ -3,6 +3,7 @@ export type NavigationSection =
   | "Ambientes"
   | "Audit runs"
   | "Inventário"
+  | "Mappings"
   | "Findings";
 
 export interface HealthResponse {
@@ -163,6 +164,44 @@ export interface CollectorRun {
   rows_collected: number;
   warning?: string | null;
   error?: string | null;
+}
+
+export interface ObjectMapping {
+  id: string;
+  source_environment_id: string;
+  target_environment_id: string;
+  source_database: string;
+  source_schema: string;
+  source_object_type: string;
+  source_object_name: string;
+  target_database: string;
+  target_schema: string;
+  target_object_type: string;
+  target_object_name: string;
+  relation_type: string;
+  confidence: number;
+  status: string;
+  source_fingerprint?: string | null;
+  target_fingerprint?: string | null;
+  fingerprint_algorithm?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MappingCandidate {
+  source_database: string;
+  source_schema: string;
+  source_object_type: string;
+  source_object_name: string;
+  target_database: string;
+  target_schema: string;
+  target_object_type: string;
+  target_object_name: string;
+  relation_type: string;
+  confidence: number;
+  source_fingerprint?: string;
+  target_fingerprint?: string;
 }
 
 export interface ItemsResponse<T> {

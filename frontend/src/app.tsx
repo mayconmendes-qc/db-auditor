@@ -4,6 +4,7 @@ import {
   AuditRunsPage,
   EnvironmentsPage,
   InventoryPage,
+  MappingsPage,
   OverviewPage,
 } from "./pages";
 import type { NavigationSection } from "./types";
@@ -20,6 +21,8 @@ export function App() {
     content = <InventoryPage />;
   } else if (section === "Audit runs") {
     content = <AuditRunsPage />;
+  } else if (section === "Mappings") {
+    content = <MappingsPage />;
   }
 
   return (
