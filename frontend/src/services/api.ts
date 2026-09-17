@@ -3,6 +3,8 @@ import type {
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
+  CompareObjectItem,
+  CompareResult,
   DatabaseSnapshot,
   DimensionSnapshot,
   EnvironmentsResponse,
@@ -147,4 +149,12 @@ export const api = {
     target_default_db?: string;
   }) =>
     postJSON<ItemsResponse<MappingCandidate>>("/api/v1/mappings/suggest", body),
+  compare: (body: {
+    source_run_id?: string;
+    target_run_id?: string;
+    source: CompareObjectItem[];
+    target: CompareObjectItem[];
+    statuses?: string[];
+    object_type?: string;
+  }) => postJSON<CompareResult>("/api/v1/compare", body),
 };

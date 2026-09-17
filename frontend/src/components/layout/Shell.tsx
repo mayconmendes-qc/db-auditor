@@ -7,6 +7,7 @@ export const navigationSections: NavigationSection[] = [
   "Audit runs",
   "Inventário",
   "Mappings",
+  "Schema Drift",
   "Findings",
 ];
 
