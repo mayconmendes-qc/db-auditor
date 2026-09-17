@@ -21,6 +21,12 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 		}
 		key := fmt.Sprintf("%s.policy.%d", p.Database, p.JobID)
 		title := fmt.Sprintf("Policy job failing: %s #%d (%s)", p.Database, p.JobID, p.PolicyType)
+		ev := map[string]any{}
+		ev["job_id"] = p.JobID
+		ev["policy_type"] = p.PolicyType
+		ev["last_run_status"] = p.LastRunStatus
+		ev["schedule_interval"] = p.ScheduleInterval
+		ev["proc_name"] = p.ProcName
 		f := Finding{
 			EnvironmentID: facts.EnvironmentID,
 			AuditRunID:    facts.AuditRunID,
@@ -34,14 +40,8 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 			DatabaseName:  p.Database,
 			SchemaName:    p.HypertableSchema,
 			ObjectName:    p.HypertableName,
-			Evidence: map[string]any{
-				"job_id":            p.JobID,
-				"policy_type":       p.PolicyType,
-				"last_run_status":   p.LastRunStatus,
-				"schedule_interval": p.ScheduleInterval,
-				"proc_name":         p.ProcName,
-			},
-			DedupKey: DedupKey("policy.job_failed", key, title),
+			Evidence:      ev,
+			DedupKey:      DedupKey("policy.job_failed", key, title),
 		}
 		out = append(out, f)
 	}
@@ -54,6 +54,12 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 		}
 		key := fmt.Sprintf("%s.job.%d", j.Database, j.JobID)
 		title := fmt.Sprintf("Background job unhealthy: %s #%d", j.Database, j.JobID)
+		ev := map[string]any{}
+		ev["job_id"] = j.JobID
+		ev["application"] = j.Application
+		ev["last_run_status"] = j.LastRunStatus
+		ev["total_failures"] = j.TotalFailures
+		ev["scheduled"] = j.Scheduled
 		f := Finding{
 			EnvironmentID: facts.EnvironmentID,
 			AuditRunID:    facts.AuditRunID,
@@ -66,14 +72,8 @@ func (PolicyAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding
 			ObjectKey:     key,
 			DatabaseName:  j.Database,
 			ObjectName:    j.ProcName,
-			Evidence: map[string]any{
-				"job_id":          j.JobID,
-				"application":     j.Application,
-				"last_run_status": j.LastRunStatus,
-				"total_failures":  j.TotalFailures,
-				"scheduled":       j.Scheduled,
-			},
-			DedupKey: DedupKey("job.unhealthy", key, title),
+			Evidence:      ev,
+			DedupKey:      DedupKey("job.unhealthy", key, title),
 		}
 		out = append(out, f)
 	}
