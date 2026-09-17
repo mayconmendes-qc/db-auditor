@@ -7,12 +7,19 @@ dist/
 bin/
 node_modules/
 
+# Accidental host pollution (tooling with wrong HOME/cwd)
+/scripts/
+/config/
+
 # Backend
 backend/bin/
 backend/coverage/
+backend/coverage.out
 
-# Frontend (Bun)
+# Frontend (Bun / Vite)
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+frontend/coverage/
 frontend/tsconfig.tsbuildinfo
 frontend/bun.lockb
