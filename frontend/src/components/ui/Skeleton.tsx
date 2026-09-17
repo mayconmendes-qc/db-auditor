@@ -4,6 +4,9 @@ export interface SkeletonProps {
 
 export function Skeleton({ className = "" }: SkeletonProps) {
   return (
-    <div className={`animate-pulse rounded-md bg-slate-800/80 ${className}`} aria-hidden="true" />
+    <div
+      className={`animate-pulse rounded-md bg-slate-800/80 ${className}`}
+      aria-hidden="true"
+    />
   );
 }
