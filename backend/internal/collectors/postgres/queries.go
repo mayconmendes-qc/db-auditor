@@ -165,3 +165,76 @@ WHERE t.relkind = 'r'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, t.relname, i.relname
 `
+
+const constraintsSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  rel.relname AS table_name,
+  c.conname AS constraint_name,
+  c.contype::text AS constraint_type,
+  pg_catalog.pg_get_constraintdef(c.oid, true) AS constraint_definition,
+  c.convalidated AS is_validated,
+  c.condeferrable AS is_deferrable,
+  c.condeferred AS is_deferred
+FROM pg_constraint c
+JOIN pg_class rel ON rel.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = rel.relnamespace
+WHERE rel.relkind = 'r'
+  AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, rel.relname, c.conname
+`
+
+const viewsSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  c.relname AS view_name,
+  pg_catalog.pg_get_userbyid(c.relowner) AS owner_name,
+  c.relkind::text AS relkind,
+  pg_catalog.pg_get_viewdef(c.oid, true) AS view_definition,
+  CASE
+    WHEN c.relkind = 'm' THEN COALESCE(pg_total_relation_size(c.oid), 0)
+    ELSE 0
+  END AS size_bytes
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('v', 'm')
+  AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, c.relname
+`
+
+const functionsSQL = `
+SELECT
+  current_database() AS database_name,
+  n.nspname AS schema_name,
+  p.proname AS function_name,
+  pg_catalog.pg_get_function_identity_arguments(p.oid) AS identity_arguments,
+  pg_catalog.pg_get_userbyid(p.proowner) AS owner_name,
+  l.lanname AS language_name,
+  p.prosecdef AS is_security_definer,
+  p.provolatile::text AS volatility,
+  p.proparallel::text AS parallel_safety,
+  p.prokind::text AS kind,
+  pg_catalog.pg_get_functiondef(p.oid) AS function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+JOIN pg_language l ON l.oid = p.prolang
+WHERE n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
+  AND n.nspname <> 'information_schema'
+ORDER BY n.nspname, p.proname, identity_arguments
+`
+
+const extensionsSQL = `
+SELECT
+  current_database() AS database_name,
+  e.extname AS extension_name,
+  e.extversion AS extension_version,
+  n.nspname AS schema_name,
+  e.extrelocatable AS is_relocatable
+FROM pg_extension e
+JOIN pg_namespace n ON n.oid = e.extnamespace
+ORDER BY e.extname
+`
