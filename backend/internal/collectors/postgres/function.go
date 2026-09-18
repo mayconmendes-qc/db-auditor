@@ -9,6 +9,7 @@ import (
 )
 
 // CollectFunctions lists functions and procedures in the current database.
+// Aggregates (prokind=a) are included; function_definition is empty when SQL returns NULL.
 func CollectFunctions(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]FunctionFacts, error) {
 	rows, err := conn.Query(ctx, functionsSQL)
 	if err != nil {
@@ -19,6 +20,7 @@ func CollectFunctions(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 	out := make([]FunctionFacts, 0)
 	for rows.Next() {
 		var f FunctionFacts
+		var definition *string
 		if err := rows.Scan(
 			&f.DatabaseName,
 			&f.SchemaName,
@@ -30,9 +32,12 @@ func CollectFunctions(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 			&f.Volatility,
 			&f.ParallelSafety,
 			&f.Kind,
-			&f.FunctionDefinition,
+			&definition,
 		); err != nil {
 			return nil, fmt.Errorf("function collector scan: %w", err)
+		}
+		if definition != nil {
+			f.FunctionDefinition = *definition
 		}
 		if !scope.AllowsSchema(f.SchemaName) {
 			continue
