@@ -41,7 +41,10 @@ const discoveryMode: Record<string, string> = {
   multi_database: "Múltiplos bancos",
 };
 
-function mapLabel(table: Record<string, string>, value: string | null | undefined): string {
+function mapLabel(
+  table: Record<string, string>,
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "—";
   }

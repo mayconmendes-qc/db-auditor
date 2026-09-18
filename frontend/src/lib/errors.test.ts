@@ -3,7 +3,11 @@ import { ApiError, formatError, networkApiError } from "./errors";
 
 describe("formatError", () => {
   it("uses ApiError message", () => {
-    const err = new ApiError(500, "/x", "Erro interno do servidor. Tente novamente em instantes.");
+    const err = new ApiError(
+      500,
+      "/x",
+      "Erro interno do servidor. Tente novamente em instantes.",
+    );
     expect(formatError(err)).toContain("Erro interno");
   });
 

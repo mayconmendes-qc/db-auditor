@@ -10,7 +10,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        TIMESCALЕ AUDITOR
+        TIMESCALE AUDITOR
       </p>
       <h1 className="mt-2 max-w-3xl text-3xl font-semibold leading-tight text-slate-50 md:text-4xl">
         Auditoria com evidências, sem mudanças automáticas.
@@ -39,10 +39,7 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
       </div>
 
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card
-          subtitle="Configuração"
-          title="Bancos via .env"
-        >
+        <Card subtitle="Configuração" title="Bancos via .env">
           <p className="text-sm text-slate-400">
             Connection strings e denylists fora do git; reinicie a API após
             alterar secrets.

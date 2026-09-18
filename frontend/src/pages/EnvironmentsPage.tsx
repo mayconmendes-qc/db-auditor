@@ -111,8 +111,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         Topologia registrada no Snapshot Store. A configuração de conexão dos
-        bancos auditados continua via <code className="text-slate-300">.env</code>{" "}
-        (somente leitura). Veja a Documentação para o fluxo completo.
+        bancos auditados continua via{" "}
+        <code className="text-slate-300">.env</code> (somente leitura). Veja a
+        Documentação para o fluxo completo.
       </p>
 
       <div className="mt-6 space-y-6">
@@ -129,7 +130,10 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
             description="Configure as connection strings no .env do backend, reinicie a API e execute a discovery. O guia passo a passo está em Documentação."
             action={
               onNavigate ? (
-                <Button type="button" onClick={() => onNavigate("Documentação")}>
+                <Button
+                  type="button"
+                  onClick={() => onNavigate("Documentação")}
+                >
                   Abrir documentação
                 </Button>
               ) : null

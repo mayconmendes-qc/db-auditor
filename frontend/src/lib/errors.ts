@@ -91,9 +91,7 @@ export async function toApiError(
 
 export function networkApiError(path: string, cause?: unknown): ApiError {
   const detail =
-    cause instanceof Error && cause.message
-      ? ` (${cause.message})`
-      : "";
+    cause instanceof Error && cause.message ? ` (${cause.message})` : "";
   return new ApiError(
     0,
     path,
@@ -101,7 +99,10 @@ export function networkApiError(path: string, cause?: unknown): ApiError {
   );
 }
 
-export function formatError(err: unknown, fallback = "Ocorreu um erro inesperado."): string {
+export function formatError(
+  err: unknown,
+  fallback = "Ocorreu um erro inesperado.",
+): string {
   if (err instanceof ApiError) {
     return err.message;
   }
