@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
 
 // DashboardKPIs is the executive summary for the main dashboard.
@@ -69,6 +71,27 @@ type JobHealthResponse struct {
 	Items          []JobHealthItem `json:"items"`
 }
 
+// InventoryReportResponse is a compact inventory report.
+type InventoryReportResponse struct {
+	GeneratedAtUTC time.Time `json:"generated_at_utc"`
+	Environments   int       `json:"environments"`
+	Databases      int       `json:"databases"`
+	Schemas        int       `json:"schemas"`
+	Tables         int       `json:"tables"`
+	Hypertables    int       `json:"hypertables"`
+	Indexes        int       `json:"indexes"`
+	Notes          []string  `json:"notes,omitempty"`
+}
+
+// FindingsReportResponse is a findings export-oriented summary.
+type FindingsReportResponse struct {
+	GeneratedAtUTC time.Time            `json:"generated_at_utc"`
+	Total          int                  `json:"total"`
+	BySeverity     []FindingTrendBucket `json:"by_severity"`
+	ByStatus       []FindingTrendBucket `json:"by_status"`
+	Items          []repository.Finding `json:"items"`
+}
+
 func registerAnalyticsRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("GET /api/v1/analytics/kpis", getKPIs(store))
 	mux.HandleFunc("GET /api/v1/analytics/storage", getStorageGrowth(store))
@@ -91,12 +114,10 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 		envs, err := store.ListEnvironmentsAPI(ctx)
 		if err != nil {
 			res.Notes = append(res.Notes, "list environments failed")
+		} else if envID != "" {
+			res.Environments = 1
 		} else {
-			if envID != "" {
-				res.Environments = 1
-			} else {
-				res.Environments = len(envs)
-			}
+			res.Environments = len(envs)
 		}
 
 		findings, err := store.ListFindings(ctx, envID, "", "", "", 2000)
@@ -131,20 +152,10 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			}
 		}
 
-		targets := envs
-		if envID != "" {
-			targets = nil
-			for _, e := range envs {
-				if e.ID == envID {
-					targets = append(targets, e)
-					break
-				}
+		for _, e := range envs {
+			if envID != "" && e.ID != envID {
+				continue
 			}
-			if targets == nil {
-				targets = envs[:0]
-			}
-		}
-		for _, e := range targets {
 			dbs, err := store.ListDatabaseSnapshots(ctx, e.ID)
 			if err == nil {
 				for _, d := range dbs {
@@ -214,7 +225,10 @@ func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 				ObjectKind: "environment",
 			})
 
-			tables, _, err := store.ListTableSnapshots(ctx, repositoryInventoryFilter(e.ID, 20))
+			tables, _, err := store.ListTableSnapshots(ctx, repository.InventoryFilter{
+				EnvironmentID: e.ID,
+				Limit:         30,
+			})
 			if err == nil {
 				for _, t := range tables {
 					res.TopConsumers = append(res.TopConsumers, StorageSeriesPoint{
@@ -236,7 +250,148 @@ func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 	}
 }
 
-// repositoryInventoryFilter avoids importing filter construction noise in call sites.
-func repositoryInventoryFilter(environmentID string, limit int) interface{ /* placeholder replaced below */ } {
-	return nil
+func getFindingsTrends(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		envID := envFilter(r)
+		res := FindingsTrendResponse{
+			GeneratedAtUTC: time.Now().UTC(),
+			BySeverity:     []FindingTrendBucket{},
+			ByStatus:       []FindingTrendBucket{},
+			ByType:         []FindingTrendBucket{},
+		}
+		items, err := store.ListFindings(ctx, envID, "", "", "", 5000)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list findings failed"})
+			return
+		}
+		sev := map[string]int{}
+		st := map[string]int{}
+		ty := map[string]int{}
+		for _, f := range items {
+			res.Total++
+			sev[strings.ToLower(f.Severity)]++
+			st[strings.ToLower(f.Status)]++
+			ty[f.FindingType]++
+		}
+		res.BySeverity = bucketsFromMap(sev)
+		res.ByStatus = bucketsFromMap(st)
+		res.ByType = bucketsFromMap(ty)
+		writeJSON(w, http.StatusOK, res)
+	}
+}
+
+func bucketsFromMap(m map[string]int) []FindingTrendBucket {
+	out := make([]FindingTrendBucket, 0, len(m))
+	for k, v := range m {
+		out = append(out, FindingTrendBucket{Key: k, Count: v})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count == out[j].Count {
+			return out[i].Key < out[j].Key
+		}
+		return out[i].Count > out[j].Count
+	})
+	return out
+}
+
+func getJobHealth(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		envID := envFilter(r)
+		res := JobHealthResponse{
+			GeneratedAtUTC: time.Now().UTC(),
+			Items:          []JobHealthItem{},
+		}
+		envs, err := store.ListEnvironmentsAPI(ctx)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list environments failed"})
+			return
+		}
+		for _, e := range envs {
+			if envID != "" && e.ID != envID {
+				continue
+			}
+			item := JobHealthItem{EnvironmentID: e.ID, EnvironmentName: e.Name}
+			jobs, err := store.ListJobSnapshots(ctx, e.ID)
+			if err == nil {
+				item.JobsTotal = len(jobs)
+				for _, j := range jobs {
+					if j.Scheduled {
+						item.JobsScheduled++
+					}
+				}
+			}
+			pols, err := store.ListPolicySnapshots(ctx, e.ID)
+			if err == nil {
+				item.PoliciesTotal = len(pols)
+			}
+			res.Items = append(res.Items, item)
+		}
+		writeJSON(w, http.StatusOK, res)
+	}
+}
+
+func getInventoryReport(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		envID := envFilter(r)
+		res := InventoryReportResponse{GeneratedAtUTC: time.Now().UTC()}
+		envs, err := store.ListEnvironmentsAPI(ctx)
+		if err != nil {
+			res.Notes = append(res.Notes, "list environments failed")
+			writeJSON(w, http.StatusOK, res)
+			return
+		}
+		for _, e := range envs {
+			if envID != "" && e.ID != envID {
+				continue
+			}
+			res.Environments++
+			if dbs, err := store.ListDatabaseSnapshots(ctx, e.ID); err == nil {
+				res.Databases += len(dbs)
+			}
+			if schemas, err := store.ListSchemaSnapshots(ctx, e.ID); err == nil {
+				res.Schemas += len(schemas)
+			}
+			if _, total, err := store.ListTableSnapshots(ctx, repository.InventoryFilter{EnvironmentID: e.ID, Limit: 1}); err == nil {
+				res.Tables += total
+			}
+			if hts, err := store.ListHypertableSnapshots(ctx, e.ID); err == nil {
+				res.Hypertables += len(hts)
+			}
+			if _, total, err := store.ListIndexSnapshots(ctx, repository.InventoryFilter{EnvironmentID: e.ID, Limit: 1}); err == nil {
+				res.Indexes += total
+			}
+		}
+		writeJSON(w, http.StatusOK, res)
+	}
+}
+
+func getFindingsReport(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		envID := envFilter(r)
+		items, err := store.ListFindings(ctx, envID, "", "", "", 500)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list findings failed"})
+			return
+		}
+		if items == nil {
+			items = []repository.Finding{}
+		}
+		sev := map[string]int{}
+		st := map[string]int{}
+		for _, f := range items {
+			sev[strings.ToLower(f.Severity)]++
+			st[strings.ToLower(f.Status)]++
+		}
+		writeJSON(w, http.StatusOK, FindingsReportResponse{
+			GeneratedAtUTC: time.Now().UTC(),
+			Total:          len(items),
+			BySeverity:     bucketsFromMap(sev),
+			ByStatus:       bucketsFromMap(st),
+			Items:          items,
+		})
+	}
 }

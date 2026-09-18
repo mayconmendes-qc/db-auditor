@@ -70,6 +70,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerCompareRoutes(mux)
 	registerFindingRoutes(mux, store)
 	registerStatusRoutes(mux, store)
+	registerAnalyticsRoutes(mux, store)
 	return observability.Middleware(mux)
 }
 
