@@ -2,7 +2,9 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const apiTarget = process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8080";
+// Inside compose the browser still uses VITE_API_BASE_URL (host localhost:8080).
+// Proxy targets are for same-origin requests when BASE_URL is empty.
+const apiProxyTarget = "http://localhost:8080";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -10,11 +12,10 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      // Same-origin fallback when VITE_API_BASE_URL is empty or points here.
-      "/api": { target: apiTarget, changeOrigin: true },
-      "/health": { target: apiTarget, changeOrigin: true },
-      "/ready": { target: apiTarget, changeOrigin: true },
-      "/metrics": { target: apiTarget, changeOrigin: true },
+      "/api": { target: apiProxyTarget, changeOrigin: true },
+      "/health": { target: apiProxyTarget, changeOrigin: true },
+      "/ready": { target: apiProxyTarget, changeOrigin: true },
+      "/metrics": { target: apiProxyTarget, changeOrigin: true },
     },
   },
 });
