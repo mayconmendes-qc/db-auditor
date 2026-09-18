@@ -51,15 +51,26 @@ export function Shell({
     api
       .health()
       .then(() => {
-        if (!cancelled) setApiOk(true);
+        if (!cancelled) {
+          setApiOk(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setApiOk(false);
+        if (!cancelled) {
+          setApiOk(false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [activeSection]);
+
+  let healthTitle = "…";
+  if (apiOk === true) {
+    healthTitle = "API ok";
+  } else if (apiOk === false) {
+    healthTitle = "API indisponível";
+  }
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
@@ -76,7 +87,7 @@ export function Shell({
                   ? "bg-emerald-400"
                   : "bg-rose-400"
             }`}
-            title={apiOk ? "API ok" : apiOk === false ? "API indisponível" : "…"}
+            title={healthTitle}
           />
         </div>
 

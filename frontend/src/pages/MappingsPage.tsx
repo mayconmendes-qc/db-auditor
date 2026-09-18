@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
@@ -19,9 +19,15 @@ import type { Environment, MappingCandidate, ObjectMapping } from "../types";
 function statusTone(
   status: string,
 ): "success" | "warning" | "danger" | "neutral" {
-  if (status === "validated") return "success";
-  if (status === "suggested" || status === "manual") return "warning";
-  if (status === "rejected") return "danger";
+  if (status === "validated") {
+    return "success";
+  }
+  if (status === "suggested" || status === "manual") {
+    return "warning";
+  }
+  if (status === "rejected") {
+    return "danger";
+  }
   return "neutral";
 }
 
@@ -46,7 +52,7 @@ export function MappingsPage() {
     }
   }, [environments]);
 
-  const load = () => {
+  const load = useCallback(() => {
     setItems(null);
     setError(null);
     api
@@ -59,11 +65,11 @@ export function MappingsPage() {
         setError(formatError(err, "Falha ao listar mapeamentos"));
         setItems([]);
       });
-  };
+  }, [statusFilter, environmentId]);
 
   useEffect(() => {
     load();
-  }, [statusFilter, environmentId]);
+  }, [load]);
 
   const setStatus = async (id: string, status: string) => {
     setBusyId(id);
@@ -93,13 +99,11 @@ export function MappingsPage() {
         api.tables(sourceEnv, { limit: 200, offset: 0 }),
         api.tables(targetEnv, { limit: 200, offset: 0 }),
       ]);
-      const toRef = (
-        t: {
-          database_name: string;
-          schema_name: string;
-          table_name: string;
-        },
-      ) => ({
+      const toRef = (t: {
+        database_name: string;
+        schema_name: string;
+        table_name: string;
+      }) => ({
         database: t.database_name,
         schema: t.schema_name,
         object_type: "table",
