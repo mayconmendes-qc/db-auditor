@@ -152,8 +152,10 @@ export function MappingsPage() {
       setCandidates((prev) =>
         (prev ?? []).filter(
           (x) =>
-            !(x.source_object_name === c.source_object_name &&
-              x.target_object_name === c.target_object_name),
+            !(
+              x.source_object_name === c.source_object_name &&
+              x.target_object_name === c.target_object_name
+            ),
         ),
       );
       load();

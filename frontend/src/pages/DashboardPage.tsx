@@ -98,7 +98,10 @@ export function DashboardPage() {
 
       {connections ? (
         <section className="mt-8" aria-labelledby="conn-heading">
-          <h2 id="conn-heading" className="text-sm font-semibold text-slate-200">
+          <h2
+            id="conn-heading"
+            className="text-sm font-semibold text-slate-200"
+          >
             Conexões com ambientes auditados
           </h2>
           {connections.length === 0 ? (
@@ -186,7 +189,9 @@ export function DashboardPage() {
               Storage por ambiente
             </h2>
             {storage.by_environment.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Sem dados de storage.</p>
+              <p className="mt-2 text-sm text-slate-500">
+                Sem dados de storage.
+              </p>
             ) : (
               <ul className="mt-3 space-y-2">
                 {storage.by_environment.map((p) => (
@@ -249,7 +254,10 @@ export function DashboardPage() {
 
       {jobs ? (
         <section className="mt-8" aria-labelledby="jobs-heading">
-          <h2 id="jobs-heading" className="text-sm font-semibold text-slate-200">
+          <h2
+            id="jobs-heading"
+            className="text-sm font-semibold text-slate-200"
+          >
             Saúde de jobs / policies
           </h2>
           {jobs.items.length === 0 ? (

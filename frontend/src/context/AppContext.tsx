@@ -1,11 +1,11 @@
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import { api } from "../services/api";
 import type { Environment, NavigationSection } from "../types";
