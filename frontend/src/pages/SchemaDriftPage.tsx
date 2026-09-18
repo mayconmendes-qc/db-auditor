@@ -136,7 +136,9 @@ export function SchemaDriftPage() {
           {busy ? "Comparando…" : "Comparar (demo payloads)"}
         </Button>
 
-        {error ? <ErrorBanner message={error} onRetry={() => void runCompare()} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void runCompare()} />
+        ) : null}
 
         {result ? (
           <div className="grid gap-3 sm:grid-cols-5">
