@@ -25,6 +25,18 @@ export interface EnvironmentsResponse {
   items: Environment[];
 }
 
+export interface PageMeta {
+  limit: number;
+  offset: number;
+  total: number;
+  has_more: boolean;
+}
+
+export interface PagedResponse<T> {
+  items: T[];
+  page: PageMeta;
+}
+
 export interface DatabaseSnapshot {
   id: string;
   audit_run_id: string;
@@ -52,6 +64,63 @@ export interface SchemaSnapshot {
   sequence_count: number;
   function_count: number;
   size_bytes: number;
+  collected_at: string;
+}
+
+export interface TableSnapshot {
+  id: string;
+  audit_run_id: string;
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  owner_name: string | null;
+  relkind: string;
+  total_size_bytes: number;
+  data_size_bytes: number;
+  index_size_bytes: number;
+  row_estimate: number;
+  column_count: number;
+  has_primary_key: boolean;
+  collected_at: string;
+}
+
+export interface IndexSnapshot {
+  id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  index_name: string;
+  index_definition: string;
+  access_method: string | null;
+  is_unique: boolean;
+  is_primary: boolean;
+  size_bytes: number;
+  idx_scan: number;
+  collected_at: string;
+}
+
+export interface ViewSnapshot {
+  id: string;
+  database_name: string;
+  schema_name: string;
+  view_name: string;
+  owner_name: string | null;
+  relkind: string;
+  size_bytes: number;
+  collected_at: string;
+}
+
+export interface FunctionSnapshot {
+  id: string;
+  database_name: string;
+  schema_name: string;
+  function_name: string;
+  identity_arguments: string;
+  owner_name: string | null;
+  language_name: string | null;
+  is_security_definer: boolean;
+  kind: string | null;
   collected_at: string;
 }
 
@@ -279,3 +348,11 @@ export interface AnalyzeResult {
 export interface ItemsResponse<T> {
   items: T[];
 }
+
+export type InventoryObjectKind =
+  | "tables"
+  | "hypertables"
+  | "indexes"
+  | "views"
+  | "functions"
+  | "caggs";
