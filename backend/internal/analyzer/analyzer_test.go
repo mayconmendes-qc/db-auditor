@@ -144,6 +144,101 @@ func TestInactivityPossiblyInactiveOnly(t *testing.T) {
 	}
 }
 
+func TestVacuumHighDeadTuples(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		Vacuum: []VacuumFact{
+			{Database: "db", Schema: "public", Name: "bloated", NLiveTup: 8000, NDeadTup: 4000},
+			{Database: "db", Schema: "public", Name: "clean", NLiveTup: 10000, NDeadTup: 100},
+			{Database: "db", Schema: "public", Name: "tiny", NLiveTup: 10, NDeadTup: 50},
+		},
+	}
+	out, err := VacuumAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected 1 high_dead_tuples, got %d", len(out))
+	}
+	if out[0].FindingType != "vacuum.high_dead_tuples" {
+		t.Fatalf("type = %s", out[0].FindingType)
+	}
+	note, _ := out[0].Evidence["safety_note"].(string)
+	if note == "" {
+		t.Error("expected safety note")
+	}
+}
+
+func TestPerformanceLockAndSlowQuery(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		Locks: []LockFact{
+			{Database: "db", Mode: "AccessExclusiveLock", Granted: false, WaitAgeSeconds: 60, PID: 42, Relation: "public.orders"},
+			{Database: "db", Mode: "AccessShareLock", Granted: true, WaitAgeSeconds: 0},
+		},
+		Connections: []ConnectionFact{
+			{Database: "db", Count: 90, MaxConnections: 100},
+		},
+		QueryStats: []QueryStatFact{
+			{Database: "db", QueryFingerprint: "SELECT * FROM orders WHERE id = ?", Calls: 100, MeanExecTimeMs: 800, PgStatStatements: true},
+			{Database: "db", QueryFingerprint: "SELECT 1", Calls: 5, MeanExecTimeMs: 1},
+		},
+	}
+	out, err := PerformanceAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) < 3 {
+		t.Fatalf("expected lock + connections + slow_query, got %d", len(out))
+	}
+	types := map[string]bool{}
+	for _, f := range out {
+		types[f.FindingType] = true
+		if f.FindingType == "performance.slow_query" {
+			if _, ok := f.Evidence["query_fingerprint"]; !ok {
+				t.Error("slow_query must carry fingerprint only")
+			}
+			if _, ok := f.Evidence["query"]; ok {
+				t.Error("must not expose raw query field")
+			}
+		}
+	}
+	if !types["performance.lock_wait"] || !types["performance.high_connections"] || !types["performance.slow_query"] {
+		t.Fatalf("missing expected types: %v", types)
+	}
+}
+
+func TestSecurityDefinerAndPrivilege(t *testing.T) {
+	facts := SnapshotFacts{
+		EnvironmentID: "env-1",
+		Functions: []FunctionSecurityFact{
+			{Database: "db", Schema: "public", FunctionName: "admin_fn", IsSecurityDefiner: true, Owner: "postgres"},
+			{Database: "db", Schema: "public", FunctionName: "safe_fn", IsSecurityDefiner: false},
+		},
+		Roles: []RoleFact{
+			{Database: "db", RoleName: "app_super", Superuser: true, Login: true},
+			{Database: "db", RoleName: "app_ro", Superuser: false, Login: true},
+		},
+		Grants: []GrantFact{
+			{Database: "db", Schema: "public", ObjectType: "table", ObjectName: "secrets", Grantee: "PUBLIC", Privilege: "ALL"},
+			{Database: "db", Schema: "public", ObjectType: "table", ObjectName: "orders", Grantee: "app_ro", Privilege: "SELECT"},
+		},
+	}
+	out, err := SecurityAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) < 3 {
+		t.Fatalf("expected security_definer + powerful_role + excessive_privilege, got %d", len(out))
+	}
+	for _, f := range out {
+		note, _ := f.Evidence["safety_note"].(string)
+		if note == "" {
+			t.Errorf("missing safety_note on %s", f.FindingType)
+		}
+	}
+}
+
 func TestRunnerAggregates(t *testing.T) {
 	r := NewRunner(DefaultRegistry())
 	out, err := r.Run(context.Background(), SnapshotFacts{

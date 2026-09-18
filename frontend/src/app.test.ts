@@ -11,6 +11,8 @@ describe("navigationSections", () => {
       "Mappings",
       "Schema Drift",
       "Findings",
+      "Performance",
+      "Security",
     ]);
   });
 });

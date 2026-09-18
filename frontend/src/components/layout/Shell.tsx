@@ -9,6 +9,8 @@ export const navigationSections: NavigationSection[] = [
   "Mappings",
   "Schema Drift",
   "Findings",
+  "Performance",
+  "Security",
 ];
 
 export interface ShellProps {

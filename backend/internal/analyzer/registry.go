@@ -22,7 +22,7 @@ func (r *Registry) All() []Analyzer {
 	return out
 }
 
-// DefaultRegistry returns Sprint 6 + Sprint 7 analyzers.
+// DefaultRegistry returns Sprint 6–9 analyzers.
 func DefaultRegistry() *Registry {
 	r := NewRegistry()
 	r.Register(StorageAnalyzer{})
@@ -31,5 +31,8 @@ func DefaultRegistry() *Registry {
 	r.Register(CAGGAnalyzer{})
 	r.Register(PolicyAnalyzer{})
 	r.Register(InactivityAnalyzer{})
+	r.Register(VacuumAnalyzer{})
+	r.Register(PerformanceAnalyzer{})
+	r.Register(SecurityAnalyzer{})
 	return r
 }
