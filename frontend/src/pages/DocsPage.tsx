@@ -164,7 +164,9 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           </ul>
           {onNavigate ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button onClick={() => onNavigate("Status")}>Ir para Status</Button>
+              <Button onClick={() => onNavigate("Status")}>
+                Ir para Status
+              </Button>
               <Button
                 variant="secondary"
                 onClick={() => onNavigate("Execuções")}
