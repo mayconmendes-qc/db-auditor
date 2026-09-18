@@ -94,7 +94,7 @@ func listEnvironments(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		items, err := store.ListEnvironmentsAPI(r.Context())
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list environments failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os ambientes.")
 			return
 		}
 		if items == nil {
@@ -111,7 +111,7 @@ func listDatabases(store InventoryStore) http.HandlerFunc {
 			items = []repository.DatabaseSnapshot{}
 		}
 		return items, err
-	}, "list databases failed")
+	}, "Não foi possível listar os databases.")
 }
 
 func listSchemas(store InventoryStore) http.HandlerFunc {
@@ -121,7 +121,7 @@ func listSchemas(store InventoryStore) http.HandlerFunc {
 			items = []repository.SchemaSnapshot{}
 		}
 		return items, err
-	}, "list schemas failed")
+	}, "Não foi possível listar os schemas.")
 }
 
 func listHypertables(store InventoryStore) http.HandlerFunc {
@@ -131,7 +131,7 @@ func listHypertables(store InventoryStore) http.HandlerFunc {
 			items = []repository.HypertableSnapshotRow{}
 		}
 		return items, err
-	}, "list hypertables failed")
+	}, "Não foi possível listar as hypertables.")
 }
 
 func listDimensions(store InventoryStore) http.HandlerFunc {
@@ -141,7 +141,7 @@ func listDimensions(store InventoryStore) http.HandlerFunc {
 			items = []repository.DimensionSnapshotRow{}
 		}
 		return items, err
-	}, "list dimensions failed")
+	}, "Não foi possível listar as dimensions.")
 }
 
 func listChunks(store InventoryStore) http.HandlerFunc {
@@ -151,7 +151,7 @@ func listChunks(store InventoryStore) http.HandlerFunc {
 			items = []repository.ChunkSnapshotRow{}
 		}
 		return items, err
-	}, "list chunks failed")
+	}, "Não foi possível listar os chunks.")
 }
 
 func listCAGGs(store InventoryStore) http.HandlerFunc {
@@ -161,7 +161,7 @@ func listCAGGs(store InventoryStore) http.HandlerFunc {
 			items = []repository.CAGGSnapshotRow{}
 		}
 		return items, err
-	}, "list continuous aggregates failed")
+	}, "Não foi possível listar continuous aggregates.")
 }
 
 func listJobs(store InventoryStore) http.HandlerFunc {
@@ -171,7 +171,7 @@ func listJobs(store InventoryStore) http.HandlerFunc {
 			items = []repository.JobSnapshotRow{}
 		}
 		return items, err
-	}, "list jobs failed")
+	}, "Não foi possível listar os jobs.")
 }
 
 func listPolicies(store InventoryStore) http.HandlerFunc {
@@ -181,7 +181,7 @@ func listPolicies(store InventoryStore) http.HandlerFunc {
 			items = []repository.PolicySnapshotRow{}
 		}
 		return items, err
-	}, "list policies failed")
+	}, "Não foi possível listar as policies.")
 }
 
 func envItems(
@@ -192,12 +192,12 @@ func envItems(
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "Identificador do ambiente é obrigatório.")
 			return
 		}
 		items, err := load(r.Context(), id)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errMsg})
+			writeError(w, http.StatusInternalServerError, CodeInternal, errMsg)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})

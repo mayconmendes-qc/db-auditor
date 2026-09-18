@@ -25,11 +25,11 @@ func compareHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body compareBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if len(body.Source) == 0 && len(body.Target) == 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "source or target objects required"})
+			writeError(w, http.StatusBadRequest, CodeValidation, "É necessário informar objetos de origem ou destino.")
 			return
 		}
 		res := comparison.CompareSets(body.Source, body.Target)

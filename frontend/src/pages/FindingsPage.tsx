@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 
@@ -11,9 +22,6 @@ function severityTone(
   }
   if (severity === "medium") {
     return "warning";
-  }
-  if (severity === "low" || severity === "info") {
-    return "neutral";
   }
   return "neutral";
 }
@@ -165,7 +173,7 @@ export function FindingsPage() {
       });
       setItems(res.items);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha ao listar findings");
+      setError(formatError(err, "Falha ao listar findings"));
       setItems([]);
     } finally {
       setBusy(false);
@@ -183,7 +191,7 @@ export function FindingsPage() {
       await api.analyzeFindings(demoFacts);
       await load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha no analyze");
+      setError(formatError(err, "Falha no analyze"));
     } finally {
       setBusy(false);
     }
@@ -195,7 +203,7 @@ export function FindingsPage() {
       setItems((prev) => prev.map((f) => (f.id === id ? updated : f)));
       setSelected(updated);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha na triagem");
+      setError(formatError(err, "Falha na triagem"));
     }
   };
 
@@ -217,19 +225,19 @@ export function FindingsPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 6 + 7
+        FINDINGS
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Findings
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e
         inatividade (POSSIBLY_INACTIVE — sem exclusão automática).
       </p>
 
       <div className="mt-8 space-y-6">
         <div className="grid gap-3 sm:grid-cols-4">
-          <Card title="Open" subtitle={String(health.open)} />
+          <Card title="Abertos" subtitle={String(health.open)} />
           <Card title="CAGG" subtitle={String(health.cagg)} />
           <Card title="Policies/Jobs" subtitle={String(health.policy)} />
           <Card title="Inatividade" subtitle={String(health.inactivity)} />
@@ -237,13 +245,13 @@ export function FindingsPage() {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Input
-            label="Finding type"
+            label="Tipo de finding"
             placeholder="cagg.missing_refresh_policy"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
           />
           <Input
-            label="Severity"
+            label="Severidade"
             placeholder="info, low, medium…"
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
@@ -264,13 +272,15 @@ export function FindingsPage() {
           </Button>
         </div>
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void load()} />
+        ) : null}
         {busy ? <Skeleton className="h-40 w-full" /> : null}
 
         {!busy && items.length === 0 ? (
-          <Card
+          <EmptyState
             title="Sem findings"
-            subtitle="Nenhum resultado após filtros. Rode os analyzers demo."
+            description="Nenhum resultado após filtros. Rode os analyzers demo."
           />
         ) : null}
 
@@ -282,7 +292,7 @@ export function FindingsPage() {
               "Status",
               "Título",
               "Objeto",
-              "Last seen",
+              "Última vez",
             ]}
           >
             {items.map((f) => (
@@ -295,10 +305,14 @@ export function FindingsPage() {
                   {f.finding_type}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={severityTone(f.severity)}>{f.severity}</Badge>
+                  <Badge tone={severityTone(f.severity)}>
+                    {labels.severity(f.severity)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={statusTone(f.status)}>{f.status}</Badge>
+                  <Badge tone={statusTone(f.status)}>
+                    {labels.findingStatus(f.status)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-slate-100">{f.title}</td>
                 <td className="px-4 py-3 text-slate-400 font-mono text-xs">
@@ -316,12 +330,12 @@ export function FindingsPage() {
 
         {selected ? (
           <Card
-            title={`Detalhe · ${selected.severity}`}
+            title={`Detalhe · ${labels.severity(selected.severity)}`}
             subtitle={selected.title}
           >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
               <li>Tipo: {selected.finding_type}</li>
-              <li>Status: {selected.status}</li>
+              <li>Status: {labels.findingStatus(selected.status)}</li>
               <li>Objeto: {selected.object_key || "—"}</li>
               <li>Resumo: {selected.summary}</li>
               <li>
@@ -350,16 +364,16 @@ export function FindingsPage() {
             ) : null}
             <div className="mt-4 flex flex-wrap gap-2">
               <Button onClick={() => void triage(selected.id, "acknowledged")}>
-                Acknowledge
+                Reconhecer
               </Button>
               <Button onClick={() => void triage(selected.id, "resolved")}>
-                Resolve
+                Resolver
               </Button>
               <Button onClick={() => void triage(selected.id, "suppressed")}>
-                Suppress
+                Suprimir
               </Button>
               <Button onClick={() => void triage(selected.id, "open")}>
-                Reopen
+                Reabrir
               </Button>
             </div>
           </Card>

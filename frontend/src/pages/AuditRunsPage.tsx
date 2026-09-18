@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { AuditRun, CollectorRun, Environment } from "../types";
 
@@ -32,6 +43,7 @@ export function AuditRunsPage() {
 
   const loadRuns = () => {
     setRuns(null);
+    setError(null);
     api
       .auditRuns({
         status: statusFilter || undefined,
@@ -39,7 +51,7 @@ export function AuditRunsPage() {
       })
       .then((res) => setRuns(res.items))
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Falha ao listar runs");
+        setError(formatError(err, "Falha ao listar execuções"));
         setRuns([]);
       });
   };
@@ -53,7 +65,10 @@ export function AuditRunsPage() {
           setTriggerEnv(res.items[0].id);
         }
       })
-      .catch(() => setEnvs([]));
+      .catch((err: unknown) => {
+        setEnvs([]);
+        setError(formatError(err, "Falha ao listar ambientes"));
+      });
   }, []);
 
   useEffect(() => {
@@ -88,10 +103,12 @@ export function AuditRunsPage() {
     setTriggerMsg(null);
     try {
       const res = await api.triggerAuditRun(triggerEnv, "manual");
-      setTriggerMsg(`Run ${res.audit_run_id} → ${res.status}`);
+      setTriggerMsg(
+        `Run ${res.audit_run_id} → ${labels.runStatus(res.status)}`,
+      );
       loadRuns();
     } catch (err: unknown) {
-      setTriggerMsg(err instanceof Error ? err.message : "Falha no disparo");
+      setTriggerMsg(formatError(err, "Falha no disparo"));
     } finally {
       setBusy(false);
     }
@@ -100,12 +117,12 @@ export function AuditRunsPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 3
+        EXECUÇÕES
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Audit Runs
+        Execuções de auditoria
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         Execuções de auditoria, collectors e disparo manual via API.
       </p>
 
@@ -152,14 +169,16 @@ export function AuditRunsPage() {
           />
         </div>
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => loadRuns()} />
+        ) : null}
 
         {runs === null ? (
           <Skeleton className="h-40 w-full" />
         ) : runs.length === 0 ? (
-          <Card
-            title="Nenhum audit run"
-            subtitle="Dispare uma auditoria manual ou aguarde o scheduler."
+          <EmptyState
+            title="Nenhuma execução"
+            description="Dispare uma auditoria manual ou aguarde o scheduler. Ambientes demo vêm do seed local."
           />
         ) : (
           <Table headers={["Profile", "Status", "Início", "Ambiente"]}>
@@ -173,7 +192,9 @@ export function AuditRunsPage() {
               >
                 <td className="px-4 py-3 text-slate-100">{r.profile}</td>
                 <td className="px-4 py-3">
-                  <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                  <Badge tone={statusTone(r.status)}>
+                    {labels.runStatus(r.status)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-slate-300">
                   {new Date(r.started_at).toLocaleString()}
@@ -190,7 +211,7 @@ export function AuditRunsPage() {
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-slate-100">Detalhe</h2>
             <Card
-              title={`${selected.profile} · ${selected.status}`}
+              title={`${selected.profile} · ${labels.runStatus(selected.status)}`}
               subtitle={`id ${selected.id}`}
             >
               <ul className="mt-3 space-y-1 text-sm text-slate-300">
@@ -203,8 +224,8 @@ export function AuditRunsPage() {
                     ? new Date(selected.finished_at).toLocaleString()
                     : "—"}
                 </li>
-                <li>Warnings: {selected.warnings.length}</li>
-                <li>Errors: {selected.errors.length}</li>
+                <li>Avisos: {selected.warnings.length}</li>
+                <li>Erros: {selected.errors.length}</li>
               </ul>
             </Card>
 
@@ -212,7 +233,10 @@ export function AuditRunsPage() {
             {collectors === null ? (
               <Skeleton className="h-32 w-full" />
             ) : collectors.length === 0 ? (
-              <Card title="Sem collectors" subtitle="Nenhum registro." />
+              <EmptyState
+                title="Sem collectors"
+                description="Nenhum registro."
+              />
             ) : (
               <Table headers={["Nome", "Status", "Rows"]}>
                 {collectors.map((c) => (
@@ -221,7 +245,9 @@ export function AuditRunsPage() {
                       {c.collector_name}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={statusTone(c.status)}>{c.status}</Badge>
+                      <Badge tone={statusTone(c.status)}>
+                        {labels.runStatus(c.status)}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3 text-slate-300">
                       {c.rows_collected}
