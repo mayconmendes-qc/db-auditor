@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
   Button,
@@ -9,6 +10,7 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
@@ -41,7 +43,6 @@ function statusTone(
   return "neutral";
 }
 
-/** Demo facts covering Sprint 6 + Sprint 7 analyzers. */
 const demoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
   tables: [
@@ -153,7 +154,29 @@ const demoFacts = {
   ],
 };
 
+function FilterChip({
+  label,
+  onClear,
+}: {
+  label: string;
+  onClear: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-800/80 px-2.5 py-0.5 text-[11px] text-slate-200 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+    >
+      {label}
+      <span className="text-slate-400" aria-hidden>
+        ×
+      </span>
+    </button>
+  );
+}
+
 export function FindingsPage() {
+  const { environmentId, setSection } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -170,6 +193,7 @@ export function FindingsPage() {
         finding_type: typeFilter || undefined,
         severity: severityFilter || undefined,
         status: statusFilter || undefined,
+        environment_id: environmentId || undefined,
       });
       setItems(res.items);
     } catch (err: unknown) {
@@ -178,7 +202,7 @@ export function FindingsPage() {
     } finally {
       setBusy(false);
     }
-  }, [typeFilter, severityFilter, statusFilter]);
+  }, [typeFilter, severityFilter, statusFilter, environmentId]);
 
   useEffect(() => {
     void load();
@@ -216,31 +240,52 @@ export function FindingsPage() {
       cagg: byPrefix("cagg."),
       policy: byPrefix("policy.") + byPrefix("job."),
       inactivity: byPrefix("inactivity."),
-      storage: byPrefix("storage."),
-      index: byPrefix("index."),
-      chunk: byPrefix("chunk."),
     };
   }, [items]);
 
+  const activeChips: Array<{ key: string; label: string; clear: () => void }> =
+    [];
+  if (typeFilter) {
+    activeChips.push({
+      key: "type",
+      label: `Tipo: ${typeFilter}`,
+      clear: () => setTypeFilter(""),
+    });
+  }
+  if (severityFilter) {
+    activeChips.push({
+      key: "sev",
+      label: `Severidade: ${severityFilter}`,
+      clear: () => setSeverityFilter(""),
+    });
+  }
+  if (statusFilter) {
+    activeChips.push({
+      key: "status",
+      label: `Status: ${statusFilter}`,
+      clear: () => setStatusFilter(""),
+    });
+  }
+
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        FINDINGS
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Findings
-      </h1>
-      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e
-        inatividade (POSSIBLY_INACTIVE — sem exclusão automática).
-      </p>
+      <PageHeader
+        eyebrow="FINDINGS"
+        title="Findings"
+        description="Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e inatividade (POSSIBLY_INACTIVE — sem exclusão automática)."
+        actions={
+          <Button onClick={() => void runAnalyze()} disabled={busy}>
+            {busy ? "Analisando…" : "Rodar analyzers (demo)"}
+          </Button>
+        }
+      />
 
       <div className="mt-8 space-y-6">
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Card title="Abertos" subtitle={String(health.open)} />
-          <Card title="CAGG" subtitle={String(health.cagg)} />
-          <Card title="Policies/Jobs" subtitle={String(health.policy)} />
-          <Card title="Inatividade" subtitle={String(health.inactivity)} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card title={String(health.open)} subtitle="Abertos" />
+          <Card title={String(health.cagg)} subtitle="CAGG" />
+          <Card title={String(health.policy)} subtitle="Policies/Jobs" />
+          <Card title={String(health.inactivity)} subtitle="Inatividade" />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -263,12 +308,18 @@ export function FindingsPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           />
         </div>
+
+        {activeChips.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {activeChips.map((c) => (
+              <FilterChip key={c.key} label={c.label} onClear={c.clear} />
+            ))}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void load()} disabled={busy}>
             Atualizar
-          </Button>
-          <Button onClick={() => void runAnalyze()} disabled={busy}>
-            {busy ? "Analisando…" : "Rodar analyzers (demo)"}
           </Button>
         </div>
 
@@ -280,12 +331,26 @@ export function FindingsPage() {
         {!busy && items.length === 0 ? (
           <EmptyState
             title="Sem findings"
-            description="Nenhum resultado após filtros. Rode os analyzers demo."
+            description="Nenhum resultado após filtros. Rode os analyzers demo ou limpe os filtros."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => void runAnalyze()} disabled={busy}>
+                  Rodar analyzers (demo)
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setSection("Execuções")}
+                >
+                  Ir para Execuções
+                </Button>
+              </div>
+            }
           />
         ) : null}
 
         {!busy && items.length > 0 ? (
           <Table
+            dense
             headers={[
               "Tipo",
               "Severidade",
@@ -298,27 +363,27 @@ export function FindingsPage() {
             {items.map((f) => (
               <tr
                 key={f.id}
-                className="border-t border-slate-800 cursor-pointer"
+                className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
                 onClick={() => setSelected(f)}
               >
-                <td className="px-4 py-3 text-slate-300 font-mono text-xs">
+                <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
                   {f.finding_type}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-1.5">
                   <Badge tone={severityTone(f.severity)}>
                     {labels.severity(f.severity)}
                   </Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-1.5">
                   <Badge tone={statusTone(f.status)}>
                     {labels.findingStatus(f.status)}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-slate-100">{f.title}</td>
-                <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
+                <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
                   {f.object_key || "—"}
                 </td>
-                <td className="px-4 py-3 text-slate-400 text-xs">
+                <td className="px-3 py-1.5 text-xs text-slate-400">
                   {f.last_seen_at
                     ? new Date(f.last_seen_at).toLocaleString()
                     : "—"}
@@ -338,18 +403,6 @@ export function FindingsPage() {
               <li>Status: {labels.findingStatus(selected.status)}</li>
               <li>Objeto: {selected.object_key || "—"}</li>
               <li>Resumo: {selected.summary}</li>
-              <li>
-                First seen:{" "}
-                {selected.first_seen_at
-                  ? new Date(selected.first_seen_at).toLocaleString()
-                  : "—"}
-              </li>
-              <li>
-                Last seen:{" "}
-                {selected.last_seen_at
-                  ? new Date(selected.last_seen_at).toLocaleString()
-                  : "—"}
-              </li>
             </ul>
             {selected.finding_type.startsWith("inactivity.") ? (
               <p className="mt-3 text-xs text-amber-300">
@@ -358,7 +411,7 @@ export function FindingsPage() {
               </p>
             ) : null}
             {selected.evidence ? (
-              <pre className="mt-3 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-400">
+              <pre className="mt-3 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-400">
                 {JSON.stringify(selected.evidence, null, 2)}
               </pre>
             ) : null}
@@ -372,7 +425,10 @@ export function FindingsPage() {
               <Button onClick={() => void triage(selected.id, "suppressed")}>
                 Suprimir
               </Button>
-              <Button onClick={() => void triage(selected.id, "open")}>
+              <Button
+                variant="secondary"
+                onClick={() => void triage(selected.id, "open")}
+              >
                 Reabrir
               </Button>
             </div>
