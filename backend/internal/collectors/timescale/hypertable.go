@@ -9,7 +9,16 @@ import (
 )
 
 // CollectHypertables lists hypertables in the current database and applies schema scope.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectHypertables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]HypertableFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "hypertable collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []HypertableFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, hypertablesSQL)
 	if err != nil {
 		return nil, fmt.Errorf("hypertable collector: %w", err)
