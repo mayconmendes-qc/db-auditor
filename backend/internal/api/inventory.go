@@ -17,7 +17,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
 			return
 		}
 		q := parseInventoryQuery(r)
@@ -30,7 +30,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 			Offset:        q.Offset,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list tables failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as tabelas.")
 			return
 		}
 		if items == nil {
@@ -44,7 +44,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
 			return
 		}
 		q := parseInventoryQuery(r)
@@ -57,7 +57,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 			Offset:        q.Offset,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list indexes failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os índices.")
 			return
 		}
 		if items == nil {
@@ -71,7 +71,7 @@ func listViews(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
 			return
 		}
 		q := parseInventoryQuery(r)
@@ -84,7 +84,7 @@ func listViews(store InventoryStore) http.HandlerFunc {
 			Offset:        q.Offset,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list views failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as views.")
 			return
 		}
 		if items == nil {
@@ -98,7 +98,7 @@ func listFunctions(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		if id == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
 			return
 		}
 		q := parseInventoryQuery(r)
@@ -111,7 +111,7 @@ func listFunctions(store InventoryStore) http.HandlerFunc {
 			Offset:        q.Offset,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list functions failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as funções.")
 			return
 		}
 		if items == nil {
