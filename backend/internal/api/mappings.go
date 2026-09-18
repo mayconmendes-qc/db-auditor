@@ -59,7 +59,7 @@ func listMappings(store MappingStore) http.HandlerFunc {
 		q := r.URL.Query()
 		items, err := store.ListObjectMappings(r.Context(), q.Get("source_environment_id"), q.Get("target_environment_id"), q.Get("status"))
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list mappings failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os mapeamentos.")
 			return
 		}
 		if items == nil {
@@ -73,11 +73,11 @@ func createMapping(store MappingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createMappingBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if body.SourceEnvironmentID == "" || body.TargetEnvironmentID == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "source and target environment ids required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "Os identificadores de ambiente de origem e destino são obrigatórios.")
 			return
 		}
 		m, err := store.CreateObjectMapping(r.Context(), repository.CreateObjectMappingParams{
@@ -91,7 +91,7 @@ func createMapping(store MappingStore) http.HandlerFunc {
 			FingerprintAlgorithm: body.FingerprintAlgorithm, Notes: body.Notes,
 		})
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível criar o mapeamento.")
 			return
 		}
 		writeJSON(w, http.StatusCreated, m)
@@ -103,16 +103,16 @@ func patchMapping(store MappingStore) http.HandlerFunc {
 		id := r.PathValue("id")
 		var body updateMappingBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if body.Status == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "status required"})
+			writeError(w, http.StatusBadRequest, CodeValidation, "O campo status é obrigatório.")
 			return
 		}
 		m, err := store.UpdateObjectMappingStatus(r.Context(), id, body.Status, body.Notes)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "mapping not found"})
+			writeError(w, http.StatusNotFound, CodeNotFound, "Mapeamento não encontrado.")
 			return
 		}
 		writeJSON(w, http.StatusOK, m)
@@ -123,7 +123,7 @@ func suggestMappings() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body suggestBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		items := fingerprint.SuggestMappings(body.Source, body.Target, body.TargetDefaultDB)

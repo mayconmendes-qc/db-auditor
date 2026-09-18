@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { api } from "../services/api";
 import type {
@@ -27,11 +36,11 @@ const KINDS: InventoryObjectKind[] = [
 ];
 
 const KIND_LABELS: Record<InventoryObjectKind, string> = {
-  tables: "Tables",
+  tables: "Tabelas",
   hypertables: "Hypertables",
-  indexes: "Indexes",
+  indexes: "Índices",
   views: "Views",
-  functions: "Functions",
+  functions: "Funções",
   caggs: "CAGGs",
 };
 
@@ -70,7 +79,7 @@ export function InventoryPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Falha ao carregar");
+          setError(formatError(err, "Falha ao carregar ambientes"));
           setEnvs([]);
         }
       });
@@ -101,7 +110,7 @@ export function InventoryPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setListError(err instanceof Error ? err.message : "Erro topologia");
+          setListError(formatError(err, "Falha ao carregar topologia"));
           setDatabases([]);
           setSchemas([]);
         }
@@ -154,9 +163,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro tables"),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar tables")))
         .finally(ok);
     } else if (kind === "indexes") {
       api
@@ -167,9 +174,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro indexes"),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar indexes")))
         .finally(ok);
     } else if (kind === "views") {
       api
@@ -180,9 +185,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro views"),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar views")))
         .finally(ok);
     } else if (kind === "functions") {
       api
@@ -194,7 +197,7 @@ export function InventoryPage() {
           }
         })
         .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro functions"),
+          fail(formatError(e, "Falha ao listar functions")),
         )
         .finally(ok);
     } else if (kind === "hypertables") {
@@ -227,7 +230,7 @@ export function InventoryPage() {
           }
         })
         .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro hypertables"),
+          fail(formatError(e, "Falha ao listar hypertables")),
         )
         .finally(ok);
     } else {
@@ -266,9 +269,7 @@ export function InventoryPage() {
             );
           }
         })
-        .catch((e: unknown) =>
-          fail(e instanceof Error ? e.message : "Erro CAGGs"),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar CAGGs")))
         .finally(ok);
     }
     return () => {
@@ -322,23 +323,44 @@ export function InventoryPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 8
+        INVENTÁRIO
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Inventory Explorer
+        Explorer de inventário
       </h1>
       <p className="mt-3 max-w-2xl text-slate-400">
-        Navegação environment → database → schema → objeto com paginação
+        Navegação ambiente → database → schema → objeto com paginação
         server-side.
       </p>
 
       <div className="mt-8 space-y-6">
         {error ? (
-          <Card title="Erro" subtitle={error} />
+          <ErrorBanner
+            message={error}
+            onRetry={() => {
+              setError(null);
+              setEnvs(null);
+              api
+                .environments()
+                .then((res) => {
+                  setEnvs(res.items);
+                  if (res.items.length > 0) {
+                    setEnvId(res.items[0].id);
+                  }
+                })
+                .catch((err: unknown) => {
+                  setError(formatError(err, "Falha ao carregar ambientes"));
+                  setEnvs([]);
+                });
+            }}
+          />
         ) : envs === null ? (
           <Skeleton className="h-16 w-full" />
         ) : envs.length === 0 ? (
-          <Card title="Nenhum ambiente" subtitle="Execute discovery." />
+          <EmptyState
+            title="Nenhum ambiente"
+            description="Configure ambientes via .env e rode discovery, ou use o seed demo (make reset-volume && make up)."
+          />
         ) : (
           <div className="flex flex-wrap gap-2">
             {envs.map((e) => (
@@ -454,12 +476,20 @@ export function InventoryPage() {
               {page ? (
                 <p className="text-sm text-slate-400">{page.total} objeto(s)</p>
               ) : null}
-              {listError ? <Card title="Erro" subtitle={listError} /> : null}
+              {listError ? (
+                <ErrorBanner
+                  message={listError}
+                  onRetry={() => loadObjects()}
+                />
+              ) : null}
               {loading ? (
                 <Skeleton className="h-40 w-full" />
               ) : kind === "tables" ? (
                 tables.length === 0 ? (
-                  <Card title="Sem tables" subtitle="Filtro vazio." />
+                  <EmptyState
+                    title="Sem tabelas"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "Cols", "Size"]}>
                     {tables.map((t) => {
@@ -491,7 +521,10 @@ export function InventoryPage() {
                 )
               ) : kind === "indexes" ? (
                 indexes.length === 0 ? (
-                  <Card title="Sem indexes" subtitle="Vazio." />
+                  <EmptyState
+                    title="Sem índices"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Index", "Table", "Scan"]}>
                     {indexes.map((i) => {
@@ -523,7 +556,10 @@ export function InventoryPage() {
                 )
               ) : kind === "views" || kind === "caggs" ? (
                 views.length === 0 ? (
-                  <Card title="Sem itens" subtitle="Vazio." />
+                  <EmptyState
+                    title="Sem itens"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "Kind"]}>
                     {views.map((v) => {
@@ -552,7 +588,10 @@ export function InventoryPage() {
                 )
               ) : kind === "functions" ? (
                 functions.length === 0 ? (
-                  <Card title="Sem functions" subtitle="Vazio." />
+                  <EmptyState
+                    title="Sem funções"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "SECURITY"]}>
                     {functions.map((f) => {
@@ -571,14 +610,8 @@ export function InventoryPage() {
                           <td className="px-4 py-3 text-slate-100">
                             {f.function_name}
                           </td>
-                          <td className="px-4 py-3">
-                            <Badge
-                              tone={
-                                f.is_security_definer ? "warning" : "neutral"
-                              }
-                            >
-                              {f.is_security_definer ? "DEFINER" : "invoker"}
-                            </Badge>
+                          <td className="px-4 py-3 text-slate-300">
+                            {f.is_security_definer ? "DEFINER" : "INVOKER"}
                           </td>
                         </tr>
                       );
@@ -586,7 +619,10 @@ export function InventoryPage() {
                   </Table>
                 )
               ) : hypertables.length === 0 ? (
-                <Card title="Sem hypertables" subtitle="Vazio." />
+                <EmptyState
+                  title="Sem hypertables"
+                  description="Nenhum resultado para o filtro atual."
+                />
               ) : (
                 <Table headers={["Schema", "Nome", "Chunks", "Size"]}>
                   {hypertables.map((h) => {
@@ -616,20 +652,15 @@ export function InventoryPage() {
                   })}
                 </Table>
               )}
-              {page && page.total > PAGE_SIZE ? (
+              {page?.has_more ? (
                 <div className="flex gap-2">
                   <Button
-                    variant="secondary"
                     disabled={offset === 0}
                     onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
                   >
                     Anterior
                   </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={!page.has_more}
-                    onClick={() => setOffset(offset + PAGE_SIZE)}
-                  >
+                  <Button onClick={() => setOffset(offset + PAGE_SIZE)}>
                     Próxima
                   </Button>
                 </div>

@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 
@@ -15,7 +25,6 @@ function severityTone(
   return "neutral";
 }
 
-/** Demo facts for SECURITY DEFINER, powerful roles and privilege review. */
 const securityDemoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
   functions: [
@@ -88,9 +97,7 @@ export function SecurityPage() {
       );
       setItems(sec);
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Falha ao listar segurança",
-      );
+      setError(formatError(err, "Falha ao listar segurança"));
       setItems([]);
     } finally {
       setBusy(false);
@@ -108,7 +115,7 @@ export function SecurityPage() {
       await api.analyzeFindings(securityDemoFacts);
       await load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha no analyze");
+      setError(formatError(err, "Falha no analyze"));
     } finally {
       setBusy(false);
     }
@@ -127,12 +134,12 @@ export function SecurityPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 9
+        SEGURANÇA
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Security Review
+        Revisão de segurança
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         SECURITY DEFINER, roles elevadas e privilégios amplos para revisão
         humana. O auditor nunca emite REVOKE, ALTER ROLE ou DROP.
       </p>
@@ -153,19 +160,21 @@ export function SecurityPage() {
           </Button>
         </div>
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void load()} />
+        ) : null}
         {busy ? <Skeleton className="h-40 w-full" /> : null}
 
         {!busy && items.length === 0 ? (
-          <Card
+          <EmptyState
             title="Sem findings de segurança"
-            subtitle="Rode os analyzers demo para listar SECURITY DEFINER e privilégios."
+            description="Rode os analyzers demo para listar SECURITY DEFINER e privilégios."
           />
         ) : null}
 
         {!busy && items.length > 0 ? (
           <Table
-            headers={["Tipo", "Severidade", "Título", "Objeto", "Last seen"]}
+            headers={["Tipo", "Severidade", "Título", "Objeto", "Última vez"]}
           >
             {items.map((f) => (
               <tr
@@ -177,7 +186,9 @@ export function SecurityPage() {
                   {f.finding_type}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={severityTone(f.severity)}>{f.severity}</Badge>
+                  <Badge tone={severityTone(f.severity)}>
+                    {labels.severity(f.severity)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-slate-100">{f.title}</td>
                 <td className="px-4 py-3 text-slate-400 font-mono text-xs">
@@ -195,7 +206,7 @@ export function SecurityPage() {
 
         {selected ? (
           <Card
-            title={`Detalhe · ${selected.severity}`}
+            title={`Detalhe · ${labels.severity(selected.severity)}`}
             subtitle={selected.title}
           >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">

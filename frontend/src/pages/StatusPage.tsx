@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Card } from "../components/ui";
+import { Card, ErrorBanner } from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { StatusResponse } from "../types";
 
@@ -19,6 +21,7 @@ export function StatusPage() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +35,7 @@ export function StatusPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Falha ao carregar status");
+          setError(formatError(e, "Falha ao carregar status"));
           setData(null);
         }
       } finally {
@@ -44,7 +47,7 @@ export function StatusPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   return (
     <>
@@ -54,7 +57,7 @@ export function StatusPage() {
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Status do serviço
       </h1>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         Saúde da API, snapshot store, runs recentes e findings abertos. Dados
         vêm exclusivamente de{" "}
         <code className="text-slate-300">GET /api/v1/status</code>.
@@ -64,8 +67,12 @@ export function StatusPage() {
         <p className="mt-8 text-sm text-slate-400">Carregando status…</p>
       )}
       {error && (
-        <div className="mt-8 rounded-md border border-rose-800/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
-          API indisponível ou parcial: {error}
+        <div className="mt-8">
+          <ErrorBanner
+            title="API indisponível ou parcial"
+            message={error}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
         </div>
       )}
 
@@ -129,7 +136,7 @@ export function StatusPage() {
                         </td>
                         <td className="py-2 pr-3">{run.profile}</td>
                         <td className={`py-2 pr-3 ${tone(run.status)}`}>
-                          {run.status}
+                          {labels.runStatus(run.status)}
                         </td>
                         <td className="py-2 text-xs text-slate-400">
                           {run.started_at}

@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
 import { api } from "../services/api";
 import type { CompareResult, ObjectDiff } from "../types";
 
@@ -18,7 +28,6 @@ function statusTone(
   return "neutral";
 }
 
-/** Demo payloads so the page is usable without prior inventory load. */
 const demoSource = [
   {
     object_type: "table",
@@ -88,7 +97,7 @@ export function SchemaDriftPage() {
       });
       setResult(res);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha na comparação");
+      setError(formatError(err, "Falha na comparação"));
       setResult(null);
     } finally {
       setBusy(false);
@@ -98,14 +107,14 @@ export function SchemaDriftPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 5
+        DESVIO DE SCHEMA
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Schema Drift
+        Desvio de schema
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
-        Compare sets de objetos (fingerprints e campos) e classifique MATCH,
-        DRIFT, ONLY_SOURCE, ONLY_TARGET e UNKNOWN.
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
+        Compare conjuntos de objetos (fingerprints e campos) e classifique
+        MATCH, DRIFT, ONLY_SOURCE, ONLY_TARGET e UNKNOWN.
       </p>
 
       <div className="mt-8 space-y-6">
@@ -127,7 +136,9 @@ export function SchemaDriftPage() {
           {busy ? "Comparando…" : "Comparar (demo payloads)"}
         </Button>
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void runCompare()} />
+        ) : null}
 
         {result ? (
           <div className="grid gap-3 sm:grid-cols-5">
@@ -149,9 +160,9 @@ export function SchemaDriftPage() {
 
         {result && !busy ? (
           result.objects.length === 0 ? (
-            <Card
+            <EmptyState
               title="Sem diferenças"
-              subtitle="Nenhum objeto após filtros."
+              description="Nenhum objeto após filtros."
             />
           ) : (
             <Table headers={["Tipo", "Key", "Status", "Origem", "Destino"]}>

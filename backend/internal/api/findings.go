@@ -56,7 +56,7 @@ func listFindings(store FindingStore) http.HandlerFunc {
 		limit, _ := strconv.Atoi(q.Get("limit"))
 		items, err := store.ListFindings(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), limit)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list findings failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")
 			return
 		}
 		if items == nil {
@@ -71,7 +71,7 @@ func getFinding(store FindingStore) http.HandlerFunc {
 		id := r.PathValue("id")
 		f, err := store.GetFinding(r.Context(), id)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "finding not found"})
+			writeError(w, http.StatusNotFound, CodeNotFound, "Finding não encontrado.")
 			return
 		}
 		writeJSON(w, http.StatusOK, f)
@@ -83,22 +83,22 @@ func patchFinding(store FindingStore) http.HandlerFunc {
 		id := r.PathValue("id")
 		var body updateFindingBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if body.Status == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "status required"})
+			writeError(w, http.StatusBadRequest, CodeValidation, "O campo status é obrigatório.")
 			return
 		}
 		switch body.Status {
 		case "open", "acknowledged", "resolved", "suppressed":
 		default:
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid status"})
+			writeError(w, http.StatusBadRequest, CodeValidation, "Status inválido. Use open, acknowledged, resolved ou suppressed.")
 			return
 		}
 		f, err := store.UpdateFindingStatus(r.Context(), id, body.Status, body.Notes)
 		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "finding not found"})
+			writeError(w, http.StatusNotFound, CodeNotFound, "Finding não encontrado.")
 			return
 		}
 		writeJSON(w, http.StatusOK, f)
@@ -110,11 +110,11 @@ func analyzeFindings(store FindingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body analyzeBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if body.EnvironmentID == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment_id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O campo environment_id é obrigatório.")
 			return
 		}
 		facts := analyzer.SnapshotFacts{
@@ -138,7 +138,7 @@ func analyzeFindings(store FindingStore) http.HandlerFunc {
 		}
 		produced, err := runner.Run(r.Context(), facts)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao executar analyzers.")
 			return
 		}
 		saved := make([]repository.Finding, 0, len(produced))
@@ -159,7 +159,6 @@ func analyzeFindings(store FindingStore) http.HandlerFunc {
 				DedupKey:      f.DedupKey,
 			})
 			if err != nil {
-				// skip rows that conflict with suppressed/resolved
 				continue
 			}
 			saved = append(saved, *row)

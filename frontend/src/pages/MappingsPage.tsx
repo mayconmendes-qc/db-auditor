@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Input, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { ObjectMapping } from "../types";
 
@@ -26,13 +36,12 @@ export function MappingsPage() {
 
   const load = () => {
     setItems(null);
+    setError(null);
     api
       .mappings({ status: statusFilter || undefined })
       .then((res) => setItems(res.items))
       .catch((err: unknown) => {
-        setError(
-          err instanceof Error ? err.message : "Falha ao listar mappings",
-        );
+        setError(formatError(err, "Falha ao listar mapeamentos"));
         setItems([]);
       });
   };
@@ -47,7 +56,7 @@ export function MappingsPage() {
       await api.updateMappingStatus(id, status);
       load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar");
+      setError(formatError(err, "Falha ao atualizar mapeamento"));
     } finally {
       setBusyId(null);
     }
@@ -56,13 +65,13 @@ export function MappingsPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 4
+        MAPEAMENTOS
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Mappings
+        Mapeamentos
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
-        Correspondências Unifique ↔ Tiger Cloud, confidence e validação manual.
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
+        Correspondências entre ambientes, confidence e validação manual.
       </p>
 
       <div className="mt-8 space-y-6">
@@ -73,14 +82,14 @@ export function MappingsPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
         />
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? <ErrorBanner message={error} onRetry={() => load()} /> : null}
 
         {items === null ? (
           <Skeleton className="h-40 w-full" />
         ) : items.length === 0 ? (
-          <Card
-            title="Nenhum mapping"
-            subtitle="Crie mappings manuais via API ou aceite sugestões por fingerprint."
+          <EmptyState
+            title="Nenhum mapeamento"
+            description="Crie mappings manuais via API ou aceite sugestões por fingerprint."
           />
         ) : (
           <Table
@@ -106,7 +115,9 @@ export function MappingsPage() {
                   {(m.confidence * 100).toFixed(0)}%
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={statusTone(m.status)}>{m.status}</Badge>
+                  <Badge tone={statusTone(m.status)}>
+                    {labels.mappingStatus(m.status)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
