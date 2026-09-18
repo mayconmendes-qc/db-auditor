@@ -43,6 +43,18 @@ func (s *stubStore) ListJobSnapshots(context.Context, string) ([]repository.JobS
 func (s *stubStore) ListPolicySnapshots(context.Context, string) ([]repository.PolicySnapshotRow, error) {
 	return []repository.PolicySnapshotRow{}, nil
 }
+func (s *stubStore) ListTableSnapshots(context.Context, repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error) {
+	return []repository.TableSnapshotRow{}, 0, nil
+}
+func (s *stubStore) ListIndexSnapshots(context.Context, repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error) {
+	return []repository.IndexSnapshotRow{}, 0, nil
+}
+func (s *stubStore) ListViewSnapshots(context.Context, repository.InventoryFilter) ([]repository.ViewSnapshotRow, int, error) {
+	return []repository.ViewSnapshotRow{}, 0, nil
+}
+func (s *stubStore) ListFunctionSnapshots(context.Context, repository.InventoryFilter) ([]repository.FunctionSnapshotRow, int, error) {
+	return []repository.FunctionSnapshotRow{}, 0, nil
+}
 func (s *stubStore) ListAuditRuns(context.Context, string, string, string, int) ([]repository.AuditRunRow, error) {
 	return []repository.AuditRunRow{}, nil
 }
@@ -111,5 +123,23 @@ func TestListFindingsEmpty(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
+	}
+}
+
+func TestListTablesEmpty(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/00000000-0000-0000-0000-000000000001/tables", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["page"]; !ok {
+		t.Fatalf("expected page envelope: %v", body)
 	}
 }
