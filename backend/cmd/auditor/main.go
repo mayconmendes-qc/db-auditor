@@ -49,6 +49,7 @@ func main() {
 	registry := audit.NewLiveRegistry(audit.LiveRegistryOptions{
 		Targets: targets,
 		Scope:   cfg.Scope,
+		Writer:  store,
 	})
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
 		ServiceVersion:   "0.12.0",
