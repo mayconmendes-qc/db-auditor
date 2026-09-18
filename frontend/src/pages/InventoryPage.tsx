@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import {
   Button,
-  Card,
   EmptyState,
   ErrorBanner,
   Input,
   Skeleton,
   Table,
 } from "../components/ui";
+import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { api } from "../services/api";
 import type {
   DatabaseSnapshot,
-  Environment,
   FunctionSnapshot,
   HypertableSnapshot,
   IndexSnapshot,
@@ -24,7 +24,7 @@ import type {
   ViewSnapshot,
 } from "../types";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 50;
 
 const KINDS: InventoryObjectKind[] = [
   "tables",
@@ -44,9 +44,14 @@ const KIND_LABELS: Record<InventoryObjectKind, string> = {
   caggs: "CAGGs",
 };
 
+function rowClass(selected: boolean): string {
+  return `cursor-pointer border-t border-slate-800/80 ${selected ? "bg-slate-800/70" : "hover:bg-slate-900/50"}`;
+}
+
 export function InventoryPage() {
-  const [envs, setEnvs] = useState<Environment[] | null>(null);
-  const [envId, setEnvId] = useState<string | null>(null);
+  const { environmentId, environments, setSection } = useApp();
+  const envId = environmentId;
+
   const [error, setError] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseSnapshot[] | null>(null);
   const [schemas, setSchemas] = useState<SchemaSnapshot[] | null>(null);
@@ -66,30 +71,13 @@ export function InventoryPage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    api
-      .environments()
-      .then((res) => {
-        if (!cancelled) {
-          setEnvs(res.items);
-          if (res.items.length > 0) {
-            setEnvId(res.items[0].id);
-          }
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(formatError(err, "Falha ao carregar ambientes"));
-          setEnvs([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!envId) {
+      setDatabases([]);
+      setSchemas([]);
+      setSelectedDb(null);
+      setSelectedSchema(null);
+      setOffset(0);
+      setError(null);
       return;
     }
     let cancelled = false;
@@ -98,14 +86,12 @@ export function InventoryPage() {
     setSelectedDb(null);
     setSelectedSchema(null);
     setOffset(0);
+    setError(null);
     Promise.all([api.databases(envId), api.schemas(envId)])
       .then(([dbRes, scRes]) => {
         if (!cancelled) {
           setDatabases(dbRes.items);
           setSchemas(scRes.items);
-          if (dbRes.items.length > 0) {
-            setSelectedDb(dbRes.items[0].database_name);
-          }
         }
       })
       .catch((err: unknown) => {
@@ -121,15 +107,25 @@ export function InventoryPage() {
   }, [envId]);
 
   const schemasForDb = useMemo(() => {
-    if (!schemas || !selectedDb) {
+    if (!schemas) {
       return [];
+    }
+    if (!selectedDb) {
+      return schemas;
     }
     return schemas.filter((s) => s.database_name === selectedDb);
   }, [schemas, selectedDb]);
 
   const loadObjects = useCallback(() => {
     if (!envId) {
-      return;
+      setTables([]);
+      setIndexes([]);
+      setViews([]);
+      setFunctions([]);
+      setHypertables([]);
+      setPage(null);
+      setLoading(false);
+      return () => {};
     }
     let cancelled = false;
     setLoading(true);
@@ -320,362 +316,415 @@ export function InventoryPage() {
     return null;
   }, [selectedKey, kind, tables, indexes, views, functions, hypertables]);
 
+  const envName =
+    environments.find((e) => e.id === envId)?.name ??
+    (envId ? envId.slice(0, 8) : null);
+
+  const objectCount = page?.total;
+
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        INVENTÁRIO
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Explorer de inventário
-      </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
-        Navegação ambiente → database → schema → objeto com paginação
-        server-side.
-      </p>
+      <PageHeader
+        eyebrow="INVENTÁRIO"
+        title="Explorer de inventário"
+        description={
+          <>
+            Ambiente → database → schema → objeto. Use o seletor global na
+            sidebar. Paginação server-side ({PAGE_SIZE}/página).
+          </>
+        }
+        actions={
+          envName ? (
+            <span className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300">
+              {envName}
+            </span>
+          ) : null
+        }
+      />
 
-      <div className="mt-8 space-y-6">
-        {error ? (
-          <ErrorBanner
-            message={error}
-            onRetry={() => {
-              setError(null);
-              setEnvs(null);
-              api
-                .environments()
-                .then((res) => {
-                  setEnvs(res.items);
-                  if (res.items.length > 0) {
-                    setEnvId(res.items[0].id);
-                  }
-                })
-                .catch((err: unknown) => {
-                  setError(formatError(err, "Falha ao carregar ambientes"));
-                  setEnvs([]);
-                });
-            }}
-          />
-        ) : envs === null ? (
-          <Skeleton className="h-16 w-full" />
-        ) : envs.length === 0 ? (
+      {!envId ? (
+        <div className="mt-8">
           <EmptyState
-            title="Nenhum ambiente"
-            description="Configure ambientes via .env e rode discovery, ou use o seed demo (make reset-volume && make up)."
+            title="Selecione um ambiente"
+            description="Escolha um ambiente na barra lateral para explorar o inventário coletado."
+            action={
+              <Button onClick={() => setSection("Ambientes")}>
+                Ir para Ambientes
+              </Button>
+            }
           />
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {envs.map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                onClick={() => setEnvId(e.id)}
-                className={`rounded-md px-3 py-1.5 text-sm ${
-                  envId === e.id
-                    ? "bg-emerald-700 text-white"
-                    : "bg-slate-800 text-slate-300"
-                }`}
-              >
-                {e.name}
-              </button>
-            ))}
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className="mt-6 flex min-h-0 flex-col gap-3">
+          {error ? (
+            <ErrorBanner message={error} onRetry={() => setError(null)} />
+          ) : null}
 
-        {databases === null ? (
-          <Skeleton className="h-24 w-full" />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[12rem_10rem_1fr]">
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-slate-400">
-                Database
-              </h3>
-              {databases.map((db) => (
-                <button
-                  key={db.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDb(db.database_name);
-                    setSelectedSchema(null);
-                    setOffset(0);
-                  }}
-                  className={`mb-1 block w-full rounded px-2 py-1.5 text-left text-sm ${
-                    selectedDb === db.database_name
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:bg-slate-900"
-                  }`}
-                >
-                  {db.database_name}
-                </button>
-              ))}
-            </div>
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-slate-400">
-                Schema
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedSchema(null);
-                  setOffset(0);
-                }}
-                className={`mb-1 block w-full rounded px-2 py-1.5 text-left text-sm ${
-                  selectedSchema === null
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:bg-slate-900"
-                }`}
-              >
-                (todos)
-              </button>
-              {schemasForDb.map((sc) => (
-                <button
-                  key={sc.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedSchema(sc.schema_name);
-                    setOffset(0);
-                  }}
-                  className={`mb-1 block w-full rounded px-2 py-1.5 text-left text-sm ${
-                    selectedSchema === sc.schema_name
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:bg-slate-900"
-                  }`}
-                >
-                  {sc.schema_name}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {KINDS.map((k) => (
+          {databases === null ? (
+            <Skeleton className="h-[28rem] w-full" />
+          ) : databases.length === 0 ? (
+            <EmptyState
+              title="Sem snapshot de inventário"
+              description="Rode uma auditoria neste ambiente para popular databases/schemas/objetos."
+              action={
+                <Button onClick={() => setSection("Execuções")}>
+                  Ir para Execuções
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[11rem_9rem_minmax(0,1fr)_minmax(16rem,20rem)]">
+              <aside className="flex max-h-[min(70vh,36rem)] flex-col rounded-lg border border-slate-800 bg-slate-950/60">
+                <div className="border-b border-slate-800 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Database
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
                   <button
-                    key={k}
                     type="button"
                     onClick={() => {
-                      setKind(k);
+                      setSelectedDb(null);
+                      setSelectedSchema(null);
                       setOffset(0);
-                      setSelectedKey(null);
                     }}
-                    className={`rounded-md px-3 py-1 text-sm ${
-                      kind === k
-                        ? "bg-emerald-800 text-white"
-                        : "bg-slate-800 text-slate-300"
+                    className={`mb-0.5 block w-full rounded px-2 py-1.5 text-left text-xs ${
+                      selectedDb === null
+                        ? "bg-slate-800 text-white"
+                        : "text-slate-400 hover:bg-slate-900"
                     }`}
                   >
-                    {KIND_LABELS[k]}
+                    (todos)
                   </button>
-                ))}
-              </div>
-              <Input
-                label="Busca"
-                placeholder="nome…"
-                value={q}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setOffset(0);
-                }}
-              />
-              {page ? (
-                <p className="text-sm text-slate-400">{page.total} objeto(s)</p>
-              ) : null}
-              {listError ? (
-                <ErrorBanner
-                  message={listError}
-                  onRetry={() => loadObjects()}
-                />
-              ) : null}
-              {loading ? (
-                <Skeleton className="h-40 w-full" />
-              ) : kind === "tables" ? (
-                tables.length === 0 ? (
-                  <EmptyState
-                    title="Sem tabelas"
-                    description="Nenhum resultado para o filtro atual."
-                  />
-                ) : (
-                  <Table headers={["Schema", "Nome", "Cols", "Size"]}>
-                    {tables.map((t) => {
-                      const key = `${t.database_name}.${t.schema_name}.${t.table_name}`;
-                      return (
-                        <tr
-                          key={t.id}
-                          className={`cursor-pointer border-t border-slate-800 ${
-                            selectedKey === key ? "bg-slate-900/80" : ""
-                          }`}
-                          onClick={() => setSelectedKey(key)}
-                        >
-                          <td className="px-4 py-3 text-slate-300">
-                            {t.schema_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-100">
-                            {t.table_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {t.column_count}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {formatBytes(t.total_size_bytes)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Table>
-                )
-              ) : kind === "indexes" ? (
-                indexes.length === 0 ? (
-                  <EmptyState
-                    title="Sem índices"
-                    description="Nenhum resultado para o filtro atual."
-                  />
-                ) : (
-                  <Table headers={["Schema", "Index", "Table", "Scan"]}>
-                    {indexes.map((i) => {
-                      const key = `${i.database_name}.${i.schema_name}.${i.index_name}`;
-                      return (
-                        <tr
-                          key={i.id}
-                          className={`cursor-pointer border-t border-slate-800 ${
-                            selectedKey === key ? "bg-slate-900/80" : ""
-                          }`}
-                          onClick={() => setSelectedKey(key)}
-                        >
-                          <td className="px-4 py-3 text-slate-300">
-                            {i.schema_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-100">
-                            {i.index_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {i.table_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {i.idx_scan}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Table>
-                )
-              ) : kind === "views" || kind === "caggs" ? (
-                views.length === 0 ? (
-                  <EmptyState
-                    title="Sem itens"
-                    description="Nenhum resultado para o filtro atual."
-                  />
-                ) : (
-                  <Table headers={["Schema", "Nome", "Kind"]}>
-                    {views.map((v) => {
-                      const key = `${v.database_name}.${v.schema_name}.${v.view_name}`;
-                      return (
-                        <tr
-                          key={v.id}
-                          className={`cursor-pointer border-t border-slate-800 ${
-                            selectedKey === key ? "bg-slate-900/80" : ""
-                          }`}
-                          onClick={() => setSelectedKey(key)}
-                        >
-                          <td className="px-4 py-3 text-slate-300">
-                            {v.schema_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-100">
-                            {v.view_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {v.relkind}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Table>
-                )
-              ) : kind === "functions" ? (
-                functions.length === 0 ? (
-                  <EmptyState
-                    title="Sem funções"
-                    description="Nenhum resultado para o filtro atual."
-                  />
-                ) : (
-                  <Table headers={["Schema", "Nome", "SECURITY"]}>
-                    {functions.map((f) => {
-                      const key = `${f.database_name}.${f.schema_name}.${f.function_name}`;
-                      return (
-                        <tr
-                          key={f.id}
-                          className={`cursor-pointer border-t border-slate-800 ${
-                            selectedKey === key ? "bg-slate-900/80" : ""
-                          }`}
-                          onClick={() => setSelectedKey(key)}
-                        >
-                          <td className="px-4 py-3 text-slate-300">
-                            {f.schema_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-100">
-                            {f.function_name}
-                          </td>
-                          <td className="px-4 py-3 text-slate-300">
-                            {f.is_security_definer ? "DEFINER" : "INVOKER"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Table>
-                )
-              ) : hypertables.length === 0 ? (
-                <EmptyState
-                  title="Sem hypertables"
-                  description="Nenhum resultado para o filtro atual."
-                />
-              ) : (
-                <Table headers={["Schema", "Nome", "Chunks", "Size"]}>
-                  {hypertables.map((h) => {
-                    const key = `${h.database_name}.${h.schema_name}.${h.hypertable_name}`;
-                    return (
-                      <tr
-                        key={h.id}
-                        className={`cursor-pointer border-t border-slate-800 ${
-                          selectedKey === key ? "bg-slate-900/80" : ""
-                        }`}
-                        onClick={() => setSelectedKey(key)}
-                      >
-                        <td className="px-4 py-3 text-slate-300">
-                          {h.schema_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-100">
-                          {h.hypertable_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {h.num_chunks}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {formatBytes(h.total_size_bytes)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </Table>
-              )}
-              {page?.has_more ? (
-                <div className="flex gap-2">
-                  <Button
-                    disabled={offset === 0}
-                    onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                  >
-                    Anterior
-                  </Button>
-                  <Button onClick={() => setOffset(offset + PAGE_SIZE)}>
-                    Próxima
-                  </Button>
+                  {databases.map((db) => (
+                    <button
+                      key={db.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDb(db.database_name);
+                        setSelectedSchema(null);
+                        setOffset(0);
+                      }}
+                      className={`mb-0.5 block w-full truncate rounded px-2 py-1.5 text-left text-xs ${
+                        selectedDb === db.database_name
+                          ? "bg-slate-800 text-white"
+                          : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                      title={db.database_name}
+                    >
+                      {db.database_name}
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-              {detail ? (
-                <Card title="Detalhe" subtitle={selectedKey ?? ""}>
-                  <pre className="mt-2 max-h-56 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-300">
-                    {JSON.stringify(detail, null, 2)}
-                  </pre>
-                </Card>
-              ) : null}
+              </aside>
+
+              <aside className="flex max-h-[min(70vh,36rem)] flex-col rounded-lg border border-slate-800 bg-slate-950/60">
+                <div className="border-b border-slate-800 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Schema
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSchema(null);
+                      setOffset(0);
+                    }}
+                    className={`mb-0.5 block w-full rounded px-2 py-1.5 text-left text-xs ${
+                      selectedSchema === null
+                        ? "bg-slate-800 text-white"
+                        : "text-slate-400 hover:bg-slate-900"
+                    }`}
+                  >
+                    (todos)
+                  </button>
+                  {schemasForDb.map((sc) => (
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSchema(sc.schema_name);
+                        setOffset(0);
+                      }}
+                      className={`mb-0.5 block w-full truncate rounded px-2 py-1.5 text-left text-xs ${
+                        selectedSchema === sc.schema_name
+                          ? "bg-slate-800 text-white"
+                          : "text-slate-400 hover:bg-slate-900"
+                      }`}
+                      title={sc.schema_name}
+                    >
+                      {sc.schema_name}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <section className="flex max-h-[min(70vh,36rem)] min-w-0 flex-col rounded-lg border border-slate-800 bg-slate-950/40">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2">
+                  {KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        setKind(k);
+                        setOffset(0);
+                        setSelectedKey(null);
+                      }}
+                      className={`rounded px-2.5 py-1 text-xs ${
+                        kind === k
+                          ? "bg-emerald-800 text-white"
+                          : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      {KIND_LABELS[k]}
+                    </button>
+                  ))}
+                  <div className="ml-auto flex items-center gap-2">
+                    {objectCount != null ? (
+                      <span className="text-[11px] text-slate-500">
+                        {objectCount} objeto(s)
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="border-b border-slate-800 px-3 py-2">
+                  <Input
+                    label=""
+                    placeholder="Buscar nome…"
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setOffset(0);
+                    }}
+                  />
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto">
+                  {listError ? (
+                    <div className="p-3">
+                      <ErrorBanner
+                        message={listError}
+                        onRetry={() => loadObjects()}
+                      />
+                    </div>
+                  ) : null}
+                  {loading ? (
+                    <div className="p-3">
+                      <Skeleton className="h-32 w-full" />
+                    </div>
+                  ) : kind === "tables" ? (
+                    tables.length === 0 ? (
+                      <div className="p-4">
+                        <EmptyState
+                          title="Sem tabelas"
+                          description="Nenhum resultado para o filtro atual. Tente (todos) em database ou rode uma nova auditoria."
+                        />
+                      </div>
+                    ) : (
+                      <Table headers={["Schema", "Nome", "Cols", "Size"]}>
+                        {tables.map((t) => {
+                          const key = `${t.database_name}.${t.schema_name}.${t.table_name}`;
+                          return (
+                            <tr
+                              key={t.id}
+                              className={rowClass(selectedKey === key)}
+                              onClick={() => setSelectedKey(key)}
+                            >
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {t.schema_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
+                                {t.table_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {t.column_count}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {formatBytes(t.total_size_bytes)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    )
+                  ) : kind === "indexes" ? (
+                    indexes.length === 0 ? (
+                      <div className="p-4">
+                        <EmptyState
+                          title="Sem índices"
+                          description="Nenhum resultado para o filtro atual."
+                        />
+                      </div>
+                    ) : (
+                      <Table headers={["Schema", "Index", "Table", "Scan"]}>
+                        {indexes.map((i) => {
+                          const key = `${i.database_name}.${i.schema_name}.${i.index_name}`;
+                          return (
+                            <tr
+                              key={i.id}
+                              className={rowClass(selectedKey === key)}
+                              onClick={() => setSelectedKey(key)}
+                            >
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {i.schema_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
+                                {i.index_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {i.table_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {i.idx_scan}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    )
+                  ) : kind === "views" || kind === "caggs" ? (
+                    views.length === 0 ? (
+                      <div className="p-4">
+                        <EmptyState
+                          title="Sem itens"
+                          description="Nenhum resultado para o filtro atual."
+                        />
+                      </div>
+                    ) : (
+                      <Table headers={["Schema", "Nome", "Kind"]}>
+                        {views.map((v) => {
+                          const key = `${v.database_name}.${v.schema_name}.${v.view_name}`;
+                          return (
+                            <tr
+                              key={v.id}
+                              className={rowClass(selectedKey === key)}
+                              onClick={() => setSelectedKey(key)}
+                            >
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {v.schema_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
+                                {v.view_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {v.relkind}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    )
+                  ) : kind === "functions" ? (
+                    functions.length === 0 ? (
+                      <div className="p-4">
+                        <EmptyState
+                          title="Sem funções"
+                          description="Nenhum resultado para o filtro atual."
+                        />
+                      </div>
+                    ) : (
+                      <Table headers={["Schema", "Nome", "Lang"]}>
+                        {functions.map((f) => {
+                          const key = `${f.database_name}.${f.schema_name}.${f.function_name}`;
+                          return (
+                            <tr
+                              key={f.id}
+                              className={rowClass(selectedKey === key)}
+                              onClick={() => setSelectedKey(key)}
+                            >
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {f.schema_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
+                                {f.function_name}
+                              </td>
+                              <td className="px-3 py-1.5 text-xs text-slate-400">
+                                {f.language_name ?? "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Table>
+                    )
+                  ) : hypertables.length === 0 ? (
+                    <div className="p-4">
+                      <EmptyState
+                        title="Sem hypertables"
+                        description="Nenhum resultado para o filtro atual."
+                      />
+                    </div>
+                  ) : (
+                    <Table headers={["Schema", "Nome", "Chunks", "Size"]}>
+                      {hypertables.map((h) => {
+                        const key = `${h.database_name}.${h.schema_name}.${h.hypertable_name}`;
+                        return (
+                          <tr
+                            key={h.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => setSelectedKey(key)}
+                          >
+                            <td className="px-3 py-1.5 text-xs text-slate-400">
+                              {h.schema_name}
+                            </td>
+                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
+                              {h.hypertable_name}
+                            </td>
+                            <td className="px-3 py-1.5 text-xs text-slate-400">
+                              {h.num_chunks}
+                            </td>
+                            <td className="px-3 py-1.5 text-xs text-slate-400">
+                              {formatBytes(h.total_size_bytes)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                  )}
+                </div>
+                {(page?.has_more || offset > 0) && !loading ? (
+                  <div className="flex gap-2 border-t border-slate-800 px-3 py-2">
+                    <Button
+                      variant="secondary"
+                      disabled={offset === 0}
+                      onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={!page?.has_more}
+                      onClick={() => setOffset(offset + PAGE_SIZE)}
+                    >
+                      Próxima
+                    </Button>
+                    <span className="self-center text-[11px] text-slate-500">
+                      offset {offset}
+                    </span>
+                  </div>
+                ) : null}
+              </section>
+
+              <aside className="flex max-h-[min(70vh,36rem)] flex-col rounded-lg border border-slate-800 bg-slate-950/60">
+                <div className="border-b border-slate-800 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Detalhe
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto p-3">
+                  {detail ? (
+                    <div>
+                      <p className="mb-2 break-all font-mono text-[11px] text-emerald-300/90">
+                        {selectedKey}
+                      </p>
+                      <pre className="whitespace-pre-wrap break-all rounded bg-slate-950 p-2 text-[11px] leading-relaxed text-slate-300">
+                        {JSON.stringify(detail, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Selecione um objeto na lista para ver o snapshot.
+                    </p>
+                  )}
+                </div>
+              </aside>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
