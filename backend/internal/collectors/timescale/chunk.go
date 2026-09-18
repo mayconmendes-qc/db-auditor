@@ -10,7 +10,16 @@ import (
 )
 
 // CollectChunks lists chunks and applies schema scope on the parent hypertable schema.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]ChunkFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "chunk collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []ChunkFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, chunksSQL)
 	if err != nil {
 		return nil, fmt.Errorf("chunk collector: %w", err)

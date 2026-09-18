@@ -9,7 +9,16 @@ import (
 )
 
 // CollectDimensions lists hypertable dimensions and applies schema scope.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectDimensions(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]DimensionFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "dimension collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []DimensionFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, dimensionsSQL)
 	if err != nil {
 		return nil, fmt.Errorf("dimension collector: %w", err)

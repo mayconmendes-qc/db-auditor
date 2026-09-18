@@ -26,7 +26,16 @@ type PolicyFacts struct {
 }
 
 // CollectPolicies lists retention/compression/refresh/reorder/columnstore policies.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectPolicies(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]PolicyFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "policy collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []PolicyFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, policiesSQL)
 	if err != nil {
 		return nil, fmt.Errorf("policy collector: %w", err)
