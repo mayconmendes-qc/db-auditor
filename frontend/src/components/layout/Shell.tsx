@@ -11,6 +11,7 @@ export const navigationSections: NavigationSection[] = [
   "Findings",
   "Performance",
   "Security",
+  "Status",
 ];
 
 export interface ShellProps {
