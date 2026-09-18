@@ -1,0 +1,22 @@
+{
+  "title": "Timescale Auditor — Overview",
+  "description": "Stub Grafana dashboard for /metrics (Sprint 11 US-044). Import into Grafana and point Prometheus at the auditor API.",
+  "panels": [
+    {
+      "title": "auditor_up",
+      "type": "stat",
+      "targets": [{ "expr": "auditor_up" }]
+    },
+    {
+      "title": "HTTP requests",
+      "type": "timeseries",
+      "targets": [{ "expr": "sum by (code) (rate(auditor_http_requests_total[5m]))" }]
+    },
+    {
+      "title": "Audit runs failed",
+      "type": "stat",
+      "targets": [{ "expr": "auditor_audit_runs_failed_total" }]
+    }
+  ],
+  "tags": ["timescale-auditor", "mvp"]
+}

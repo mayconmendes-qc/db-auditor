@@ -3,6 +3,7 @@ import type { NavigationSection } from "../../types";
 
 export const navigationSections: NavigationSection[] = [
   "Visão geral",
+  "Dashboard",
   "Ambientes",
   "Audit runs",
   "Inventário",

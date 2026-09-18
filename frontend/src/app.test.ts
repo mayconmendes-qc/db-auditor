@@ -5,6 +5,7 @@ describe("navigationSections", () => {
   it("provides the initial auditor navigation", () => {
     expect(navigationSections).toEqual([
       "Visão geral",
+      "Dashboard",
       "Ambientes",
       "Audit runs",
       "Inventário",
