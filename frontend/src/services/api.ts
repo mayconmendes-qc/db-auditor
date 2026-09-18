@@ -1,3 +1,4 @@
+import { networkApiError, toApiError } from "../lib/errors";
 import type {
   AnalyzeResult,
   AuditRun,
@@ -33,35 +34,48 @@ import type {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
 async function getJSON<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`);
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
   if (!response.ok) {
-    throw new Error(`API ${path} failed with ${response.status}`);
+    throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
 }
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `API ${path} failed with ${response.status}`);
+    throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
 }
 
 async function patchJSON<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `API ${path} failed with ${response.status}`);
+    throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
 }

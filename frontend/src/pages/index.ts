@@ -1,5 +1,6 @@
 export { AuditRunsPage } from "./AuditRunsPage";
 export { DashboardPage } from "./DashboardPage";
+export { DocsPage } from "./DocsPage";
 export { EnvironmentsPage } from "./EnvironmentsPage";
 export { FindingsPage } from "./FindingsPage";
 export { InventoryPage } from "./InventoryPage";
