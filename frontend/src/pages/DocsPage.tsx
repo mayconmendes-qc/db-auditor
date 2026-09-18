@@ -71,23 +71,28 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       </p>
 
       <ol className="mt-8 grid gap-4 lg:grid-cols-2">
-        {steps.map((step) => (
-          <li key={step.title}>
-            <Card title={step.title}>
-              <p className="text-sm leading-relaxed text-slate-300">{step.body}</p>
-              {step.tip ? (
-                <p className="mt-2 text-xs text-slate-500">{step.tip}</p>
-              ) : null}
-              {step.goTo && onNavigate ? (
-                <div className="mt-3">
-                  <Button type="button" onClick={() => onNavigate(step.goTo!)}>
-                    Ir para {step.goTo}
-                  </Button>
-                </div>
-              ) : null}
-            </Card>
-          </li>
-        ))}
+        {steps.map((step) => {
+          const target = step.goTo;
+          return (
+            <li key={step.title}>
+              <Card title={step.title}>
+                <p className="text-sm leading-relaxed text-slate-300">
+                  {step.body}
+                </p>
+                {step.tip ? (
+                  <p className="mt-2 text-xs text-slate-500">{step.tip}</p>
+                ) : null}
+                {target && onNavigate ? (
+                  <div className="mt-3">
+                    <Button type="button" onClick={() => onNavigate(target)}>
+                      Ir para {target}
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
+            </li>
+          );
+        })}
       </ol>
 
       <section className="mt-10 rounded-xl border border-slate-800 bg-slate-900/50 p-5">
