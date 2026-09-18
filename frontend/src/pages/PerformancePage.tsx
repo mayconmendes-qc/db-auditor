@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Skeleton, Table } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 
@@ -15,7 +25,6 @@ function severityTone(
   return "neutral";
 }
 
-/** Demo facts for vacuum / locks / connections / sanitized query stats. */
 const performanceDemoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
   vacuum: [
@@ -84,9 +93,7 @@ export function PerformancePage() {
       );
       setItems(perf);
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Falha ao listar performance",
-      );
+      setError(formatError(err, "Falha ao listar performance"));
       setItems([]);
     } finally {
       setBusy(false);
@@ -104,7 +111,7 @@ export function PerformancePage() {
       await api.analyzeFindings(performanceDemoFacts);
       await load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Falha no analyze");
+      setError(formatError(err, "Falha no analyze"));
     } finally {
       setBusy(false);
     }
@@ -124,12 +131,12 @@ export function PerformancePage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 9
+        PERFORMANCE
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Performance
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         Vacuum / dead tuples, lock waits, pressão de conexões e fingerprints de
         queries lentas. SQL sensível nunca é exposto — apenas fingerprints
         normalizados.
@@ -152,19 +159,19 @@ export function PerformancePage() {
           </Button>
         </div>
 
-        {error ? <Card title="Erro" subtitle={error} /> : null}
+        {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
         {busy ? <Skeleton className="h-40 w-full" /> : null}
 
         {!busy && items.length === 0 ? (
-          <Card
+          <EmptyState
             title="Sem findings de performance"
-            subtitle="Rode os analyzers demo para popular vacuum, locks e queries."
+            description="Rode os analyzers demo para popular vacuum, locks e queries."
           />
         ) : null}
 
         {!busy && items.length > 0 ? (
           <Table
-            headers={["Tipo", "Severidade", "Título", "Objeto", "Last seen"]}
+            headers={["Tipo", "Severidade", "Título", "Objeto", "Última vez"]}
           >
             {items.map((f) => (
               <tr
@@ -176,7 +183,9 @@ export function PerformancePage() {
                   {f.finding_type}
                 </td>
                 <td className="px-4 py-3">
-                  <Badge tone={severityTone(f.severity)}>{f.severity}</Badge>
+                  <Badge tone={severityTone(f.severity)}>
+                    {labels.severity(f.severity)}
+                  </Badge>
                 </td>
                 <td className="px-4 py-3 text-slate-100">{f.title}</td>
                 <td className="px-4 py-3 text-slate-400 font-mono text-xs">
@@ -194,7 +203,7 @@ export function PerformancePage() {
 
         {selected ? (
           <Card
-            title={`Detalhe · ${selected.severity}`}
+            title={`Detalhe · ${labels.severity(selected.severity)}`}
             subtitle={selected.title}
           >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
