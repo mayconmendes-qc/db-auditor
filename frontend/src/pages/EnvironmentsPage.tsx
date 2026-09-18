@@ -1,10 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
-import { Badge, Card, Input, Skeleton, Table } from "../components/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  ErrorBanner,
+  Input,
+  Skeleton,
+  Table,
+} from "../components/ui";
+import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
-import type { DatabaseSnapshot, Environment, SchemaSnapshot } from "../types";
+import type {
+  DatabaseSnapshot,
+  Environment,
+  NavigationSection,
+  SchemaSnapshot,
+} from "../types";
 
-export function EnvironmentsPage() {
+export interface EnvironmentsPageProps {
+  onNavigate?: (section: NavigationSection) => void;
+}
+
+export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const [items, setItems] = useState<Environment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -12,32 +31,28 @@ export function EnvironmentsPage() {
   const [schemas, setSchemas] = useState<SchemaSnapshot[] | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadEnvironments = useCallback(() => {
+    setError(null);
+    setItems(null);
     api
       .environments()
       .then((res) => {
-        if (!cancelled) {
-          setItems(res.items);
-          setError(null);
-          if (res.items.length > 0) {
-            setSelectedId(res.items[0].id);
-          }
+        setItems(res.items);
+        if (res.items.length > 0) {
+          setSelectedId((prev) => prev ?? res.items[0].id);
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          const message =
-            err instanceof Error ? err.message : "Falha ao carregar ambientes";
-          setError(message);
-          setItems([]);
-        }
+        setError(formatError(err, "Falha ao carregar ambientes"));
+        setItems([]);
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    loadEnvironments();
+  }, [loadEnvironments, reloadKey]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -58,9 +73,7 @@ export function EnvironmentsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          const message =
-            err instanceof Error ? err.message : "Falha ao carregar topologia";
-          setDetailError(message);
+          setDetailError(formatError(err, "Falha ao carregar topologia"));
           setDatabases([]);
           setSchemas([]);
         }
@@ -91,25 +104,36 @@ export function EnvironmentsPage() {
   return (
     <>
       <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SPRINT 1
+        AMBIENTES
       </p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Ambientes
       </h1>
-      <p className="mt-3 max-w-2xl text-slate-400">
-        Topologia registrada no Snapshot Store. Dados vêm exclusivamente da API
-        Go.
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
+        Topologia registrada no Snapshot Store. A configuração de conexão dos
+        bancos auditados continua via <code className="text-slate-300">.env</code>{" "}
+        (somente leitura). Veja a Documentação para o fluxo completo.
       </p>
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-6 space-y-6">
         {error ? (
-          <Card title="Erro" subtitle={error} />
+          <ErrorBanner
+            message={error}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
         ) : items === null ? (
           <Skeleton className="h-32 w-full" />
         ) : items.length === 0 ? (
-          <Card
-            title="Nenhum ambiente"
-            subtitle="Registre ambientes e execute discovery para popular o inventário."
+          <EmptyState
+            title="Nenhum ambiente registrado"
+            description="Configure as connection strings no .env do backend, reinicie a API e execute a discovery. O guia passo a passo está em Documentação."
+            action={
+              onNavigate ? (
+                <Button type="button" onClick={() => onNavigate("Documentação")}>
+                  Abrir documentação
+                </Button>
+              ) : null
+            }
           />
         ) : (
           <Table headers={["Nome", "Tipo", "Discovery", "Status"]}>
@@ -128,9 +152,11 @@ export function EnvironmentsPage() {
                 tabIndex={0}
               >
                 <td className="px-4 py-3 text-slate-100">{env.name}</td>
-                <td className="px-4 py-3 text-slate-300">{env.type}</td>
                 <td className="px-4 py-3 text-slate-300">
-                  {env.discovery_mode}
+                  {labels.envType(env.type)}
+                </td>
+                <td className="px-4 py-3 text-slate-300">
+                  {labels.discoveryMode(env.discovery_mode)}
                 </td>
                 <td className="px-4 py-3">
                   <Badge tone={env.active ? "success" : "neutral"}>
@@ -158,9 +184,7 @@ export function EnvironmentsPage() {
               </div>
             </div>
 
-            {detailError ? (
-              <Card title="Erro na topologia" subtitle={detailError} />
-            ) : null}
+            {detailError ? <ErrorBanner message={detailError} /> : null}
 
             <div className="grid gap-6 lg:grid-cols-2">
               <div>
@@ -170,9 +194,9 @@ export function EnvironmentsPage() {
                 {filteredDatabases === null ? (
                   <Skeleton className="h-40 w-full" />
                 ) : filteredDatabases.length === 0 ? (
-                  <Card
+                  <EmptyState
                     title="Nenhum database"
-                    subtitle="Sem snapshots ou nenhum resultado para o filtro."
+                    description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
                   />
                 ) : (
                   <Table headers={["Nome", "Tamanho", "Conexões"]}>
@@ -200,9 +224,9 @@ export function EnvironmentsPage() {
                 {filteredSchemas === null ? (
                   <Skeleton className="h-40 w-full" />
                 ) : filteredSchemas.length === 0 ? (
-                  <Card
+                  <EmptyState
                     title="Nenhum schema"
-                    subtitle="Sem snapshots ou nenhum resultado para o filtro."
+                    description="Sem snapshots ou nenhum resultado para o filtro."
                   />
                 ) : (
                   <Table

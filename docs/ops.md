@@ -1,5 +1,19 @@
 # Operação em VPS — Timescale Auditor
 
+## Schema do snapshot store
+
+O schema canônico está em `backend/migrations/01_baseline.sql` (consolidado pré-produção).
+O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
+
+Após alterar o baseline em desenvolvimento:
+
+```bash
+make reset-volume   # destrutivo
+make up
+```
+
+Detalhes: `backend/migrations/README.md`.
+
 ## Observabilidade (Sprint 10)
 
 | Endpoint | Uso |
@@ -43,6 +57,7 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 - Volume `snapshot-store`: dados do PostgreSQL interno (backup/restore = dump deste volume ou `pg_dump`).
 - Senhas apenas em env files locais ou secret managers; nunca no repositório.
 - Rede `auditor` é privada; Postgres **não** publica porta no compose de produção.
+- Bancos **auditados** (Tiger Cloud / self-hosted): connection strings só no env da API, credenciais **read-only**.
 
 ### Health e restart
 
@@ -56,3 +71,4 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 3. `GET /metrics` contém `auditor_up 1`
 4. UI **Status** lista API, store e runs
 5. Logs JSON incluem `request_id` e `duration_ms`
+6. UI **Documentação** descreve o fluxo de configuração via `.env`
