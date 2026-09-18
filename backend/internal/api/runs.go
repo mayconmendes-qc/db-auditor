@@ -41,7 +41,7 @@ func listAuditRuns(runs RunService) http.HandlerFunc {
 		limit, _ := strconv.Atoi(q.Get("limit"))
 		items, err := runs.ListAuditRuns(r.Context(), q.Get("environment_id"), q.Get("profile"), q.Get("status"), limit)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list audit runs failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as execuções de auditoria.")
 			return
 		}
 		if items == nil {
@@ -56,7 +56,7 @@ func getAuditRun(runs RunService) http.HandlerFunc {
 		id := r.PathValue("id")
 		item, err := runs.GetAuditRun(r.Context(), id)
 		if err != nil || item == nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "audit run not found"})
+			writeError(w, http.StatusNotFound, CodeNotFound, "Execução de auditoria não encontrada.")
 			return
 		}
 		writeJSON(w, http.StatusOK, item)
@@ -68,7 +68,7 @@ func listRunCollectors(runs RunService) http.HandlerFunc {
 		id := r.PathValue("id")
 		items, err := runs.ListCollectorRuns(r.Context(), id)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list collectors failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os collectors.")
 			return
 		}
 		if items == nil {
@@ -81,16 +81,16 @@ func listRunCollectors(runs RunService) http.HandlerFunc {
 func triggerAuditRun(runner ManualRunner) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if runner == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "runner unavailable"})
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Runner de auditoria indisponível.")
 			return
 		}
 		var body triggerBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
 		if body.EnvironmentID == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "environment_id required"})
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O campo environment_id é obrigatório.")
 			return
 		}
 		if body.Profile == "" {
@@ -98,7 +98,7 @@ func triggerAuditRun(runner ManualRunner) http.HandlerFunc {
 		}
 		res, err := runner.TryRun(r.Context(), body.EnvironmentID, body.Profile)
 		if err != nil {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			writeError(w, http.StatusConflict, CodeConflict, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusAccepted, res)
