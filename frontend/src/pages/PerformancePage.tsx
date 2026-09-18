@@ -163,7 +163,9 @@ export function PerformancePage() {
         ) : null}
 
         {!busy && items.length > 0 ? (
-          <Table headers={["Tipo", "Severidade", "Título", "Objeto", "Last seen"]}>
+          <Table
+            headers={["Tipo", "Severidade", "Título", "Objeto", "Last seen"]}
+          >
             {items.map((f) => (
               <tr
                 key={f.id}
