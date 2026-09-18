@@ -1,6 +1,8 @@
 package timescale
 
 // SQL kept in sync with backend/sql/collectors/timescale/*.sql (source of truth for review).
+// Optional / version-dependent columns are read via to_jsonb(row) so missing attributes
+// become NULL instead of ERROR 42703 (Tiger Cloud / TimescaleDB ≥ 2.14).
 
 const versionSQL = `
 SELECT
@@ -13,6 +15,7 @@ JOIN pg_namespace n ON n.oid = e.extnamespace
 WHERE e.extname = 'timescaledb'
 `
 
+// is_distributed was sunset in TimescaleDB v2.14 (multi-node removed).
 const hypertablesSQL = `
 SELECT
   current_database() AS database_name,
@@ -22,7 +25,7 @@ SELECT
   COALESCE(h.num_dimensions, 0)::int AS num_dimensions,
   COALESCE(h.num_chunks, 0)::int AS num_chunks,
   COALESCE(h.compression_enabled, false) AS compression_enabled,
-  COALESCE(h.is_distributed, false) AS is_distributed,
+  COALESCE((to_jsonb(h)->>'is_distributed')::boolean, false) AS is_distributed,
   COALESCE(pg_total_relation_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass), 0) AS total_size_bytes,
   COALESCE(pg_relation_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass), 0) AS data_size_bytes,
   COALESCE(pg_indexes_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass), 0) AS index_size_bytes
@@ -30,6 +33,7 @@ FROM timescaledb_information.hypertables h
 ORDER BY h.hypertable_schema, h.hypertable_name
 `
 
+// num_slices renamed to num_partitions on newer informational views.
 const dimensionsSQL = `
 SELECT
   current_database() AS database_name,
@@ -42,8 +46,14 @@ SELECT
   d.time_interval::text AS time_interval,
   d.integer_interval::text AS integer_interval,
   d.integer_now_func::text AS integer_now_func,
-  d.num_slices::int AS num_slices,
-  d.partitioning_func::text AS partitioning_func
+  COALESCE(
+    (to_jsonb(d)->>'num_partitions')::int,
+    (to_jsonb(d)->>'num_slices')::int
+  ) AS num_slices,
+  COALESCE(
+    to_jsonb(d)->>'partitioning_func',
+    to_jsonb(d)->>'partitioning_func_name'
+  ) AS partitioning_func
 FROM timescaledb_information.dimensions d
 ORDER BY d.hypertable_schema, d.hypertable_name, d.dimension_number
 `

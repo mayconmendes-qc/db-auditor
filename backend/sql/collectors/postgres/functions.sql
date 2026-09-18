@@ -1,4 +1,5 @@
--- Function and procedure inventory facts (read-only).
+-- postgres.functions — inventory of functions/procedures/aggregates.
+-- pg_get_functiondef is not valid for aggregates (prokind = 'a').
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -10,7 +11,10 @@ SELECT
   p.provolatile::text AS volatility,
   p.proparallel::text AS parallel_safety,
   p.prokind::text AS kind,
-  pg_catalog.pg_get_functiondef(p.oid) AS function_definition
+  CASE
+    WHEN p.prokind = 'a' THEN NULL
+    ELSE pg_catalog.pg_get_functiondef(p.oid)
+  END AS function_definition
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 JOIN pg_language l ON l.oid = p.prolang
