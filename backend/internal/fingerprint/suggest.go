@@ -22,11 +22,11 @@ type MappingCandidate struct {
 
 // ObjectRef is a lightweight inventory reference used for suggestions.
 type ObjectRef struct {
-	Database    string
-	Schema      string
-	ObjectType  string
-	ObjectName  string
-	Fingerprint string
+	Database    string `json:"database"`
+	Schema      string `json:"schema"`
+	ObjectType  string `json:"object_type"`
+	ObjectName  string `json:"object_name"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // SuggestMappings proposes correspondences by name and optional fingerprint equality.
@@ -44,13 +44,11 @@ func SuggestMappings(source, target []ObjectRef, targetDefaultDB string) []Mappi
 		if t.Fingerprint != "" {
 			targetByFP[t.Fingerprint] = t
 		}
-		// also index by database name as schema for Unifique→Tiger
 		if t.ObjectType == string(ObjectTypeSchema) || t.ObjectType == string(ObjectTypeDatabase) {
 			targetByKey[key("", string(ObjectTypeSchema), t.ObjectName)] = t
 		}
 	}
 	for _, s := range source {
-		// database → schema mapping (Unifique DB name equals Tiger schema)
 		if s.ObjectType == string(ObjectTypeDatabase) {
 			if t, ok := targetByKey[key("", string(ObjectTypeSchema), s.ObjectName)]; ok {
 				out = append(out, MappingCandidate{

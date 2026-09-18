@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { navigationSections, Shell } from "./components/layout/Shell";
+import { AppProvider, useApp } from "./context/AppContext";
 import {
   AuditRunsPage,
   DashboardPage,
@@ -14,12 +14,11 @@ import {
   SecurityPage,
   StatusPage,
 } from "./pages";
-import type { NavigationSection } from "./types";
 
 export { navigationSections };
 
-export function App() {
-  const [section, setSection] = useState<NavigationSection>("Visão geral");
+function AppRoutes() {
+  const { section, setSection } = useApp();
 
   let content = <OverviewPage onNavigate={setSection} />;
   if (section === "Dashboard") {
@@ -50,5 +49,13 @@ export function App() {
     <Shell activeSection={section} onNavigate={setSection}>
       {content}
     </Shell>
+  );
+}
+
+export function App() {
+  return (
+    <AppProvider>
+      <AppRoutes />
+    </AppProvider>
   );
 }

@@ -115,11 +115,13 @@ ON CONFLICT (audit_run_id, database_name, schema_name) DO NOTHING
 
 func (s *Store) ListDatabaseSnapshots(ctx context.Context, environmentID string) ([]DatabaseSnapshot, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT id::text, audit_run_id::text, environment_id::text, database_name, owner_name, encoding,
+SELECT DISTINCT ON (database_name)
+  id::text, audit_run_id::text, environment_id::text, database_name, owner_name, encoding,
   size_bytes, connection_count, allow_connections, is_template, collected_at
 FROM database_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name
+  AND COALESCE(is_template, false) = false
+ORDER BY database_name, collected_at DESC
 `, environmentID)
 	if err != nil {
 		return nil, err
@@ -141,11 +143,12 @@ ORDER BY collected_at DESC, database_name
 
 func (s *Store) ListSchemaSnapshots(ctx context.Context, environmentID string) ([]SchemaSnapshot, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema_name, owner_name,
+SELECT DISTINCT ON (database_name, schema_name)
+  id::text, audit_run_id::text, environment_id::text, database_name, schema_name, owner_name,
   table_count, view_count, materialized_view_count, sequence_count, function_count, size_bytes, collected_at
 FROM schema_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name, schema_name
+ORDER BY database_name, schema_name, collected_at DESC
 `, environmentID)
 	if err != nil {
 		return nil, err

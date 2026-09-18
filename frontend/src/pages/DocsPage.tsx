@@ -1,3 +1,4 @@
+import { PageHeader } from "../components/PageHeader";
 import { Button, Card } from "../components/ui";
 import type { NavigationSection } from "../types";
 
@@ -33,12 +34,12 @@ const steps: Array<{
   },
   {
     title: "5. Explorar o inventário",
-    body: "Use Inventário para navegar databases, schemas, tabelas, hypertables, índices, views, funções, CAGGs, jobs e policies. Filtros e paginação são server-side.",
+    body: "Use Inventário para navegar databases, schemas, tabelas, hypertables, índices, views, funções, CAGGs, jobs e policies. Filtros e paginação são server-side. Prefira o filtro (todos) para ver objetos do DSN.",
     goTo: "Inventário",
   },
   {
     title: "6. Mapear e comparar (dois ambientes)",
-    body: "Com pelo menos dois ambientes coletados, use Mapeamentos para relacionar objetos e Desvio de schema para ver match, drift, only_source e only_target.",
+    body: "Com pelo menos dois ambientes coletados, use Mapeamentos para sugerir e validar correspondências por fingerprint, e Desvio de schema para ver match, drift, only_source e only_target.",
     goTo: "Mapeamentos",
   },
   {
@@ -53,42 +54,45 @@ const steps: Array<{
   },
 ];
 
-/** Guia de uso e fluxo de configuração (via .env). */
 export function DocsPage({ onNavigate }: DocsPageProps) {
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        GUIA
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Como usar o Timescale Auditor
-      </h1>
-      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Fluxo recomendado para configurar os bancos auditados (somente via{" "}
-        <code className="text-slate-300">.env</code> / secrets), coletar
-        inventário e triar findings. A aplicação nunca aplica mudanças
-        automáticas nos ambientes Timescale.
-      </p>
+      <PageHeader
+        eyebrow="GUIA"
+        title="Como usar o Timescale Auditor"
+        description={
+          <>
+            Fluxo recomendado para configurar os bancos auditados (somente via{" "}
+            <code className="text-slate-300">.env</code> / secrets), coletar
+            inventário e triar findings. A aplicação nunca aplica mudanças
+            automáticas nos ambientes Timescale.
+          </>
+        }
+      />
 
-      <ol className="mt-8 grid gap-4 lg:grid-cols-2">
+      <ol className="mt-8 grid auto-rows-fr gap-4 lg:grid-cols-2">
         {steps.map((step) => {
           const target = step.goTo;
           return (
-            <li key={step.title}>
-              <Card title={step.title}>
+            <li key={step.title} className="h-full">
+              <Card title={step.title} className="h-full">
                 <p className="text-sm leading-relaxed text-slate-300">
                   {step.body}
                 </p>
                 {step.tip ? (
                   <p className="mt-2 text-xs text-slate-500">{step.tip}</p>
                 ) : null}
-                {target && onNavigate ? (
-                  <div className="mt-3">
+                <div className="mt-4 flex flex-1 items-end">
+                  {target && onNavigate ? (
                     <Button type="button" onClick={() => onNavigate(target)}>
                       Ir para {target}
                     </Button>
-                  </div>
-                ) : null}
+                  ) : (
+                    <span className="text-xs text-slate-600">
+                      Configuração local
+                    </span>
+                  )}
+                </div>
               </Card>
             </li>
           );
