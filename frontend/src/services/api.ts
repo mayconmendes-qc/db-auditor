@@ -240,5 +240,16 @@ export const api = {
     indexes?: unknown[];
     hypertables?: unknown[];
     chunks?: unknown[];
+    caggs?: unknown[];
+    policies?: unknown[];
+    jobs?: unknown[];
+    activity?: unknown[];
+    vacuum?: unknown[];
+    locks?: unknown[];
+    connections?: unknown[];
+    query_stats?: unknown[];
+    roles?: unknown[];
+    grants?: unknown[];
+    functions?: unknown[];
   }) => postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
 };
