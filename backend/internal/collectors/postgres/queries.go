@@ -14,6 +14,8 @@ SELECT
   current_setting('autovacuum', true) AS autovacuum
 `
 
+// databasesSQL sizes only databases the role can CONNECT to.
+// pg_database_size() raises 42501 on DBs without privilege (e.g. tsadmin on Tiger Cloud).
 const databasesSQL = `
 SELECT
   d.datname AS database_name,
@@ -23,7 +25,11 @@ SELECT
   d.datctype AS ctype_name,
   d.datallowconn AS allow_connections,
   d.datistemplate AS is_template,
-  COALESCE(pg_database_size(d.datname), 0) AS size_bytes,
+  CASE
+    WHEN has_database_privilege(d.datname, 'CONNECT')
+    THEN COALESCE(pg_database_size(d.datname), 0)
+    ELSE 0
+  END AS size_bytes,
   COALESCE(s.numbackends, 0) AS connection_count
 FROM pg_database d
 LEFT JOIN pg_stat_database s ON s.datname = d.datname
@@ -206,6 +212,8 @@ WHERE c.relkind IN ('v', 'm')
 ORDER BY n.nspname, c.relname
 `
 
+// functionsSQL still lists aggregates (prokind=a) for inventory/security,
+// but skips pg_get_functiondef which errors on aggregates (42809).
 const functionsSQL = `
 SELECT
   current_database() AS database_name,
@@ -218,7 +226,10 @@ SELECT
   p.provolatile::text AS volatility,
   p.proparallel::text AS parallel_safety,
   p.prokind::text AS kind,
-  pg_catalog.pg_get_functiondef(p.oid) AS function_definition
+  CASE
+    WHEN p.prokind = 'a' THEN NULL
+    ELSE pg_catalog.pg_get_functiondef(p.oid)
+  END AS function_definition
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 JOIN pg_language l ON l.oid = p.prolang

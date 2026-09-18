@@ -1,5 +1,7 @@
 package timescale
 
+// continuousAggregatesSQL: finalized exists since ~2.7 on many builds, but some
+// Tiger Cloud images omit it — read via to_jsonb to avoid 42703.
 const continuousAggregatesSQL = `
 SELECT
   current_database() AS database_name,
@@ -10,7 +12,7 @@ SELECT
   ca.materialization_hypertable_name AS materialization_hypertable,
   COALESCE(ca.materialized_only, false) AS materialized_only,
   COALESCE(ca.compression_enabled, false) AS compression_enabled,
-  ca.finalized
+  (to_jsonb(ca)->>'finalized')::boolean AS finalized
 FROM timescaledb_information.continuous_aggregates ca
 ORDER BY ca.view_schema, ca.view_name
 `
