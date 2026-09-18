@@ -635,7 +635,7 @@ export function InventoryPage() {
                                 {f.function_name}
                               </td>
                               <td className="px-3 py-1.5 text-xs text-slate-400">
-                                {f.language}
+                                {f.language_name ?? "—"}
                               </td>
                             </tr>
                           );
