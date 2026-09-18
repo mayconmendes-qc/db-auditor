@@ -159,7 +159,9 @@ export function PerformancePage() {
           </Button>
         </div>
 
-        {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void load()} />
+        ) : null}
         {busy ? <Skeleton className="h-40 w-full" /> : null}
 
         {!busy && items.length === 0 ? (
