@@ -108,7 +108,10 @@ export function DashboardPage() {
       {kpis && (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card subtitle="Ambientes" title={String(kpis.environments)} />
-          <Card subtitle="Findings abertos" title={String(kpis.open_findings)} />
+          <Card
+            subtitle="Findings abertos"
+            title={String(kpis.open_findings)}
+          />
           <Card
             subtitle="Critical / High"
             title={`${kpis.critical_findings} / ${kpis.high_findings}`}
@@ -160,7 +163,9 @@ export function DashboardPage() {
               <ul className="mt-2 space-y-1 text-sm text-slate-400">
                 {storage.top_consumers.slice(0, 8).map((p) => (
                   <li key={p.label} className="flex justify-between gap-4">
-                    <span className="truncate font-mono text-xs">{p.label}</span>
+                    <span className="truncate font-mono text-xs">
+                      {p.label}
+                    </span>
                     <span>{formatBytes(p.size_bytes)}</span>
                   </li>
                 ))}
