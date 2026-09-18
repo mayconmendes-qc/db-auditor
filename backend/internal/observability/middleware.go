@@ -37,9 +37,9 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// Middleware adds request_id, structured access logs and Prometheus metrics.
+// Middleware adds CORS, request_id, structured access logs and Prometheus metrics.
 func Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rid := r.Header.Get("X-Request-ID")
 		if rid == "" {
@@ -62,5 +62,5 @@ func Middleware(next http.Handler) http.Handler {
 			"duration_ms", d.Milliseconds(),
 			"remote", r.RemoteAddr,
 		)
-	})
+	}))
 }
