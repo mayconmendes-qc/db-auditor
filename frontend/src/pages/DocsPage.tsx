@@ -74,7 +74,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             Fluxo recomendado para configurar os bancos auditados (somente via{" "}
             <code className="rounded bg-slate-800 px-1 text-slate-200">
               .env
-            </code{" "}
+            </code>{" "}
             / secrets), coletar inventário e triar findings. A aplicação nunca
             aplica mudanças automáticas nos ambientes Timescale.
           </>
