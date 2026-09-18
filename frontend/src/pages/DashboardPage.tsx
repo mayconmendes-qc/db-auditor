@@ -142,9 +142,7 @@ export function DashboardPage() {
                       {c.server_version ? (
                         <span className="ml-2 text-xs text-slate-500">
                           PG {c.server_version}
-                          {c.latency_ms != null
-                            ? ` · ${c.latency_ms} ms`
-                            : ""}
+                          {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
                         </span>
                       ) : null}
                       {c.error ? (

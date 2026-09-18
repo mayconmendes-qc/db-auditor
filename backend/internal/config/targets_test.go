@@ -15,12 +15,19 @@ func TestTargetDSNKey(t *testing.T) {
 }
 
 func TestDSNForEnvironment(t *testing.T) {
-	key := TargetDSNKey("00000000-0000-0000-0000-000000000001")
-	_ = os.Setenv(key, "postgresql://user:pass@host:5432/db")
+	id := "00000000-0000-0000-0000-000000000001"
+	key := TargetDSNKey(id)
+	want := "postgresql://user:pass@host:5432/db"
+	_ = os.Setenv(key, want)
 	t.Cleanup(func() { _ = os.Unsetenv(key) })
 
-	dsn := DSNForEnvironment(nil, "00000000-0000-0000-0000-000000000001")
-	if dsn == "" {
-		t.Fatal("expected dsn from env")
+	// Via map
+	m := LoadTargetDSNs()
+	if got := DSNForEnvironment(m, id); got != want {
+		t.Fatalf("from map: got %q want %q", got, want)
+	}
+	// Via env fallback when map is nil
+	if got := DSNForEnvironment(nil, id); got != want {
+		t.Fatalf("from env: got %q want %q", got, want)
 	}
 }

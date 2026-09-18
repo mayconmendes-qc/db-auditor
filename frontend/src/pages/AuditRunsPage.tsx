@@ -30,7 +30,7 @@ function statusTone(
 }
 
 function envLabel(run: AuditRun): string {
-  if (run.environment_name && run.environment_name.trim()) {
+  if (run.environment_name?.trim()) {
     return run.environment_name;
   }
   return `${run.environment_id.slice(0, 8)}…`;
@@ -130,8 +130,8 @@ export function AuditRunsPage() {
         Execuções de auditoria
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Execuções de auditoria, collectors e disparo manual via API. Configure
-        AUDITOR_TARGET_DSN_<uuid> no .env para coletar dados reais.
+        Execuções de auditoria, collectors e disparo manual via API. Configure{" "}
+        AUDITOR_TARGET_DSN_&lt;uuid&gt; no .env para coletar dados reais.
       </p>
 
       <div className="mt-8 space-y-8">
