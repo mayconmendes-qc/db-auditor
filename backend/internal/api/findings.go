@@ -24,23 +24,23 @@ type updateFindingBody struct {
 }
 
 type analyzeBody struct {
-	EnvironmentID string                           `json:"environment_id"`
-	AuditRunID    string                           `json:"audit_run_id"`
-	Tables        []analyzer.TableFact             `json:"tables"`
-	Indexes       []analyzer.IndexFact             `json:"indexes"`
-	Hypertables   []analyzer.HypertableFact        `json:"hypertables"`
-	Chunks        []analyzer.ChunkFact             `json:"chunks"`
-	CAGGs         []analyzer.CAGGFact              `json:"caggs"`
-	Policies      []analyzer.PolicyFact            `json:"policies"`
-	Jobs          []analyzer.JobFact               `json:"jobs"`
-	Activity      []analyzer.ActivityFact          `json:"activity"`
-	Vacuum        []analyzer.VacuumFact            `json:"vacuum"`
-	Locks         []analyzer.LockFact              `json:"locks"`
-	Connections   []analyzer.ConnectionFact        `json:"connections"`
-	QueryStats    []analyzer.QueryStatFact         `json:"query_stats"`
-	Roles         []analyzer.RoleFact              `json:"roles"`
-	Grants        []analyzer.GrantFact             `json:"grants"`
-	Functions     []analyzer.FunctionSecurityFact  `json:"functions"`
+	EnvironmentID string                          `json:"environment_id"`
+	AuditRunID    string                          `json:"audit_run_id"`
+	Tables        []analyzer.TableFact            `json:"tables"`
+	Indexes       []analyzer.IndexFact            `json:"indexes"`
+	Hypertables   []analyzer.HypertableFact       `json:"hypertables"`
+	Chunks        []analyzer.ChunkFact            `json:"chunks"`
+	CAGGs         []analyzer.CAGGFact             `json:"caggs"`
+	Policies      []analyzer.PolicyFact           `json:"policies"`
+	Jobs          []analyzer.JobFact              `json:"jobs"`
+	Activity      []analyzer.ActivityFact         `json:"activity"`
+	Vacuum        []analyzer.VacuumFact           `json:"vacuum"`
+	Locks         []analyzer.LockFact             `json:"locks"`
+	Connections   []analyzer.ConnectionFact       `json:"connections"`
+	QueryStats    []analyzer.QueryStatFact        `json:"query_stats"`
+	Roles         []analyzer.RoleFact             `json:"roles"`
+	Grants        []analyzer.GrantFact            `json:"grants"`
+	Functions     []analyzer.FunctionSecurityFact `json:"functions"`
 }
 
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore) {

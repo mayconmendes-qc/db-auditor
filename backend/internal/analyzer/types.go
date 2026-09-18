@@ -171,12 +171,12 @@ type ActivityFact struct {
 
 // VacuumFact carries live/dead tuple stats for vacuum analysis.
 type VacuumFact struct {
-	Database   string `json:"database"`
-	Schema     string `json:"schema"`
-	Name       string `json:"name"`
-	NLiveTup   int64  `json:"n_live_tup"`
-	NDeadTup   int64  `json:"n_dead_tup"`
-	LastVacuum string `json:"last_vacuum,omitempty"`
+	Database       string `json:"database"`
+	Schema         string `json:"schema"`
+	Name           string `json:"name"`
+	NLiveTup       int64  `json:"n_live_tup"`
+	NDeadTup       int64  `json:"n_dead_tup"`
+	LastVacuum     string `json:"last_vacuum,omitempty"`
 	LastAutovacuum string `json:"last_autovacuum,omitempty"`
 }
 
@@ -201,13 +201,13 @@ type ConnectionFact struct {
 
 // QueryStatFact holds sanitized query fingerprints only — never raw SQL with literals.
 type QueryStatFact struct {
-	Database          string  `json:"database"`
-	QueryFingerprint  string  `json:"query_fingerprint"` // normalized, literals stripped
-	Calls             int64   `json:"calls"`
-	TotalExecTimeMs   float64 `json:"total_exec_time_ms"`
-	MeanExecTimeMs    float64 `json:"mean_exec_time_ms"`
-	Rows              int64   `json:"rows"`
-	PgStatStatements  bool    `json:"pg_stat_statements"`
+	Database         string  `json:"database"`
+	QueryFingerprint string  `json:"query_fingerprint"` // normalized, literals stripped
+	Calls            int64   `json:"calls"`
+	TotalExecTimeMs  float64 `json:"total_exec_time_ms"`
+	MeanExecTimeMs   float64 `json:"mean_exec_time_ms"`
+	Rows             int64   `json:"rows"`
+	PgStatStatements bool    `json:"pg_stat_statements"`
 }
 
 // RoleFact describes a database role for privilege review.
