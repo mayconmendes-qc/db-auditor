@@ -35,13 +35,12 @@ func LoadTargetDSNs() map[string]string {
 
 // DSNForEnvironment returns the configured target DSN, if any.
 func DSNForEnvironment(targets map[string]string, environmentID string) string {
-	if targets == nil {
-		return ""
-	}
 	id := strings.ToLower(strings.TrimSpace(environmentID))
-	if dsn, ok := targets[id]; ok {
-		return dsn
+	if targets != nil {
+		if dsn, ok := targets[id]; ok {
+			return dsn
+		}
 	}
-	// Direct env lookup (covers process-level sets after Load)
+	// Direct env lookup (covers nil map and keys set after LoadTargetDSNs).
 	return strings.TrimSpace(os.Getenv(TargetDSNKey(environmentID)))
 }
