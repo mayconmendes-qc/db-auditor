@@ -106,7 +106,6 @@ export function Shell({
                   : "bg-rose-400"
             }`}
             title={healthTitle}
-            aria-label={healthTitle}
           />
         </div>
         {apiOk === true && dsnDown > 0 ? (
