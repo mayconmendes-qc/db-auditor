@@ -22,6 +22,10 @@ services:
     build:
       context: ./backend
       dockerfile: Containerfile
+    # Pass full .env so AUDITOR_TARGET_N_* (and legacy DSN_*) reach the process.
+    env_file:
+      - path: .env
+        required: false
     environment:
       AUDITOR_HTTP_ADDRESS: :8080
       AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-timescale_auditor}?sslmode=disable
