@@ -38,9 +38,7 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const params = envFilter
-          ? { environment_id: envFilter }
-          : undefined;
+        const params = envFilter ? { environment_id: envFilter } : undefined;
         const [k, s, t, j] = await Promise.all([
           api.analyticsKpis(params),
           api.analyticsStorage(params),
@@ -55,7 +53,9 @@ export function DashboardPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Falha ao carregar dashboard");
+          setError(
+            e instanceof Error ? e.message : "Falha ao carregar dashboard",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -183,7 +183,10 @@ export function DashboardPage() {
               <p className="text-xs uppercase text-slate-500">Severidade</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {trends.by_severity.map((b) => (
-                  <li key={b.key} className="flex justify-between text-slate-300">
+                  <li
+                    key={b.key}
+                    className="flex justify-between text-slate-300"
+                  >
                     <span>{b.key || "(vazio)"}</span>
                     <span>{b.count}</span>
                   </li>
@@ -194,7 +197,10 @@ export function DashboardPage() {
               <p className="text-xs uppercase text-slate-500">Status</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {trends.by_status.map((b) => (
-                  <li key={b.key} className="flex justify-between text-slate-300">
+                  <li
+                    key={b.key}
+                    className="flex justify-between text-slate-300"
+                  >
                     <span>{b.key || "(vazio)"}</span>
                     <span>{b.count}</span>
                   </li>
@@ -207,7 +213,10 @@ export function DashboardPage() {
 
       {jobs && (
         <section className="mt-10" aria-labelledby="jobs-heading">
-          <h2 id="jobs-heading" className="text-sm font-semibold text-slate-200">
+          <h2
+            id="jobs-heading"
+            className="text-sm font-semibold text-slate-200"
+          >
             Saúde de jobs / policies
           </h2>
           {jobs.items.length === 0 ? (
@@ -227,7 +236,8 @@ export function DashboardPage() {
                   {jobs.items.map((item) => (
                     <tr key={item.environment_id}>
                       <td className="py-2 pr-3">
-                        {item.environment_name || item.environment_id.slice(0, 8)}
+                        {item.environment_name ||
+                          item.environment_id.slice(0, 8)}
                       </td>
                       <td className="py-2 pr-3">{item.jobs_total}</td>
                       <td className="py-2 pr-3">{item.jobs_scheduled}</td>
