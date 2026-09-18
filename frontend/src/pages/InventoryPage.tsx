@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -495,7 +494,10 @@ export function InventoryPage() {
                 <Skeleton className="h-40 w-full" />
               ) : kind === "tables" ? (
                 tables.length === 0 ? (
-                  <EmptyState title="Sem tabelas" description="Nenhum resultado para o filtro atual." />
+                  <EmptyState
+                    title="Sem tabelas"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "Cols", "Size"]}>
                     {tables.map((t) => {
@@ -527,7 +529,10 @@ export function InventoryPage() {
                 )
               ) : kind === "indexes" ? (
                 indexes.length === 0 ? (
-                  <EmptyState title="Sem índices" description="Nenhum resultado para o filtro atual." />
+                  <EmptyState
+                    title="Sem índices"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Index", "Table", "Scan"]}>
                     {indexes.map((i) => {
@@ -559,7 +564,10 @@ export function InventoryPage() {
                 )
               ) : kind === "views" || kind === "caggs" ? (
                 views.length === 0 ? (
-                  <EmptyState title="Sem itens" description="Nenhum resultado para o filtro atual." />
+                  <EmptyState
+                    title="Sem itens"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "Kind"]}>
                     {views.map((v) => {
@@ -588,7 +596,10 @@ export function InventoryPage() {
                 )
               ) : kind === "functions" ? (
                 functions.length === 0 ? (
-                  <EmptyState title="Sem funções" description="Nenhum resultado para o filtro atual." />
+                  <EmptyState
+                    title="Sem funções"
+                    description="Nenhum resultado para o filtro atual."
+                  />
                 ) : (
                   <Table headers={["Schema", "Nome", "SECURITY"]}>
                     {functions.map((f) => {
@@ -608,7 +619,7 @@ export function InventoryPage() {
                             {f.function_name}
                           </td>
                           <td className="px-4 py-3 text-slate-300">
-                            {f.security_definer ? "DEFINER" : "INVOKER"}
+                            {f.is_security_definer ? "DEFINER" : "INVOKER"}
                           </td>
                         </tr>
                       );
@@ -616,7 +627,10 @@ export function InventoryPage() {
                   </Table>
                 )
               ) : hypertables.length === 0 ? (
-                <EmptyState title="Sem hypertables" description="Nenhum resultado para o filtro atual." />
+                <EmptyState
+                  title="Sem hypertables"
+                  description="Nenhum resultado para o filtro atual."
+                />
               ) : (
                 <Table headers={["Schema", "Nome", "Chunks", "Size"]}>
                   {hypertables.map((h) => {
