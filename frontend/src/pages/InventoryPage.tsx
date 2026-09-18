@@ -513,7 +513,9 @@ export function InventoryPage() {
                           <td className="px-4 py-3 text-slate-300">
                             {i.table_name}
                           </td>
-                          <td className="px-4 py-3 text-slate-300">{i.idx_scan}</td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {i.idx_scan}
+                          </td>
                         </tr>
                       );
                     })}
@@ -540,7 +542,9 @@ export function InventoryPage() {
                           <td className="px-4 py-3 text-slate-100">
                             {v.view_name}
                           </td>
-                          <td className="px-4 py-3 text-slate-300">{v.relkind}</td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {v.relkind}
+                          </td>
                         </tr>
                       );
                     })}
@@ -569,7 +573,9 @@ export function InventoryPage() {
                           </td>
                           <td className="px-4 py-3">
                             <Badge
-                              tone={f.is_security_definer ? "warning" : "neutral"}
+                              tone={
+                                f.is_security_definer ? "warning" : "neutral"
+                              }
                             >
                               {f.is_security_definer ? "DEFINER" : "invoker"}
                             </Badge>
@@ -593,11 +599,15 @@ export function InventoryPage() {
                         }`}
                         onClick={() => setSelectedKey(key)}
                       >
-                        <td className="px-4 py-3 text-slate-300">{h.schema_name}</td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {h.schema_name}
+                        </td>
                         <td className="px-4 py-3 text-slate-100">
                           {h.hypertable_name}
                         </td>
-                        <td className="px-4 py-3 text-slate-300">{h.num_chunks}</td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {h.num_chunks}
+                        </td>
                         <td className="px-4 py-3 text-slate-300">
                           {formatBytes(h.total_size_bytes)}
                         </td>
