@@ -27,6 +27,41 @@ function formatBytes(n: number): string {
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+function MiniBar({
+  label,
+  value,
+  max,
+  tone = "emerald",
+}: {
+  label: string;
+  value: number;
+  max: number;
+  tone?: "emerald" | "amber" | "rose" | "sky";
+}) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  const colors = {
+    emerald: "bg-emerald-500/80",
+    amber: "bg-amber-500/80",
+    rose: "bg-rose-500/80",
+    sky: "bg-sky-500/80",
+  };
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between gap-2 text-xs">
+        <span className="truncate text-slate-300">{label}</span>
+        <span className="shrink-0 font-mono text-slate-100">{value}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+        <div
+          className={`h-full rounded-full ${colors[tone]}`}
+          style={{ width: `${pct}%` }}
+          role="presentation"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { environmentId, setSection } = useApp();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
@@ -78,6 +113,16 @@ export function DashboardPage() {
     };
   }, [environmentId, reloadKey]);
 
+  const storageMax = storage
+    ? Math.max(1, ...storage.by_environment.map((p) => p.size_bytes))
+    : 1;
+  const severityMax = trends
+    ? Math.max(1, ...trends.by_severity.map((b) => b.count))
+    : 1;
+  const statusMax = trends
+    ? Math.max(1, ...trends.by_status.map((b) => b.count))
+    : 1;
+
   return (
     <>
       <PageHeader
@@ -86,7 +131,6 @@ export function DashboardPage() {
         description="Conexões, KPIs, storage, findings e saúde de jobs. O filtro de ambiente está na barra lateral."
       />
 
-      {loading ? <Skeleton className="mt-8 h-32 w-full" /> : null}
       {error ? (
         <div className="mt-8">
           <ErrorBanner
@@ -96,7 +140,26 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      {connections ? (
+      {loading ? (
+        <div className="mt-8 space-y-6">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </div>
+      ) : null}
+
+      {!loading && connections ? (
         <section className="mt-8" aria-labelledby="conn-heading">
           <h2
             id="conn-heading"
@@ -105,7 +168,7 @@ export function DashboardPage() {
             Conexões com ambientes auditados
           </h2>
           {connections.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">Nenhum ambiente.</p>
+            <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
           ) : (
             <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {connections.map((c) => {
@@ -120,7 +183,7 @@ export function DashboardPage() {
                         {c.environment_name}
                       </span>
                       {c.server_version ? (
-                        <span className="ml-2 text-xs text-slate-500">
+                        <span className="ml-2 text-xs text-slate-400">
                           PG {c.server_version}
                           {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
                         </span>
@@ -146,7 +209,7 @@ export function DashboardPage() {
         </section>
       ) : null}
 
-      {kpis ? (
+      {!loading && kpis ? (
         <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card
             subtitle="Ambientes"
@@ -179,80 +242,82 @@ export function DashboardPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        {storage ? (
-          <section aria-labelledby="storage-heading">
-            <h2
-              id="storage-heading"
-              className="text-sm font-semibold text-slate-200"
-            >
-              Storage por ambiente
-            </h2>
-            {storage.by_environment.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">
-                Sem dados de storage.
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {storage.by_environment.map((p) => (
-                  <li
-                    key={p.label}
-                    className="flex justify-between rounded-md border border-slate-800 px-3 py-2 text-sm"
-                  >
-                    <span className="text-slate-300">{p.label}</span>
-                    <span className="font-mono text-slate-100">
-                      {formatBytes(p.size_bytes)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ) : null}
-
-        {trends ? (
-          <section aria-labelledby="findings-heading">
-            <h2
-              id="findings-heading"
-              className="text-sm font-semibold text-slate-200"
-            >
-              Findings (total {trends.total})
-            </h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md border border-slate-800 p-3">
-                <p className="text-xs uppercase text-slate-500">Severidade</p>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {trends.by_severity.map((b) => (
-                    <li
-                      key={b.key}
-                      className="flex justify-between text-slate-300"
-                    >
-                      <span>{labels.severity(b.key)}</span>
-                      <span>{b.count}</span>
+      {!loading ? (
+        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          {storage ? (
+            <Card title="Storage por ambiente">
+              {storage.by_environment.length === 0 ? (
+                <p className="text-sm text-slate-400">Sem dados de storage.</p>
+              ) : (
+                <ul className="mt-1 space-y-3">
+                  {storage.by_environment.map((p) => (
+                    <li key={p.label}>
+                      <MiniBar
+                        label={p.label}
+                        value={p.size_bytes}
+                        max={storageMax}
+                        tone="sky"
+                      />
+                      <p className="mt-0.5 text-right text-[11px] text-slate-400">
+                        {formatBytes(p.size_bytes)}
+                      </p>
                     </li>
                   ))}
                 </ul>
-              </div>
-              <div className="rounded-md border border-slate-800 p-3">
-                <p className="text-xs uppercase text-slate-500">Status</p>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {trends.by_status.map((b) => (
-                    <li
-                      key={b.key}
-                      className="flex justify-between text-slate-300"
-                    >
-                      <span>{labels.findingStatus(b.key)}</span>
-                      <span>{b.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </section>
-        ) : null}
-      </div>
+              )}
+            </Card>
+          ) : null}
 
-      {jobs ? (
+          {trends ? (
+            <Card title={`Findings (total ${trends.total})`}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Severidade
+                  </p>
+                  <ul className="space-y-2.5">
+                    {trends.by_severity.map((b) => (
+                      <li key={b.key}>
+                        <MiniBar
+                          label={labels.severity(b.key)}
+                          value={b.count}
+                          max={severityMax}
+                          tone={
+                            b.key === "critical" || b.key === "high"
+                              ? "rose"
+                              : b.key === "medium"
+                                ? "amber"
+                                : "emerald"
+                          }
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Status
+                  </p>
+                  <ul className="space-y-2.5">
+                    {trends.by_status.map((b) => (
+                      <li key={b.key}>
+                        <MiniBar
+                          label={labels.findingStatus(b.key)}
+                          value={b.count}
+                          max={statusMax}
+                          tone="amber"
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!loading && jobs ? (
         <section className="mt-8" aria-labelledby="jobs-heading">
           <h2
             id="jobs-heading"
@@ -261,28 +326,28 @@ export function DashboardPage() {
             Saúde de jobs / policies
           </h2>
           {jobs.items.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">Nenhum ambiente.</p>
+            <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
           ) : (
-            <div className="mt-3 overflow-x-auto">
+            <div className="mt-3 overflow-x-auto rounded-lg border border-slate-800">
               <table className="w-full min-w-[28rem] text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500">
+                <thead className="sticky top-0 bg-slate-900/95 text-xs uppercase text-slate-400">
                   <tr>
-                    <th className="pb-2 pr-3 font-medium">Ambiente</th>
-                    <th className="pb-2 pr-3 font-medium">Jobs</th>
-                    <th className="pb-2 pr-3 font-medium">Agendados</th>
-                    <th className="pb-2 font-medium">Policies</th>
+                    <th className="px-3 py-2 font-medium">Ambiente</th>
+                    <th className="px-3 py-2 font-medium">Jobs</th>
+                    <th className="px-3 py-2 font-medium">Agendados</th>
+                    <th className="px-3 py-2 font-medium">Policies</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-300">
                   {jobs.items.map((item) => (
                     <tr key={item.environment_id}>
-                      <td className="py-2 pr-3">
+                      <td className="px-3 py-2">
                         {item.environment_name ||
                           item.environment_id.slice(0, 8)}
                       </td>
-                      <td className="py-2 pr-3">{item.jobs_total}</td>
-                      <td className="py-2 pr-3">{item.jobs_scheduled}</td>
-                      <td className="py-2">{item.policies_total}</td>
+                      <td className="px-3 py-2">{item.jobs_total}</td>
+                      <td className="px-3 py-2">{item.jobs_scheduled}</td>
+                      <td className="px-3 py-2">{item.policies_total}</td>
                     </tr>
                   ))}
                 </tbody>
