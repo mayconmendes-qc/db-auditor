@@ -41,9 +41,10 @@ type InventoryStore interface {
 	UpsertFinding(ctx context.Context, p repository.UpsertFindingParams) (*repository.Finding, error)
 }
 
-// HandlerOptions wires optional run trigger support.
+// HandlerOptions wires optional run trigger support and target DSNs.
 type HandlerOptions struct {
-	Runner ManualRunner
+	Runner  ManualRunner
+	Targets map[string]string
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -71,6 +72,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerFindingRoutes(mux, store)
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)
+	registerConnectionRoutes(mux, store, opts.Targets)
 	return observability.Middleware(mux)
 }
 
