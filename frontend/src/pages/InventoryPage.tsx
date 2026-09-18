@@ -163,9 +163,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar tables")),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar tables")))
         .finally(ok);
     } else if (kind === "indexes") {
       api
@@ -176,9 +174,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar indexes")),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar indexes")))
         .finally(ok);
     } else if (kind === "views") {
       api
@@ -189,9 +185,7 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar views")),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar views")))
         .finally(ok);
     } else if (kind === "functions") {
       api
@@ -275,9 +269,7 @@ export function InventoryPage() {
             );
           }
         })
-        .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar CAGGs")),
-        )
+        .catch((e: unknown) => fail(formatError(e, "Falha ao listar CAGGs")))
         .finally(ok);
     }
     return () => {
@@ -660,7 +652,7 @@ export function InventoryPage() {
                   })}
                 </Table>
               )}
-              {page && page.has_more ? (
+              {page?.has_more ? (
                 <div className="flex gap-2">
                   <Button
                     disabled={offset === 0}
@@ -668,9 +660,7 @@ export function InventoryPage() {
                   >
                     Anterior
                   </Button>
-                  <Button
-                    onClick={() => setOffset(offset + PAGE_SIZE)}
-                  >
+                  <Button onClick={() => setOffset(offset + PAGE_SIZE)}>
                     Próxima
                   </Button>
                 </div>
