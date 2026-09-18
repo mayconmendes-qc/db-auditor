@@ -10,6 +10,7 @@ import {
   PerformancePage,
   SchemaDriftPage,
   SecurityPage,
+  StatusPage,
 } from "./pages";
 import type { NavigationSection } from "./types";
 
@@ -35,6 +36,8 @@ export function App() {
     content = <PerformancePage />;
   } else if (section === "Security") {
     content = <SecurityPage />;
+  } else if (section === "Status") {
+    content = <StatusPage />;
   }
 
   return (

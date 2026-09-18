@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mayconmendes-qc/timescale-auditor/internal/observability"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 )
 
@@ -53,6 +54,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /ready", ready(store))
+	mux.HandleFunc("GET /metrics", observability.DefaultMetrics.Handler())
 	mux.HandleFunc("GET /api/v1/environments", listEnvironments(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/databases", listDatabases(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/schemas", listSchemas(store))
@@ -67,7 +69,8 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
 	registerFindingRoutes(mux, store)
-	return mux
+	registerStatusRoutes(mux, store)
+	return observability.Middleware(mux)
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

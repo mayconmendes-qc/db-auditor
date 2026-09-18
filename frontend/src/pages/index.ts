@@ -7,3 +7,4 @@ export { OverviewPage } from "./OverviewPage";
 export { PerformancePage } from "./PerformancePage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
 export { SecurityPage } from "./SecurityPage";
+export { StatusPage } from "./StatusPage";
