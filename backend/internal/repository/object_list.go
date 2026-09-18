@@ -78,34 +78,11 @@ type FunctionSnapshotRow struct {
 	CollectedAt       time.Time `json:"collected_at"`
 }
 
-func inventoryWhere(f InventoryFilter, startArg int) (string, []any, int) {
-	conds := []string{fmt.Sprintf("environment_id = $%d::uuid", startArg)}
-	args := []any{f.EnvironmentID}
-	n := startArg + 1
-	// Prefer rows from the most recent audit run that has inventory for this environment.
-	conds = append(conds, fmt.Sprintf(`audit_run_id = (
-  SELECT audit_run_id FROM table_snapshot
-  WHERE environment_id = $%d::uuid
-  ORDER BY collected_at DESC
-  LIMIT 1
-)`, startArg))
-	if f.Database != "" {
-		conds = append(conds, fmt.Sprintf("database_name = $%d", n))
-		args = append(args, f.Database)
-		n++
-	}
-	if f.Schema != "" {
-		conds = append(conds, fmt.Sprintf("schema_name = $%d", n))
-		args = append(args, f.Schema)
-		n++
-	}
-	return strings.Join(conds, " AND "), args, n
-}
-
 func inventoryWhereFor(table string, f InventoryFilter, startArg int) (string, []any, int) {
 	conds := []string{fmt.Sprintf("environment_id = $%d::uuid", startArg)}
 	args := []any{f.EnvironmentID}
 	n := startArg + 1
+	// Restrict to the most recent audit run that has rows in this snapshot table.
 	conds = append(conds, fmt.Sprintf(`audit_run_id = (
   SELECT audit_run_id FROM %s
   WHERE environment_id = $%d::uuid

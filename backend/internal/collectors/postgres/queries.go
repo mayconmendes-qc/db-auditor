@@ -15,6 +15,7 @@ SELECT
 `
 
 // databasesSQL sizes only databases the role can CONNECT to.
+// Templates and non-connectable DBs are excluded so Inventory UI does not auto-focus them.
 // pg_database_size() raises 42501 on DBs without privilege (e.g. tsadmin on Tiger Cloud).
 const databasesSQL = `
 SELECT
@@ -33,6 +34,9 @@ SELECT
   COALESCE(s.numbackends, 0) AS connection_count
 FROM pg_database d
 LEFT JOIN pg_stat_database s ON s.datname = d.datname
+WHERE NOT d.datistemplate
+  AND d.datallowconn
+  AND has_database_privilege(d.datname, 'CONNECT')
 ORDER BY d.datname
 `
 
@@ -182,7 +186,7 @@ SELECT
   pg_catalog.pg_get_constraintdef(c.oid, true) AS constraint_definition,
   c.convalidated AS is_validated,
   c.condeferrable AS is_deferrable,
-  c.condeferred AS is_deferred
+  n.condeferred AS is_deferred
 FROM pg_constraint c
 JOIN pg_class rel ON rel.oid = c.conrelid
 JOIN pg_namespace n ON n.oid = rel.relnamespace
