@@ -14,16 +14,16 @@ func (SecurityAnalyzer) Name() string { return "security" }
 
 // Privileges considered broadly powerful when granted to PUBLIC or non-owner roles.
 var excessivePrivileges = map[string]bool{
-	"ALL":            true,
-	"SUPERUSER":      true,
-	"CREATE":         true,
-	"TRUNCATE":       true,
-	"REFERENCES":     true,
-	"TRIGGER":        true,
-	"EXECUTE":        true, // on sensitive functions still review
-	"INSERT":         true,
-	"UPDATE":         true,
-	"DELETE":         true,
+	"ALL":        true,
+	"SUPERUSER":  true,
+	"CREATE":     true,
+	"TRUNCATE":   true,
+	"REFERENCES": true,
+	"TRIGGER":    true,
+	"EXECUTE":    true, // on sensitive functions still review
+	"INSERT":     true,
+	"UPDATE":     true,
+	"DELETE":     true,
 }
 
 func (SecurityAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, error) {
