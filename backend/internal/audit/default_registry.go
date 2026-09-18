@@ -1,41 +1,16 @@
 package audit
 
-import "context"
+import "github.com/mayconmendes-qc/timescale-auditor/internal/config"
 
-// NewDefaultRegistry registers placeholder collectors representing the inventory set.
-// Real connection-bound implementations are wired by the composition root when target DSNs exist.
+// NewDefaultRegistry builds the production collector set (live SQL against target DSNs).
+// Without AUDITOR_TARGET_DSN_<uuid>, collectors fail with a clear configuration error
+// instead of reporting success with 0 rows.
 func NewDefaultRegistry() *Registry {
-	r := NewRegistry()
-	placeholders := []string{
-		"postgres.server",
-		"postgres.databases",
-		"postgres.schemas",
-		"postgres.tables",
-		"postgres.columns",
-		"postgres.indexes",
-		"postgres.constraints",
-		"postgres.views",
-		"postgres.functions",
-		"postgres.extensions",
-		"timescale.version",
-		"timescale.hypertables",
-		"timescale.dimensions",
-		"timescale.chunks",
-		"timescale.continuous_aggregates",
-		"timescale.jobs",
-		"timescale.policies",
-	}
-	for _, name := range placeholders {
-		n := name
-		_ = r.Register(CollectorSpec{
-			Name:     n,
-			Version:  "1.0.0",
-			Profiles: DefaultProfiles(),
-			Run: func(context.Context) (int64, error) {
-				// Placeholder: no target connection yet; treat as skipped success with 0 rows.
-				return 0, nil
-			},
-		})
-	}
-	return r
+	return NewLiveRegistry(LiveRegistryOptions{
+		Targets: config.LoadTargetDSNs(),
+		Scope: config.Scope{
+			DatabaseDenylist: []string{"template0", "template1", "postgres"},
+			SchemaDenylist:   []string{"pg_catalog", "information_schema"},
+		},
+	})
 }

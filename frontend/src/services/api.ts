@@ -7,6 +7,7 @@ import type {
   CollectorRun,
   CompareObjectItem,
   CompareResult,
+  ConnectionStatus,
   DashboardKPIs,
   DatabaseSnapshot,
   DimensionSnapshot,
@@ -111,6 +112,10 @@ export const api = {
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
   status: () => getJSON<StatusResponse>("/api/v1/status"),
+  connectionStatus: () =>
+    getJSON<ItemsResponse<ConnectionStatus>>(
+      "/api/v1/environments/connection-status",
+    ),
   analyticsKpis: (params?: AnalyticsParams) =>
     getJSON<DashboardKPIs>(`/api/v1/analytics/kpis${qs(params)}`),
   analyticsStorage: (params?: AnalyticsParams) =>

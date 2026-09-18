@@ -27,6 +27,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	targets := config.LoadTargetDSNs()
+	if len(targets) == 0 {
+		slog.Warn("nenhum AUDITOR_TARGET_DSN_* configurado; execuções de auditoria falharão até definir DSNs somente leitura")
+	} else {
+		slog.Info("target DSNs carregados", "count", len(targets))
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -39,9 +46,12 @@ func main() {
 
 	store := repository.NewStore(pool)
 	runStore := &repository.AuditRunStore{Store: store}
-	registry := audit.NewDefaultRegistry()
+	registry := audit.NewLiveRegistry(audit.LiveRegistryOptions{
+		Targets: targets,
+		Scope:   cfg.Scope,
+	})
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:   "0.10.0",
+		ServiceVersion:   "0.12.0",
 		CollectorVersion: "1.0.0",
 		MaxWorkers:       4,
 	})
@@ -50,7 +60,8 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddress,
 		Handler: api.NewHandlerWithOptions(store, api.HandlerOptions{
-			Runner: sch,
+			Runner:  sch,
+			Targets: targets,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

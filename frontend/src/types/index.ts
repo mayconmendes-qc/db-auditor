@@ -16,6 +16,16 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface ConnectionStatus {
+  environment_id: string;
+  environment_name: string;
+  dsn_configured: boolean;
+  reachable: boolean;
+  latency_ms?: number;
+  server_version?: string;
+  error?: string;
+}
+
 export interface StatusRun {
   id: string;
   environment_id: string;
@@ -295,6 +305,7 @@ export interface PolicySnapshot {
 export interface AuditRun {
   id: string;
   environment_id: string;
+  environment_name?: string;
   profile: string;
   status: string;
   service_version: string;

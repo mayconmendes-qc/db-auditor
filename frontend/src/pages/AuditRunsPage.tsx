@@ -29,6 +29,13 @@ function statusTone(
   return "neutral";
 }
 
+function envLabel(run: AuditRun): string {
+  if (run.environment_name?.trim()) {
+    return run.environment_name;
+  }
+  return `${run.environment_id.slice(0, 8)}…`;
+}
+
 export function AuditRunsPage() {
   const [envs, setEnvs] = useState<Environment[] | null>(null);
   const [runs, setRuns] = useState<AuditRun[] | null>(null);
@@ -123,7 +130,8 @@ export function AuditRunsPage() {
         Execuções de auditoria
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Execuções de auditoria, collectors e disparo manual via API.
+        Execuções de auditoria, collectors e disparo manual via API. Configure{" "}
+        AUDITOR_TARGET_DSN_&lt;uuid&gt; no .env para coletar dados reais.
       </p>
 
       <div className="mt-8 space-y-8">
@@ -199,9 +207,7 @@ export function AuditRunsPage() {
                 <td className="px-4 py-3 text-slate-300">
                   {new Date(r.started_at).toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-slate-300 font-mono text-xs">
-                  {r.environment_id.slice(0, 8)}…
-                </td>
+                <td className="px-4 py-3 text-slate-200">{envLabel(r)}</td>
               </tr>
             ))}
           </Table>
@@ -212,7 +218,7 @@ export function AuditRunsPage() {
             <h2 className="text-xl font-semibold text-slate-100">Detalhe</h2>
             <Card
               title={`${selected.profile} · ${labels.runStatus(selected.status)}`}
-              subtitle={`id ${selected.id}`}
+              subtitle={`${envLabel(selected)} · id ${selected.id}`}
             >
               <ul className="mt-3 space-y-1 text-sm text-slate-300">
                 <li>
@@ -227,6 +233,13 @@ export function AuditRunsPage() {
                 <li>Avisos: {selected.warnings.length}</li>
                 <li>Erros: {selected.errors.length}</li>
               </ul>
+              {selected.errors.length > 0 ? (
+                <ul className="mt-3 list-inside list-disc text-xs text-rose-300">
+                  {selected.errors.slice(0, 8).map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              ) : null}
             </Card>
 
             <h3 className="text-sm font-medium text-slate-300">Collectors</h3>

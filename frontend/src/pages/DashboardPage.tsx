@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Card, ErrorBanner } from "../components/ui";
+import { Badge, Card, ErrorBanner } from "../components/ui";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type {
+  ConnectionStatus,
   DashboardKPIs,
   FindingsTrendResponse,
   JobHealthResponse,
@@ -30,6 +31,9 @@ export function DashboardPage() {
   const [storage, setStorage] = useState<StorageGrowthResponse | null>(null);
   const [trends, setTrends] = useState<FindingsTrendResponse | null>(null);
   const [jobs, setJobs] = useState<JobHealthResponse | null>(null);
+  const [connections, setConnections] = useState<ConnectionStatus[] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [envFilter, setEnvFilter] = useState("");
@@ -42,17 +46,19 @@ export function DashboardPage() {
       setError(null);
       try {
         const params = envFilter ? { environment_id: envFilter } : undefined;
-        const [k, s, t, j] = await Promise.all([
+        const [k, s, t, j, c] = await Promise.all([
           api.analyticsKpis(params),
           api.analyticsStorage(params),
           api.analyticsFindingsTrends(params),
           api.analyticsJobHealth(params),
+          api.connectionStatus(),
         ]);
         if (!cancelled) {
           setKpis(k);
           setStorage(s);
           setTrends(t);
           setJobs(j);
+          setConnections(c.items);
         }
       } catch (e) {
         if (!cancelled) {
@@ -78,7 +84,7 @@ export function DashboardPage() {
         Visão executiva
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        KPIs, storage, findings e saúde de jobs — apenas via API analítica.
+        Conexões com bancos auditados, KPIs, storage, findings e saúde de jobs.
       </p>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -104,6 +110,58 @@ export function DashboardPage() {
             onRetry={() => setReloadKey((k) => k + 1)}
           />
         </div>
+      )}
+
+      {connections && (
+        <section className="mt-8" aria-labelledby="conn-heading">
+          <h2
+            id="conn-heading"
+            className="text-sm font-semibold text-slate-200"
+          >
+            Conexões com ambientes auditados
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Verifique se o DSN está configurado e se o banco responde antes de
+            disparar uma execução.
+          </p>
+          {connections.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">Nenhum ambiente.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {connections.map((c) => {
+                const ok = c.dsn_configured && c.reachable;
+                return (
+                  <li
+                    key={c.environment_id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <span className="font-medium text-slate-100">
+                        {c.environment_name}
+                      </span>
+                      {c.server_version ? (
+                        <span className="ml-2 text-xs text-slate-500">
+                          PG {c.server_version}
+                          {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
+                        </span>
+                      ) : null}
+                      {c.error ? (
+                        <p className="mt-1 text-xs text-rose-300">{c.error}</p>
+                      ) : null}
+                    </div>
+                    <Badge tone={ok ? "success" : "danger"}>
+                      {ok
+                        ? "Conectado"
+                        : c.dsn_configured
+                          ? "Indisponível"
+                          : "DSN ausente"}
+                    </Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       )}
 
       {kpis && (
@@ -155,23 +213,6 @@ export function DashboardPage() {
                 </li>
               ))}
             </ul>
-          )}
-          {storage.top_consumers.length > 0 && (
-            <>
-              <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Top consumers (tabelas)
-              </h3>
-              <ul className="mt-2 space-y-1 text-sm text-slate-400">
-                {storage.top_consumers.slice(0, 8).map((p) => (
-                  <li key={p.label} className="flex justify-between gap-4">
-                    <span className="truncate font-mono text-xs">
-                      {p.label}
-                    </span>
-                    <span>{formatBytes(p.size_bytes)}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
           )}
         </section>
       )}
