@@ -1,5 +1,6 @@
 export type NavigationSection =
   | "Visão geral"
+  | "Dashboard"
   | "Ambientes"
   | "Audit runs"
   | "Inventário"
@@ -34,6 +35,61 @@ export interface StatusResponse {
   open_findings: number;
   failed_runs_recent: number;
   notes?: string[];
+}
+
+export interface DashboardKPIs {
+  generated_at_utc: string;
+  environments: number;
+  open_findings: number;
+  critical_findings: number;
+  high_findings: number;
+  failed_runs_recent: number;
+  successful_runs_recent: number;
+  total_storage_bytes: number;
+  hypertables: number;
+  jobs_scheduled: number;
+  policies: number;
+  notes?: string[];
+}
+
+export interface StorageSeriesPoint {
+  label: string;
+  size_bytes: number;
+  object_kind: string;
+}
+
+export interface StorageGrowthResponse {
+  generated_at_utc: string;
+  by_environment: StorageSeriesPoint[];
+  by_database: StorageSeriesPoint[];
+  top_consumers: StorageSeriesPoint[];
+  notes?: string[];
+}
+
+export interface FindingTrendBucket {
+  key: string;
+  count: number;
+}
+
+export interface FindingsTrendResponse {
+  generated_at_utc: string;
+  by_severity: FindingTrendBucket[];
+  by_status: FindingTrendBucket[];
+  by_type: FindingTrendBucket[];
+  total: number;
+}
+
+export interface JobHealthItem {
+  environment_id: string;
+  environment_name?: string;
+  jobs_total: number;
+  jobs_scheduled: number;
+  policies_total: number;
+}
+
+export interface JobHealthResponse {
+  generated_at_utc: string;
+  items: JobHealthItem[];
 }
 
 export interface Environment {

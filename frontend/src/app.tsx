@@ -2,6 +2,7 @@ import { useState } from "react";
 import { navigationSections, Shell } from "./components/layout/Shell";
 import {
   AuditRunsPage,
+  DashboardPage,
   EnvironmentsPage,
   FindingsPage,
   InventoryPage,
@@ -20,7 +21,9 @@ export function App() {
   const [section, setSection] = useState<NavigationSection>("Visão geral");
 
   let content = <OverviewPage />;
-  if (section === "Ambientes") {
+  if (section === "Dashboard") {
+    content = <DashboardPage />;
+  } else if (section === "Ambientes") {
     content = <EnvironmentsPage />;
   } else if (section === "Inventário") {
     content = <InventoryPage />;

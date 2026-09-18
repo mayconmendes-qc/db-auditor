@@ -6,15 +6,18 @@ import type {
   CollectorRun,
   CompareObjectItem,
   CompareResult,
+  DashboardKPIs,
   DatabaseSnapshot,
   DimensionSnapshot,
   EnvironmentsResponse,
   Finding,
+  FindingsTrendResponse,
   FunctionSnapshot,
   HealthResponse,
   HypertableSnapshot,
   IndexSnapshot,
   ItemsResponse,
+  JobHealthResponse,
   JobSnapshot,
   MappingCandidate,
   ObjectMapping,
@@ -22,6 +25,7 @@ import type {
   PolicySnapshot,
   SchemaSnapshot,
   StatusResponse,
+  StorageGrowthResponse,
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
@@ -84,11 +88,29 @@ export type InventoryListParams = {
   schema?: string;
 };
 
+export type AnalyticsParams = {
+  environment_id?: string;
+};
+
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
   status: () => getJSON<StatusResponse>("/api/v1/status"),
+  analyticsKpis: (params?: AnalyticsParams) =>
+    getJSON<DashboardKPIs>(`/api/v1/analytics/kpis${qs(params)}`),
+  analyticsStorage: (params?: AnalyticsParams) =>
+    getJSON<StorageGrowthResponse>(`/api/v1/analytics/storage${qs(params)}`),
+  analyticsFindingsTrends: (params?: AnalyticsParams) =>
+    getJSON<FindingsTrendResponse>(
+      `/api/v1/analytics/findings-trends${qs(params)}`,
+    ),
+  analyticsJobHealth: (params?: AnalyticsParams) =>
+    getJSON<JobHealthResponse>(`/api/v1/analytics/job-health${qs(params)}`),
+  reportInventory: (params?: AnalyticsParams) =>
+    getJSON<Record<string, unknown>>(`/api/v1/reports/inventory${qs(params)}`),
+  reportFindings: (params?: AnalyticsParams) =>
+    getJSON<Record<string, unknown>>(`/api/v1/reports/findings${qs(params)}`),
   environments: () => getJSON<EnvironmentsResponse>("/api/v1/environments"),
   databases: (environmentId: string) =>
     getJSON<ItemsResponse<DatabaseSnapshot>>(
