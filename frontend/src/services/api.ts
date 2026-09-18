@@ -10,14 +10,19 @@ import type {
   DimensionSnapshot,
   EnvironmentsResponse,
   Finding,
+  FunctionSnapshot,
   HealthResponse,
   HypertableSnapshot,
+  IndexSnapshot,
   ItemsResponse,
   JobSnapshot,
   MappingCandidate,
   ObjectMapping,
+  PagedResponse,
   PolicySnapshot,
   SchemaSnapshot,
+  TableSnapshot,
+  ViewSnapshot,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
@@ -56,6 +61,28 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function qs(params?: Record<string, string | number | undefined>): string {
+  if (!params) {
+    return "";
+  }
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") {
+      q.set(k, String(v));
+    }
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+export type InventoryListParams = {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  database?: string;
+  schema?: string;
+};
+
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   health: () => getJSON<HealthResponse>("/health"),
@@ -93,6 +120,22 @@ export const api = {
     getJSON<ItemsResponse<PolicySnapshot>>(
       `/api/v1/environments/${environmentId}/policies`,
     ),
+  tables: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<TableSnapshot>>(
+      `/api/v1/environments/${environmentId}/tables${qs(params)}`,
+    ),
+  indexes: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<IndexSnapshot>>(
+      `/api/v1/environments/${environmentId}/indexes${qs(params)}`,
+    ),
+  views: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<ViewSnapshot>>(
+      `/api/v1/environments/${environmentId}/views${qs(params)}`,
+    ),
+  functions: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<FunctionSnapshot>>(
+      `/api/v1/environments/${environmentId}/functions${qs(params)}`,
+    ),
   auditRuns: (params?: {
     environment_id?: string;
     profile?: string;
@@ -108,9 +151,9 @@ export const api = {
     if (params?.status) {
       q.set("status", params.status);
     }
-    const qs = q.toString();
+    const s = q.toString();
     return getJSON<ItemsResponse<AuditRun>>(
-      `/api/v1/audit-runs${qs ? `?${qs}` : ""}`,
+      `/api/v1/audit-runs${s ? `?${s}` : ""}`,
     );
   },
   auditRun: (id: string) => getJSON<AuditRun>(`/api/v1/audit-runs/${id}`),
@@ -136,9 +179,9 @@ export const api = {
     if (params?.status) {
       q.set("status", params.status);
     }
-    const qs = q.toString();
+    const s = q.toString();
     return getJSON<ItemsResponse<ObjectMapping>>(
-      `/api/v1/mappings${qs ? `?${qs}` : ""}`,
+      `/api/v1/mappings${s ? `?${s}` : ""}`,
     );
   },
   createMapping: (body: Partial<ObjectMapping>) =>
@@ -182,9 +225,9 @@ export const api = {
     if (params?.limit) {
       q.set("limit", String(params.limit));
     }
-    const qs = q.toString();
+    const s = q.toString();
     return getJSON<ItemsResponse<Finding>>(
-      `/api/v1/findings${qs ? `?${qs}` : ""}`,
+      `/api/v1/findings${s ? `?${s}` : ""}`,
     );
   },
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
