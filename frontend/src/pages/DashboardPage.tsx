@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Badge, Card, ErrorBanner } from "../components/ui";
+import { PageHeader } from "../components/PageHeader";
+import { Badge, Card, ErrorBanner, Skeleton } from "../components/ui";
+import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
@@ -12,9 +14,7 @@ import type {
 } from "../types";
 
 function formatBytes(n: number): string {
-  if (n <= 0) {
-    return "0 B";
-  }
+  if (n <= 0) return "0 B";
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   let v = n;
   let i = 0;
@@ -25,8 +25,8 @@ function formatBytes(n: number): string {
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-/** Executive dashboard (Sprint 11). */
 export function DashboardPage() {
+  const { environmentId, setSection } = useApp();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [storage, setStorage] = useState<StorageGrowthResponse | null>(null);
   const [trends, setTrends] = useState<FindingsTrendResponse | null>(null);
@@ -36,7 +36,6 @@ export function DashboardPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [envFilter, setEnvFilter] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -45,7 +44,9 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const params = envFilter ? { environment_id: envFilter } : undefined;
+        const params = environmentId
+          ? { environment_id: environmentId }
+          : undefined;
         const [k, s, t, j, c] = await Promise.all([
           api.analyticsKpis(params),
           api.analyticsStorage(params),
@@ -65,77 +66,49 @@ export function DashboardPage() {
           setError(formatError(e, "Falha ao carregar dashboard"));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [envFilter, reloadKey]);
+  }, [environmentId, reloadKey]);
 
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        DASHBOARD
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Visão executiva
-      </h1>
-      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Conexões com bancos auditados, KPIs, storage, findings e saúde de jobs.
-      </p>
+      <PageHeader
+        eyebrow="DASHBOARD"
+        title="Visão executiva"
+        description="Conexões, KPIs, storage, findings e saúde de jobs. O filtro de ambiente está na barra lateral."
+      />
 
-      <div className="mt-6 flex flex-wrap items-end gap-3">
-        <label className="grid gap-1 text-xs text-slate-400">
-          Filtro environment_id (opcional)
-          <input
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-            value={envFilter}
-            onChange={(e) => setEnvFilter(e.target.value.trim())}
-            placeholder="uuid do ambiente"
-            aria-label="Filtro de ambiente"
-          />
-        </label>
-      </div>
-
-      {loading && (
-        <p className="mt-8 text-sm text-slate-400">Carregando KPIs…</p>
-      )}
-      {error && (
+      {loading ? <Skeleton className="mt-8 h-32 w-full" /> : null}
+      {error ? (
         <div className="mt-8">
           <ErrorBanner
             message={error}
             onRetry={() => setReloadKey((k) => k + 1)}
           />
         </div>
-      )}
+      ) : null}
 
-      {connections && (
+      {connections ? (
         <section className="mt-8" aria-labelledby="conn-heading">
-          <h2
-            id="conn-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
+          <h2 id="conn-heading" className="text-sm font-semibold text-slate-200">
             Conexões com ambientes auditados
           </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Verifique se o DSN está configurado e se o banco responde antes de
-            disparar uma execução.
-          </p>
           {connections.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">Nenhum ambiente.</p>
           ) : (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {connections.map((c) => {
                 const ok = c.dsn_configured && c.reachable;
                 return (
                   <li
                     key={c.environment_id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-medium text-slate-100">
                         {c.environment_name}
                       </span>
@@ -146,7 +119,9 @@ export function DashboardPage() {
                         </span>
                       ) : null}
                       {c.error ? (
-                        <p className="mt-1 text-xs text-rose-300">{c.error}</p>
+                        <p className="mt-1 truncate text-xs text-rose-300">
+                          {c.error}
+                        </p>
                       ) : null}
                     </div>
                     <Badge tone={ok ? "success" : "danger"}>
@@ -162,22 +137,29 @@ export function DashboardPage() {
             </ul>
           )}
         </section>
-      )}
+      ) : null}
 
-      {kpis && (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card subtitle="Ambientes" title={String(kpis.environments)} />
+      {kpis ? (
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card
+            subtitle="Ambientes"
+            title={String(kpis.environments)}
+            onClick={() => setSection("Ambientes")}
+          />
           <Card
             subtitle="Findings abertos"
             title={String(kpis.open_findings)}
+            onClick={() => setSection("Findings")}
           />
           <Card
             subtitle="Critical / High"
             title={`${kpis.critical_findings} / ${kpis.high_findings}`}
+            onClick={() => setSection("Findings")}
           />
           <Card
             subtitle="Storage total"
             title={formatBytes(kpis.total_storage_bytes)}
+            onClick={() => setSection("Inventário")}
           />
           <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
           <Card subtitle="Jobs agendados" title={String(kpis.jobs_scheduled)} />
@@ -185,85 +167,85 @@ export function DashboardPage() {
           <Card
             subtitle="Runs ok / falha"
             title={`${kpis.successful_runs_recent} / ${kpis.failed_runs_recent}`}
+            onClick={() => setSection("Execuções")}
           />
         </div>
-      )}
+      ) : null}
 
-      {storage && (
-        <section className="mt-10" aria-labelledby="storage-heading">
-          <h2
-            id="storage-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
-            Storage por ambiente
-          </h2>
-          {storage.by_environment.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">Sem dados de storage.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {storage.by_environment.map((p) => (
-                <li
-                  key={p.label}
-                  className="flex justify-between rounded-md border border-slate-800 px-3 py-2 text-sm"
-                >
-                  <span className="text-slate-300">{p.label}</span>
-                  <span className="font-mono text-slate-100">
-                    {formatBytes(p.size_bytes)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {trends && (
-        <section className="mt-10" aria-labelledby="findings-heading">
-          <h2
-            id="findings-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
-            Findings por severidade / status (total {trends.total})
-          </h2>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-md border border-slate-800 p-3">
-              <p className="text-xs uppercase text-slate-500">Severidade</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {trends.by_severity.map((b) => (
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        {storage ? (
+          <section aria-labelledby="storage-heading">
+            <h2
+              id="storage-heading"
+              className="text-sm font-semibold text-slate-200"
+            >
+              Storage por ambiente
+            </h2>
+            {storage.by_environment.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">Sem dados de storage.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {storage.by_environment.map((p) => (
                   <li
-                    key={b.key}
-                    className="flex justify-between text-slate-300"
+                    key={p.label}
+                    className="flex justify-between rounded-md border border-slate-800 px-3 py-2 text-sm"
                   >
-                    <span>{labels.severity(b.key)}</span>
-                    <span>{b.count}</span>
+                    <span className="text-slate-300">{p.label}</span>
+                    <span className="font-mono text-slate-100">
+                      {formatBytes(p.size_bytes)}
+                    </span>
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="rounded-md border border-slate-800 p-3">
-              <p className="text-xs uppercase text-slate-500">Status</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {trends.by_status.map((b) => (
-                  <li
-                    key={b.key}
-                    className="flex justify-between text-slate-300"
-                  >
-                    <span>{labels.findingStatus(b.key)}</span>
-                    <span>{b.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-      )}
+            )}
+          </section>
+        ) : null}
 
-      {jobs && (
-        <section className="mt-10" aria-labelledby="jobs-heading">
-          <h2
-            id="jobs-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
+        {trends ? (
+          <section aria-labelledby="findings-heading">
+            <h2
+              id="findings-heading"
+              className="text-sm font-semibold text-slate-200"
+            >
+              Findings (total {trends.total})
+            </h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-slate-800 p-3">
+                <p className="text-xs uppercase text-slate-500">Severidade</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {trends.by_severity.map((b) => (
+                    <li
+                      key={b.key}
+                      className="flex justify-between text-slate-300"
+                    >
+                      <span>{labels.severity(b.key)}</span>
+                      <span>{b.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-md border border-slate-800 p-3">
+                <p className="text-xs uppercase text-slate-500">Status</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {trends.by_status.map((b) => (
+                    <li
+                      key={b.key}
+                      className="flex justify-between text-slate-300"
+                    >
+                      <span>{labels.findingStatus(b.key)}</span>
+                      <span>{b.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      {jobs ? (
+        <section className="mt-8" aria-labelledby="jobs-heading">
+          <h2 id="jobs-heading" className="text-sm font-semibold text-slate-200">
             Saúde de jobs / policies
           </h2>
           {jobs.items.length === 0 ? (
@@ -296,7 +278,7 @@ export function DashboardPage() {
             </div>
           )}
         </section>
-      )}
+      ) : null}
     </>
   );
 }
