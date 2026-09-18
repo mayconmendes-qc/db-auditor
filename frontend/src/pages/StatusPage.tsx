@@ -56,7 +56,8 @@ export function StatusPage() {
       </h1>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">
         Saúde da API, snapshot store, runs recentes e findings abertos. Dados
-        vêm exclusivamente de <code className="text-slate-300">GET /api/v1/status</code>.
+        vêm exclusivamente de{" "}
+        <code className="text-slate-300">GET /api/v1/status</code>.
       </p>
 
       {loading && (
@@ -102,7 +103,9 @@ export function StatusPage() {
               </span>
             </div>
             {data.recent_runs.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">Nenhum run registrado.</p>
+              <p className="mt-3 text-sm text-slate-500">
+                Nenhum run registrado.
+              </p>
             ) : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[40rem] text-left text-sm">
@@ -118,11 +121,19 @@ export function StatusPage() {
                   <tbody className="divide-y divide-slate-800 text-slate-300">
                     {data.recent_runs.map((run) => (
                       <tr key={run.id}>
-                        <td className="py-2 pr-3 font-mono text-xs">{run.id.slice(0, 8)}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{run.environment_id.slice(0, 8)}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">
+                          {run.id.slice(0, 8)}
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs">
+                          {run.environment_id.slice(0, 8)}
+                        </td>
                         <td className="py-2 pr-3">{run.profile}</td>
-                        <td className={`py-2 pr-3 ${tone(run.status)}`}>{run.status}</td>
-                        <td className="py-2 text-xs text-slate-400">{run.started_at}</td>
+                        <td className={`py-2 pr-3 ${tone(run.status)}`}>
+                          {run.status}
+                        </td>
+                        <td className="py-2 text-xs text-slate-400">
+                          {run.started_at}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
