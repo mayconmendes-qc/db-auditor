@@ -184,7 +184,6 @@ export function AuditRunsPage() {
     [runs, selectedId],
   );
 
-  // Poll while selected run is running (or any list item is running)
   useEffect(() => {
     const listRunning = runs?.some((r) => r.status === "running") ?? false;
     const selectedRunning = selected?.status === "running";
@@ -238,7 +237,7 @@ export function AuditRunsPage() {
             Dispare coletas, acompanhe o progresso por collector e revise erros.
             Configure{" "}
             <code className="rounded bg-slate-800 px-1 text-slate-200">
-              AUDITOR_TARGET_DSN_<uuid>
+              {"AUDITOR_TARGET_DSN_<uuid>"}
             </code>{" "}
             no .env para dados reais. O filtro de ambiente da sidebar aplica-se
             à lista.
@@ -273,7 +272,10 @@ export function AuditRunsPage() {
                 </select>
               </label>
             </div>
-            <Button onClick={() => void onTrigger()} disabled={busy || !triggerEnv}>
+            <Button
+              onClick={() => void onTrigger()}
+              disabled={busy || !triggerEnv}
+            >
               {busy ? "Disparando…" : "Executar agora"}
             </Button>
           </div>
