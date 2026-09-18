@@ -16,7 +16,7 @@ type LiveRegistryOptions struct {
 	Scope   config.Scope
 }
 
-// NewLiveRegistry registers collectors that connect using AUDITOR_TARGET_DSN_* for the run environment.
+// NewLiveRegistry registers collectors that connect using AUDITOR_TARGET_N_* credentials.
 func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	r := NewRegistry()
 	scope := opts.Scope
@@ -33,8 +33,8 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		dsn := config.DSNForEnvironment(targets, meta.EnvironmentID)
 		if dsn == "" {
 			return nil, fmt.Errorf(
-				"DSN do ambiente não configurado. Defina %s no .env (credencial somente leitura) e reinicie a API",
-				config.TargetDSNKey(meta.EnvironmentID),
+				"credenciais do ambiente não configuradas. Defina %s no .env (somente leitura) e reinicie a API",
+				config.TargetSlotHint(meta.EnvironmentID),
 			)
 		}
 		conn, err := pgx.Connect(ctx, dsn)
