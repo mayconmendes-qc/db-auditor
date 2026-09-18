@@ -7,25 +7,25 @@ import (
 
 // StatusResponse is the operational snapshot for the Status page.
 type StatusResponse struct {
-	Service       string         `json:"service"`
-	Version       string         `json:"version"`
-	TimeUTC       time.Time      `json:"time_utc"`
-	API           string         `json:"api_status"`
-	Database      string         `json:"database_status"`
-	Environments  int            `json:"environments_count"`
-	RecentRuns    []StatusRun    `json:"recent_runs"`
-	OpenFindings  int            `json:"open_findings"`
-	FailedRuns    int            `json:"failed_runs_recent"`
-	Notes         []string       `json:"notes,omitempty"`
+	Service      string      `json:"service"`
+	Version      string      `json:"version"`
+	TimeUTC      time.Time   `json:"time_utc"`
+	API          string      `json:"api_status"`
+	Database     string      `json:"database_status"`
+	Environments int         `json:"environments_count"`
+	RecentRuns   []StatusRun `json:"recent_runs"`
+	OpenFindings int         `json:"open_findings"`
+	FailedRuns   int         `json:"failed_runs_recent"`
+	Notes        []string    `json:"notes,omitempty"`
 }
 
 // StatusRun is a compact audit run summary.
 type StatusRun struct {
-	ID            string    `json:"id"`
-	EnvironmentID string    `json:"environment_id"`
-	Profile       string    `json:"profile"`
-	Status        string    `json:"status"`
-	StartedAt     time.Time `json:"started_at"`
+	ID            string     `json:"id"`
+	EnvironmentID string     `json:"environment_id"`
+	Profile       string     `json:"profile"`
+	Status        string     `json:"status"`
+	StartedAt     time.Time  `json:"started_at"`
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`
 }
 
