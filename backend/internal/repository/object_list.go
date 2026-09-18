@@ -82,6 +82,36 @@ func inventoryWhere(f InventoryFilter, startArg int) (string, []any, int) {
 	conds := []string{fmt.Sprintf("environment_id = $%d::uuid", startArg)}
 	args := []any{f.EnvironmentID}
 	n := startArg + 1
+	// Prefer rows from the most recent audit run that has inventory for this environment.
+	conds = append(conds, fmt.Sprintf(`audit_run_id = (
+  SELECT audit_run_id FROM table_snapshot
+  WHERE environment_id = $%d::uuid
+  ORDER BY collected_at DESC
+  LIMIT 1
+)`, startArg))
+	if f.Database != "" {
+		conds = append(conds, fmt.Sprintf("database_name = $%d", n))
+		args = append(args, f.Database)
+		n++
+	}
+	if f.Schema != "" {
+		conds = append(conds, fmt.Sprintf("schema_name = $%d", n))
+		args = append(args, f.Schema)
+		n++
+	}
+	return strings.Join(conds, " AND "), args, n
+}
+
+func inventoryWhereFor(table string, f InventoryFilter, startArg int) (string, []any, int) {
+	conds := []string{fmt.Sprintf("environment_id = $%d::uuid", startArg)}
+	args := []any{f.EnvironmentID}
+	n := startArg + 1
+	conds = append(conds, fmt.Sprintf(`audit_run_id = (
+  SELECT audit_run_id FROM %s
+  WHERE environment_id = $%d::uuid
+  ORDER BY collected_at DESC
+  LIMIT 1
+)`, table, startArg))
 	if f.Database != "" {
 		conds = append(conds, fmt.Sprintf("database_name = $%d", n))
 		args = append(args, f.Database)
@@ -96,7 +126,7 @@ func inventoryWhere(f InventoryFilter, startArg int) (string, []any, int) {
 }
 
 func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]TableSnapshotRow, int, error) {
-	where, args, next := inventoryWhere(f, 1)
+	where, args, next := inventoryWhereFor("table_snapshot", f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (table_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -116,7 +146,7 @@ SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema
   COALESCE(row_estimate,0), COALESCE(column_count,0), COALESCE(has_primary_key,false), collected_at
 FROM table_snapshot
 WHERE %s
-ORDER BY collected_at DESC, database_name, schema_name, table_name
+ORDER BY database_name, schema_name, table_name
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -141,7 +171,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListIndexSnapshots(ctx context.Context, f InventoryFilter) ([]IndexSnapshotRow, int, error) {
-	where, args, next := inventoryWhere(f, 1)
+	where, args, next := inventoryWhereFor("index_snapshot", f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (index_name ILIKE $%d OR table_name ILIKE $%d OR schema_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -161,7 +191,7 @@ SELECT id::text, database_name, schema_name, table_name, index_name,
   COALESCE(size_bytes,0), COALESCE(idx_scan,0), collected_at
 FROM index_snapshot
 WHERE %s
-ORDER BY collected_at DESC, database_name, schema_name, index_name
+ORDER BY database_name, schema_name, index_name
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -186,7 +216,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListViewSnapshots(ctx context.Context, f InventoryFilter) ([]ViewSnapshotRow, int, error) {
-	where, args, next := inventoryWhere(f, 1)
+	where, args, next := inventoryWhereFor("view_snapshot", f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (view_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -205,7 +235,7 @@ SELECT id::text, database_name, schema_name, view_name, owner_name,
   COALESCE(relkind,''), COALESCE(size_bytes,0), collected_at
 FROM view_snapshot
 WHERE %s
-ORDER BY collected_at DESC, database_name, schema_name, view_name
+ORDER BY database_name, schema_name, view_name
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -229,7 +259,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListFunctionSnapshots(ctx context.Context, f InventoryFilter) ([]FunctionSnapshotRow, int, error) {
-	where, args, next := inventoryWhere(f, 1)
+	where, args, next := inventoryWhereFor("function_snapshot", f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (function_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -248,7 +278,7 @@ SELECT id::text, database_name, schema_name, function_name, COALESCE(identity_ar
   owner_name, language_name, COALESCE(is_security_definer,false), kind, collected_at
 FROM function_snapshot
 WHERE %s
-ORDER BY collected_at DESC, database_name, schema_name, function_name
+ORDER BY database_name, schema_name, function_name
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
