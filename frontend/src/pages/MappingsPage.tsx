@@ -82,9 +82,7 @@ export function MappingsPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
         />
 
-        {error ? (
-          <ErrorBanner message={error} onRetry={() => load()} />
-        ) : null}
+        {error ? <ErrorBanner message={error} onRetry={() => load()} /> : null}
 
         {items === null ? (
           <Skeleton className="h-40 w-full" />
