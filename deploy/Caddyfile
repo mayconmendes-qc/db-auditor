@@ -1,0 +1,28 @@
+{
+	email {$CADDY_EMAIL:ops@example.local}
+}
+
+{$AUDITOR_DOMAIN:localhost} {
+	encode gzip
+
+	# Prometheus scrape (restrict at network layer in production).
+	handle /metrics {
+		reverse_proxy api:8080
+	}
+
+	handle /health {
+		reverse_proxy api:8080
+	}
+
+	handle /ready {
+		reverse_proxy api:8080
+	}
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+}

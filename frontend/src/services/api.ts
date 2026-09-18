@@ -21,6 +21,7 @@ import type {
   PagedResponse,
   PolicySnapshot,
   SchemaSnapshot,
+  StatusResponse,
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
@@ -87,6 +88,7 @@ export type InventoryListParams = {
 export const api = {
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
+  status: () => getJSON<StatusResponse>("/api/v1/status"),
   environments: () => getJSON<EnvironmentsResponse>("/api/v1/environments"),
   databases: (environmentId: string) =>
     getJSON<ItemsResponse<DatabaseSnapshot>>(
