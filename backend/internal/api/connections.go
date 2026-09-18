@@ -43,7 +43,7 @@ func listConnectionStatus(store InventoryStore, targets map[string]string) http.
 			dsn := config.DSNForEnvironment(targets, env.ID)
 			if dsn == "" {
 				item.DSNConfigured = false
-				item.Error = "DSN não configurado (" + config.TargetDSNKey(env.ID) + ")"
+				item.Error = "Credenciais não configuradas: " + config.TargetSlotHint(env.ID)
 				out = append(out, item)
 				continue
 			}
