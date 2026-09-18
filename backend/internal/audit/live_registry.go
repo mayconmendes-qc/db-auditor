@@ -10,17 +10,10 @@ import (
 	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
 )
 
-// SnapshotSaver persists collected inventory for an audit run (optional).
-type SnapshotSaver interface {
-	SaveDiscovery(ctx context.Context, environmentID, auditRunID string, databases []postgres.DatabaseFacts, schemas []postgres.SchemaFacts) error
-	SaveObjectInventory(ctx context.Context, environmentID, auditRunID string, tables []postgres.TableFacts, columns []postgres.ColumnFacts, indexes []postgres.IndexFacts) error
-}
-
 // LiveRegistryOptions configures collectors that hit audited databases.
 type LiveRegistryOptions struct {
 	Targets map[string]string
 	Scope   config.Scope
-	Saver   SnapshotSaver // optional; nil skips persistence
 }
 
 // NewLiveRegistry registers collectors that connect using AUDITOR_TARGET_DSN_* for the run environment.
@@ -32,23 +25,23 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		targets = config.LoadTargetDSNs()
 	}
 
-	connect := func(ctx context.Context) (*pgx.Conn, RunMeta, error) {
+	connect := func(ctx context.Context) (*pgx.Conn, error) {
 		meta, ok := RunMetaFromContext(ctx)
 		if !ok || meta.EnvironmentID == "" {
-			return nil, meta, fmt.Errorf("contexto da execução sem environment_id")
+			return nil, fmt.Errorf("contexto da execução sem environment_id")
 		}
 		dsn := config.DSNForEnvironment(targets, meta.EnvironmentID)
 		if dsn == "" {
-			return nil, meta, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"DSN do ambiente não configurado. Defina %s no .env (credencial somente leitura) e reinicie a API",
 				config.TargetDSNKey(meta.EnvironmentID),
 			)
 		}
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
-			return nil, meta, fmt.Errorf("conectar ao ambiente auditado: %w", err)
+			return nil, fmt.Errorf("conectar ao ambiente auditado: %w", err)
 		}
-		return conn, meta, nil
+		return conn, nil
 	}
 
 	must := func(name string, fn CollectorFunc) {
@@ -61,7 +54,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	}
 
 	must("postgres.server", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -73,7 +66,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.databases", func(ctx context.Context) (int64, error) {
-		conn, meta, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -82,14 +75,11 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return 0, err
 		}
-		if opts.Saver != nil && meta.AuditRunID != "" {
-			_ = opts.Saver.SaveDiscovery(ctx, meta.EnvironmentID, meta.AuditRunID, dbs, nil)
-		}
 		return int64(len(dbs)), nil
 	})
 
 	must("postgres.schemas", func(ctx context.Context) (int64, error) {
-		conn, meta, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -98,14 +88,11 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return 0, err
 		}
-		if opts.Saver != nil && meta.AuditRunID != "" {
-			_ = opts.Saver.SaveDiscovery(ctx, meta.EnvironmentID, meta.AuditRunID, nil, schemas)
-		}
 		return int64(len(schemas)), nil
 	})
 
 	must("postgres.tables", func(ctx context.Context) (int64, error) {
-		conn, meta, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -114,14 +101,11 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return 0, err
 		}
-		if opts.Saver != nil && meta.AuditRunID != "" {
-			_ = opts.Saver.SaveObjectInventory(ctx, meta.EnvironmentID, meta.AuditRunID, tables, nil, nil)
-		}
 		return int64(len(tables)), nil
 	})
 
 	must("postgres.columns", func(ctx context.Context) (int64, error) {
-		conn, meta, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -130,14 +114,11 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return 0, err
 		}
-		if opts.Saver != nil && meta.AuditRunID != "" {
-			_ = opts.Saver.SaveObjectInventory(ctx, meta.EnvironmentID, meta.AuditRunID, nil, cols, nil)
-		}
 		return int64(len(cols)), nil
 	})
 
 	must("postgres.indexes", func(ctx context.Context) (int64, error) {
-		conn, meta, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -146,14 +127,11 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return 0, err
 		}
-		if opts.Saver != nil && meta.AuditRunID != "" {
-			_ = opts.Saver.SaveObjectInventory(ctx, meta.EnvironmentID, meta.AuditRunID, nil, nil, idxs)
-		}
 		return int64(len(idxs)), nil
 	})
 
 	must("postgres.constraints", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -166,7 +144,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.views", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -179,7 +157,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.functions", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -192,7 +170,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.extensions", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -205,24 +183,28 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.version", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		if _, err := timescale.CollectVersion(ctx, conn); err != nil {
+		v, err := timescale.CollectVersion(ctx, conn)
+		if err != nil {
 			return 0, err
+		}
+		if v == nil {
+			return 0, nil
 		}
 		return 1, nil
 	})
 
 	must("timescale.hypertables", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectHypertables(ctx, conn)
+		items, err := timescale.CollectHypertables(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
@@ -230,12 +212,12 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.dimensions", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectDimensions(ctx, conn)
+		items, err := timescale.CollectDimensions(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
@@ -243,12 +225,12 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.chunks", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectChunks(ctx, conn)
+		items, err := timescale.CollectChunks(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
@@ -256,12 +238,12 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.continuous_aggregates", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectContinuousAggregates(ctx, conn)
+		items, err := timescale.CollectContinuousAggregates(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
@@ -269,12 +251,12 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.jobs", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectJobs(ctx, conn)
+		items, err := timescale.CollectJobs(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
@@ -282,12 +264,12 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("timescale.policies", func(ctx context.Context) (int64, error) {
-		conn, _, err := connect(ctx)
+		conn, err := connect(ctx)
 		if err != nil {
 			return 0, err
 		}
 		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectPolicies(ctx, conn)
+		items, err := timescale.CollectPolicies(ctx, conn, scope)
 		if err != nil {
 			return 0, err
 		}
