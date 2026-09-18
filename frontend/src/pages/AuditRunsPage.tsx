@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
   Button,
@@ -9,10 +10,13 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
-import type { AuditRun, CollectorRun, Environment } from "../types";
+import type { AuditRun, CollectorRun } from "../types";
+
+const POLL_MS = 2500;
 
 function statusTone(
   status: string,
@@ -36,8 +40,82 @@ function envLabel(run: AuditRun): string {
   return `${run.environment_id.slice(0, 8)}…`;
 }
 
+function isTerminal(status: string): boolean {
+  return (
+    status === "success" ||
+    status === "partial_success" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "skipped"
+  );
+}
+
+function durationLabel(start: string, end?: string | null): string {
+  const a = new Date(start).getTime();
+  const b = end ? new Date(end).getTime() : Date.now();
+  if (Number.isNaN(a) || Number.isNaN(b) || b < a) {
+    return "—";
+  }
+  const sec = Math.round((b - a) / 1000);
+  if (sec < 60) {
+    return `${sec}s`;
+  }
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}m ${s}s`;
+}
+
+function CollectorProgress({
+  collectors,
+  runStatus,
+}: {
+  collectors: CollectorRun[];
+  runStatus: string;
+}) {
+  const total = collectors.length;
+  const done = collectors.filter((c) => isTerminal(c.status)).length;
+  const running = collectors.filter((c) => c.status === "running").length;
+  const failed = collectors.filter((c) => c.status === "failed").length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const live = runStatus === "running" || running > 0;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
+        <span>
+          {done}/{total || "…"} collectors
+          {running > 0 ? ` · ${running} em execução` : ""}
+          {failed > 0 ? ` · ${failed} falha(s)` : ""}
+        </span>
+        <span className="font-mono text-slate-400">
+          {total > 0 ? `${pct}%` : live ? "…" : "—"}
+          {live ? " · ao vivo" : ""}
+        </span>
+      </div>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-slate-800"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            failed > 0
+              ? "bg-rose-500/80"
+              : live
+                ? "bg-amber-400/90"
+                : "bg-emerald-500/80"
+          }`}
+          style={{ width: `${total > 0 ? pct : live ? 8 : 0}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function AuditRunsPage() {
-  const [envs, setEnvs] = useState<Environment[] | null>(null);
+  const { environments, environmentId } = useApp();
   const [runs, setRuns] = useState<AuditRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
@@ -47,40 +125,50 @@ export function AuditRunsPage() {
   const [triggerEnv, setTriggerEnv] = useState("");
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [polling, setPolling] = useState(false);
 
-  const loadRuns = () => {
-    setRuns(null);
+  useEffect(() => {
+    if (environmentId) {
+      setTriggerEnv(environmentId);
+    } else if (environments.length > 0 && !triggerEnv) {
+      setTriggerEnv(environments[0].id);
+    }
+  }, [environmentId, environments, triggerEnv]);
+
+  const loadRuns = useCallback(() => {
     setError(null);
-    api
+    return api
       .auditRuns({
         status: statusFilter || undefined,
         profile: profileFilter || undefined,
+        environment_id: environmentId || undefined,
       })
-      .then((res) => setRuns(res.items))
+      .then((res) => {
+        setRuns(res.items);
+        return res.items;
+      })
       .catch((err: unknown) => {
         setError(formatError(err, "Falha ao listar execuções"));
         setRuns([]);
+        return [] as AuditRun[];
       });
-  };
+  }, [statusFilter, profileFilter, environmentId]);
 
   useEffect(() => {
-    api
-      .environments()
-      .then((res) => {
-        setEnvs(res.items);
-        if (res.items.length > 0) {
-          setTriggerEnv(res.items[0].id);
-        }
-      })
-      .catch((err: unknown) => {
-        setEnvs([]);
-        setError(formatError(err, "Falha ao listar ambientes"));
-      });
+    setRuns(null);
+    void loadRuns();
+  }, [loadRuns]);
+
+  const loadCollectors = useCallback(async (runId: string) => {
+    try {
+      const res = await api.auditRunCollectors(runId);
+      setCollectors(res.items);
+      return res.items;
+    } catch {
+      setCollectors([]);
+      return [] as CollectorRun[];
+    }
   }, []);
-
-  useEffect(() => {
-    loadRuns();
-  }, [statusFilter, profileFilter]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -88,16 +176,32 @@ export function AuditRunsPage() {
       return;
     }
     setCollectors(null);
-    api
-      .auditRunCollectors(selectedId)
-      .then((res) => setCollectors(res.items))
-      .catch(() => setCollectors([]));
-  }, [selectedId]);
+    void loadCollectors(selectedId);
+  }, [selectedId, loadCollectors]);
 
   const selected = useMemo(
     () => runs?.find((r) => r.id === selectedId) ?? null,
     [runs, selectedId],
   );
+
+  useEffect(() => {
+    const listRunning = runs?.some((r) => r.status === "running") ?? false;
+    const selectedRunning = selected?.status === "running";
+    if (!listRunning && !selectedRunning) {
+      setPolling(false);
+      return;
+    }
+    setPolling(true);
+    const id = window.setInterval(() => {
+      void loadRuns().then((items) => {
+        const still = items.find((r) => r.id === selectedId);
+        if (still && selectedId) {
+          void loadCollectors(selectedId);
+        }
+      });
+    }, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [runs, selected, selectedId, loadRuns, loadCollectors]);
 
   const onTrigger = async () => {
     if (!triggerEnv) {
@@ -111,9 +215,11 @@ export function AuditRunsPage() {
     try {
       const res = await api.triggerAuditRun(triggerEnv, "manual");
       setTriggerMsg(
-        `Run ${res.audit_run_id} → ${labels.runStatus(res.status)}`,
+        `Run ${res.audit_run_id.slice(0, 8)}… → ${labels.runStatus(res.status)}`,
       );
-      loadRuns();
+      setSelectedId(res.audit_run_id);
+      await loadRuns();
+      await loadCollectors(res.audit_run_id);
     } catch (err: unknown) {
       setTriggerMsg(formatError(err, "Falha no disparo"));
     } finally {
@@ -123,16 +229,29 @@ export function AuditRunsPage() {
 
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        EXECUÇÕES
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
-        Execuções de auditoria
-      </h1>
-      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Execuções de auditoria, collectors e disparo manual via API. Configure{" "}
-        AUDITOR_TARGET_DSN_&lt;uuid&gt; no .env para coletar dados reais.
-      </p>
+      <PageHeader
+        eyebrow="EXECUÇÕES"
+        title="Execuções de auditoria"
+        description={
+          <>
+            Dispare coletas, acompanhe o progresso por collector e revise erros.
+            Configure{" "}
+            <code className="rounded bg-slate-800 px-1 text-slate-200">
+              {"AUDITOR_TARGET_DSN_<uuid>"}
+            </code>{" "}
+            no .env para dados reais. O filtro de ambiente da sidebar aplica-se
+            à lista.
+          </>
+        }
+        actions={
+          polling ? (
+            <span className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+              Atualizando…
+            </span>
+          ) : null
+        }
+      />
 
       <div className="mt-8 space-y-8">
         <Card title="Disparo manual">
@@ -141,11 +260,11 @@ export function AuditRunsPage() {
               <label className="mb-1 block text-xs text-slate-400">
                 Ambiente
                 <select
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   value={triggerEnv}
                   onChange={(e) => setTriggerEnv(e.target.value)}
                 >
-                  {(envs ?? []).map((e) => (
+                  {environments.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}
                     </option>
@@ -153,8 +272,11 @@ export function AuditRunsPage() {
                 </select>
               </label>
             </div>
-            <Button onClick={onTrigger} disabled={busy || !triggerEnv}>
-              {busy ? "Executando…" : "Executar agora"}
+            <Button
+              onClick={() => void onTrigger()}
+              disabled={busy || !triggerEnv}
+            >
+              {busy ? "Disparando…" : "Executar agora"}
             </Button>
           </div>
           {triggerMsg ? (
@@ -165,7 +287,7 @@ export function AuditRunsPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Input
             label="Filtrar status"
-            placeholder="success, failed…"
+            placeholder="running, success, failed…"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
@@ -178,7 +300,7 @@ export function AuditRunsPage() {
         </div>
 
         {error ? (
-          <ErrorBanner message={error} onRetry={() => loadRuns()} />
+          <ErrorBanner message={error} onRetry={() => void loadRuns()} />
         ) : null}
 
         {runs === null ? (
@@ -187,27 +309,38 @@ export function AuditRunsPage() {
           <EmptyState
             title="Nenhuma execução"
             description="Dispare uma auditoria manual ou aguarde o scheduler. Ambientes demo vêm do seed local."
+            action={
+              <Button
+                onClick={() => void onTrigger()}
+                disabled={busy || !triggerEnv}
+              >
+                Executar agora
+              </Button>
+            }
           />
         ) : (
-          <Table headers={["Profile", "Status", "Início", "Ambiente"]}>
+          <Table dense headers={["Profile", "Status", "Duração", "Ambiente"]}>
             {runs.map((r) => (
               <tr
                 key={r.id}
-                className={`border-t border-slate-800 cursor-pointer ${
+                className={`cursor-pointer border-t border-slate-800 hover:bg-slate-900/50 ${
                   selectedId === r.id ? "bg-slate-900/80" : ""
                 }`}
                 onClick={() => setSelectedId(r.id)}
               >
-                <td className="px-4 py-3 text-slate-100">{r.profile}</td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-1.5 text-slate-100">{r.profile}</td>
+                <td className="px-3 py-1.5">
                   <Badge tone={statusTone(r.status)}>
                     {labels.runStatus(r.status)}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-slate-300">
-                  {new Date(r.started_at).toLocaleString()}
+                <td className="px-3 py-1.5 text-xs text-slate-400">
+                  {durationLabel(r.started_at, r.finished_at)}
+                  <span className="mt-0.5 block text-[10px] text-slate-500">
+                    {new Date(r.started_at).toLocaleString()}
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-slate-200">{envLabel(r)}</td>
+                <td className="px-3 py-1.5 text-slate-200">{envLabel(r)}</td>
               </tr>
             ))}
           </Table>
@@ -215,12 +348,12 @@ export function AuditRunsPage() {
 
         {selected ? (
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-slate-100">Detalhe</h2>
+            <h2 className="text-lg font-semibold text-slate-100">Detalhe</h2>
             <Card
               title={`${selected.profile} · ${labels.runStatus(selected.status)}`}
-              subtitle={`${envLabel(selected)} · id ${selected.id}`}
+              subtitle={`${envLabel(selected)} · ${selected.id.slice(0, 8)}…`}
             >
-              <ul className="mt-3 space-y-1 text-sm text-slate-300">
+              <ul className="mt-1 space-y-1 text-sm text-slate-300">
                 <li>
                   Início: {new Date(selected.started_at).toLocaleString()}
                 </li>
@@ -229,6 +362,10 @@ export function AuditRunsPage() {
                   {selected.finished_at
                     ? new Date(selected.finished_at).toLocaleString()
                     : "—"}
+                </li>
+                <li>
+                  Duração:{" "}
+                  {durationLabel(selected.started_at, selected.finished_at)}
                 </li>
                 <li>Avisos: {selected.warnings.length}</li>
                 <li>Erros: {selected.errors.length}</li>
@@ -242,33 +379,68 @@ export function AuditRunsPage() {
               ) : null}
             </Card>
 
-            <h3 className="text-sm font-medium text-slate-300">Collectors</h3>
-            {collectors === null ? (
-              <Skeleton className="h-32 w-full" />
-            ) : collectors.length === 0 ? (
-              <EmptyState
-                title="Sem collectors"
-                description="Nenhum registro."
-              />
-            ) : (
-              <Table headers={["Nome", "Status", "Rows"]}>
-                {collectors.map((c) => (
-                  <tr key={c.id} className="border-t border-slate-800">
-                    <td className="px-4 py-3 text-slate-100">
-                      {c.collector_name}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={statusTone(c.status)}>
-                        {labels.runStatus(c.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-slate-300">
-                      {c.rows_collected}
-                    </td>
-                  </tr>
-                ))}
-              </Table>
-            )}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-medium text-slate-200">
+                  Collectors
+                </h3>
+                <Button
+                  variant="ghost"
+                  onClick={() => void loadCollectors(selected.id)}
+                >
+                  Atualizar
+                </Button>
+              </div>
+
+              {collectors === null ? (
+                <Skeleton className="h-24 w-full" />
+              ) : collectors.length === 0 ? (
+                <EmptyState
+                  title="Sem collectors ainda"
+                  description={
+                    selected.status === "running"
+                      ? "A run ainda está iniciando os collectors…"
+                      : "Nenhum registro de collector para esta execução."
+                  }
+                />
+              ) : (
+                <>
+                  <CollectorProgress
+                    collectors={collectors}
+                    runStatus={selected.status}
+                  />
+                  <Table dense headers={["Nome", "Status", "Rows", "Duração"]}>
+                    {collectors.map((c) => (
+                      <tr key={c.id} className="border-t border-slate-800">
+                        <td className="px-3 py-1.5 text-xs text-slate-100">
+                          {c.collector_name}
+                          {c.error ? (
+                            <span className="mt-0.5 block truncate text-[10px] text-rose-300">
+                              {c.error}
+                            </span>
+                          ) : c.warning ? (
+                            <span className="mt-0.5 block truncate text-[10px] text-amber-300">
+                              {c.warning}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <Badge tone={statusTone(c.status)}>
+                            {labels.runStatus(c.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-slate-300">
+                          {c.rows_collected}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-slate-400">
+                          {durationLabel(c.started_at, c.finished_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                </>
+              )}
+            </div>
           </section>
         ) : null}
       </div>
