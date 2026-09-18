@@ -31,7 +31,11 @@ function messageForStatus(status: number, serverMessage?: string): string {
   }
 
   if (status === 0) {
-    return "Não foi possível conectar à API. Verifique se o serviço está no ar (make up / podman compose).";
+    return (
+      "Não foi possível conectar à API. Confirme: (1) make up / podman compose " +
+      "com o serviço api saudável; (2) VITE_API_BASE_URL apontando para a API; " +
+      "(3) CORS liberado para a origem do frontend (localhost:5173)."
+    );
   }
   if (status === 400) {
     return "Requisição inválida. Revise os filtros ou os dados enviados.";
@@ -95,7 +99,7 @@ export function networkApiError(path: string, cause?: unknown): ApiError {
   return new ApiError(
     0,
     path,
-    `Não foi possível conectar à API${detail}. Verifique se o backend está em execução.`,
+    messageForStatus(0) + detail,
   );
 }
 
