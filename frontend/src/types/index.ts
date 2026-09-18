@@ -5,7 +5,9 @@ export type NavigationSection =
   | "Inventário"
   | "Mappings"
   | "Schema Drift"
-  | "Findings";
+  | "Findings"
+  | "Performance"
+  | "Security";
 
 export interface HealthResponse {
   status: string;

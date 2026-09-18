@@ -7,7 +7,9 @@ import {
   InventoryPage,
   MappingsPage,
   OverviewPage,
+  PerformancePage,
   SchemaDriftPage,
+  SecurityPage,
 } from "./pages";
 import type { NavigationSection } from "./types";
 
@@ -29,6 +31,10 @@ export function App() {
     content = <SchemaDriftPage />;
   } else if (section === "Findings") {
     content = <FindingsPage />;
+  } else if (section === "Performance") {
+    content = <PerformancePage />;
+  } else if (section === "Security") {
+    content = <SecurityPage />;
   }
 
   return (
