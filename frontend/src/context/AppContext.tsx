@@ -29,15 +29,25 @@ const SLUG_TO_SECTION = Object.fromEntries(
   Object.entries(SECTION_SLUGS).map(([k, v]) => [v, k]),
 ) as Record<string, NavigationSection>;
 
-function sectionFromHash(): NavigationSection {
+function parseHash(): { section: NavigationSection; env: string | null } {
   const raw = window.location.hash.replace(/^#\/?/, "");
-  const slug = raw.split("?")[0] || "overview";
-  return SLUG_TO_SECTION[slug] ?? "Visão geral";
+  const [pathPart, queryPart] = raw.split("?");
+  const slug = pathPart || "overview";
+  const section = SLUG_TO_SECTION[slug] ?? "Visão geral";
+  let env: string | null = null;
+  if (queryPart) {
+    const params = new URLSearchParams(queryPart);
+    env = params.get("env");
+  }
+  return { section, env };
 }
 
-function writeHash(section: NavigationSection) {
+function writeHash(section: NavigationSection, envId: string | null) {
   const slug = SECTION_SLUGS[section];
-  const next = `#/${slug}`;
+  let next = `#/${slug}`;
+  if (envId) {
+    next += `?env=${encodeURIComponent(envId)}`;
+  }
   if (window.location.hash !== next) {
     window.history.replaceState(null, "", next);
   }
@@ -57,23 +67,49 @@ export interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [section, setSectionState] = useState<NavigationSection>(() =>
-    typeof window !== "undefined" ? sectionFromHash() : "Visão geral",
+  const initial =
+    typeof window !== "undefined"
+      ? parseHash()
+      : { section: "Visão geral" as NavigationSection, env: null };
+
+  const [section, setSectionState] = useState<NavigationSection>(
+    initial.section,
   );
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [environmentsLoading, setEnvironmentsLoading] = useState(true);
-  const [environmentId, setEnvironmentId] = useState<string | null>(null);
+  const [environmentId, setEnvironmentIdState] = useState<string | null>(
+    initial.env,
+  );
 
-  const setSection = useCallback((next: NavigationSection) => {
-    setSectionState(next);
-    writeHash(next);
-  }, []);
+  const setSection = useCallback(
+    (next: NavigationSection) => {
+      setSectionState(next);
+      writeHash(next, environmentId);
+    },
+    [environmentId],
+  );
+
+  const setEnvironmentId = useCallback(
+    (id: string | null) => {
+      setEnvironmentIdState(id);
+      writeHash(section, id);
+    },
+    [section],
+  );
 
   useEffect(() => {
-    const onHash = () => setSectionState(sectionFromHash());
+    const onHash = () => {
+      const parsed = parseHash();
+      setSectionState(parsed.section);
+      if (parsed.env !== undefined) {
+        setEnvironmentIdState(parsed.env);
+      }
+    };
     window.addEventListener("hashchange", onHash);
-    writeHash(sectionFromHash());
+    writeHash(section, environmentId);
     return () => window.removeEventListener("hashchange", onHash);
+    // only on mount for hash listener
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshEnvironments = useCallback(async () => {
@@ -81,11 +117,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.environments();
       setEnvironments(res.items);
-      setEnvironmentId((prev) => {
+      setEnvironmentIdState((prev) => {
         if (prev && res.items.some((e) => e.id === prev)) {
           return prev;
         }
-        return res.items[0]?.id ?? null;
+        // Keep hash env if still valid; otherwise first env
+        return prev && res.items.some((e) => e.id === prev)
+          ? prev
+          : (res.items[0]?.id ?? null);
       });
     } catch {
       setEnvironments([]);
@@ -97,6 +136,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshEnvironments();
   }, [refreshEnvironments]);
+
+  // Keep hash in sync when env list settles
+  useEffect(() => {
+    writeHash(section, environmentId);
+  }, [section, environmentId]);
 
   const selectedEnvironment = useMemo(
     () => environments.find((e) => e.id === environmentId) ?? null,
@@ -120,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       environments,
       environmentsLoading,
       environmentId,
+      setEnvironmentId,
       selectedEnvironment,
       refreshEnvironments,
     ],

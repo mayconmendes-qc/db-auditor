@@ -45,6 +45,7 @@ export function Shell({
 }: ShellProps) {
   const { environments, environmentId, setEnvironmentId } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
+  const [dsnDown, setDsnDown] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +61,20 @@ export function Shell({
           setApiOk(false);
         }
       });
+    api
+      .connectionStatus()
+      .then((res) => {
+        if (!cancelled) {
+          setDsnDown(
+            res.items.filter((c) => c.dsn_configured && !c.reachable).length,
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDsnDown(0);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -67,7 +82,8 @@ export function Shell({
 
   let healthTitle = "…";
   if (apiOk === true) {
-    healthTitle = "API ok";
+    healthTitle =
+      dsnDown > 0 ? `API ok · ${dsnDown} DSN indisponível(is)` : "API ok";
   } else if (apiOk === false) {
     healthTitle = "API indisponível";
   }
@@ -84,17 +100,25 @@ export function Shell({
               apiOk === null
                 ? "bg-slate-600"
                 : apiOk
-                  ? "bg-emerald-400"
+                  ? dsnDown > 0
+                    ? "bg-amber-400"
+                    : "bg-emerald-400"
                   : "bg-rose-400"
             }`}
             title={healthTitle}
+            aria-label={healthTitle}
           />
         </div>
+        {apiOk === true && dsnDown > 0 ? (
+          <p className="mt-1 text-[10px] text-amber-300/90">
+            {dsnDown} DSN down
+          </p>
+        ) : null}
 
-        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Ambiente
           <select
-            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
+            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
             value={environmentId ?? ""}
             onChange={(e) => setEnvironmentId(e.target.value || null)}
             aria-label="Ambiente global"
@@ -122,10 +146,10 @@ export function Shell({
                       key={section}
                       type="button"
                       onClick={() => onNavigate?.(section)}
-                      className={`rounded-md px-3 py-2 text-left text-sm transition ${
+                      className={`rounded-md px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 ${
                         isActive
                           ? "bg-slate-800 text-white"
-                          : "text-slate-400 hover:bg-slate-800/70 hover:text-white"
+                          : "text-slate-300 hover:bg-slate-800/70 hover:text-white"
                       }`}
                     >
                       {section}
