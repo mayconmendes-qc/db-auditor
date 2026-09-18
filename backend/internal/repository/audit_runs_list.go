@@ -11,6 +11,7 @@ import (
 type AuditRunRow struct {
 	ID               string     `json:"id"`
 	EnvironmentID    string     `json:"environment_id"`
+	EnvironmentName  string     `json:"environment_name"`
 	Profile          string     `json:"profile"`
 	Status           string     `json:"status"`
 	ServiceVersion   string     `json:"service_version"`
@@ -34,19 +35,20 @@ type CollectorRunRow struct {
 	Error            *string    `json:"error,omitempty"`
 }
 
-// ListAuditRuns returns recent runs, optionally filtered by environment/profile/status.
+// ListAuditRuns returns recent runs with environment name, optionally filtered.
 func (s *Store) ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]AuditRunRow, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `
-SELECT id::text, environment_id::text, profile, status, service_version, collector_version,
-  started_at, finished_at, warnings, errors
-FROM audit_run
-WHERE ($1 = '' OR environment_id = $1::uuid)
-  AND ($2 = '' OR profile = $2)
-  AND ($3 = '' OR status = $3)
-ORDER BY started_at DESC
+SELECT ar.id::text, ar.environment_id::text, COALESCE(e.name, ''), ar.profile, ar.status,
+  ar.service_version, ar.collector_version, ar.started_at, ar.finished_at, ar.warnings, ar.errors
+FROM audit_run ar
+LEFT JOIN audit_environment e ON e.id = ar.environment_id
+WHERE ($1 = '' OR ar.environment_id = $1::uuid)
+  AND ($2 = '' OR ar.profile = $2)
+  AND ($3 = '' OR ar.status = $3)
+ORDER BY ar.started_at DESC
 LIMIT $4
 `, environmentID, profile, status, limit)
 	if err != nil {
@@ -59,8 +61,8 @@ LIMIT $4
 		var finished pgtype.Timestamptz
 		var warnings, errorsJSON []byte
 		if err := rows.Scan(
-			&r.ID, &r.EnvironmentID, &r.Profile, &r.Status, &r.ServiceVersion, &r.CollectorVersion,
-			&r.StartedAt, &finished, &warnings, &errorsJSON,
+			&r.ID, &r.EnvironmentID, &r.EnvironmentName, &r.Profile, &r.Status,
+			&r.ServiceVersion, &r.CollectorVersion, &r.StartedAt, &finished, &warnings, &errorsJSON,
 		); err != nil {
 			return nil, err
 		}
@@ -82,27 +84,19 @@ LIMIT $4
 }
 
 func (s *Store) GetAuditRun(ctx context.Context, id string) (*AuditRunRow, error) {
-	items, err := s.ListAuditRuns(ctx, "", "", "", 200)
-	if err != nil {
-		return nil, err
-	}
-	for i := range items {
-		if items[i].ID == id {
-			return &items[i], nil
-		}
-	}
-	// direct query fallback
 	row := s.pool.QueryRow(ctx, `
-SELECT id::text, environment_id::text, profile, status, service_version, collector_version,
-  started_at, finished_at, warnings, errors
-FROM audit_run WHERE id = $1::uuid
+SELECT ar.id::text, ar.environment_id::text, COALESCE(e.name, ''), ar.profile, ar.status,
+  ar.service_version, ar.collector_version, ar.started_at, ar.finished_at, ar.warnings, ar.errors
+FROM audit_run ar
+LEFT JOIN audit_environment e ON e.id = ar.environment_id
+WHERE ar.id = $1::uuid
 `, id)
 	var r AuditRunRow
 	var finished pgtype.Timestamptz
 	var warnings, errorsJSON []byte
 	if err := row.Scan(
-		&r.ID, &r.EnvironmentID, &r.Profile, &r.Status, &r.ServiceVersion, &r.CollectorVersion,
-		&r.StartedAt, &finished, &warnings, &errorsJSON,
+		&r.ID, &r.EnvironmentID, &r.EnvironmentName, &r.Profile, &r.Status,
+		&r.ServiceVersion, &r.CollectorVersion, &r.StartedAt, &finished, &warnings, &errorsJSON,
 	); err != nil {
 		return nil, err
 	}

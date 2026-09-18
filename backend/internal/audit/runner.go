@@ -100,6 +100,8 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 		return RunResult{}, fmt.Errorf("start audit run: %w", err)
 	}
 
+	ctx = WithRunMeta(ctx, RunMeta{EnvironmentID: environmentID, AuditRunID: auditRunID})
+
 	outcomes := make([]CollectorOutcome, len(collectors))
 	var (
 		wg        sync.WaitGroup
@@ -191,7 +193,7 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 		case <-ctx.Done():
 			timer.Stop()
 			runErr = ctx.Err()
-			attempt = attempts // force exit
+			attempt = attempts
 		case <-timer.C:
 		}
 	}
