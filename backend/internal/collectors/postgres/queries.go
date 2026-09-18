@@ -186,7 +186,7 @@ SELECT
   pg_catalog.pg_get_constraintdef(c.oid, true) AS constraint_definition,
   c.convalidated AS is_validated,
   c.condeferrable AS is_deferrable,
-  n.condeferred AS is_deferred
+  c.condeferred AS is_deferred
 FROM pg_constraint c
 JOIN pg_class rel ON rel.oid = c.conrelid
 JOIN pg_namespace n ON n.oid = rel.relnamespace
