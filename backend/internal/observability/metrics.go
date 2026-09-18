@@ -3,33 +3,54 @@ package observability
 import (
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Metrics holds process-level counters for Prometheus text exposition.
+// Metrics is a minimal Prometheus-compatible registry (stdlib only).
 type Metrics struct {
-	startedAt       time.Time
-	httpRequests    atomic.Int64
-	httpErrors      atomic.Int64
-	auditRunsTotal  atomic.Int64
-	auditRunsFailed atomic.Int64
+	startedAt time.Time
+
+	httpRequests   sync.Map // key method|path|code -> *atomic.Uint64
+	httpDurationNs sync.Map // key method|path -> *atomic.Uint64 (sum)
+	httpDurationN  sync.Map // key method|path -> *atomic.Uint64 (count)
+
+	auditRunsTotal  atomic.Uint64
+	auditRunsFailed atomic.Uint64
 }
+
+// DefaultMetrics is the process-wide registry.
+var DefaultMetrics = NewMetrics()
 
 // NewMetrics creates a metrics registry.
 func NewMetrics() *Metrics {
 	return &Metrics{startedAt: time.Now().UTC()}
 }
 
-// IncHTTP records an HTTP request; status >= 500 counts as error.
-func (m *Metrics) IncHTTP(status int) {
-	m.httpRequests.Add(1)
-	if status >= 500 {
-		m.httpErrors.Add(1)
-	}
+func (m *Metrics) incMap(store *sync.Map, key string) {
+	v, _ := store.LoadOrStore(key, &atomic.Uint64{})
+	v.(*atomic.Uint64).Add(1)
 }
 
-// IncAuditRun records a completed audit run outcome.
+func (m *Metrics) addMap(store *sync.Map, key string, n uint64) {
+	v, _ := store.LoadOrStore(key, &atomic.Uint64{})
+	v.(*atomic.Uint64).Add(n)
+}
+
+// ObserveHTTP records one completed HTTP request.
+func (m *Metrics) ObserveHTTP(method, path string, status int, d time.Duration) {
+	path = normalizePath(path)
+	codeKey := fmt.Sprintf("%s|%s|%d", method, path, status)
+	m.incMap(&m.httpRequests, codeKey)
+	durKey := fmt.Sprintf("%s|%s", method, path)
+	m.addMap(&m.httpDurationNs, durKey, uint64(d.Nanoseconds()))
+	m.incMap(&m.httpDurationN, durKey)
+}
+
+// IncAuditRun increments audit run counters.
 func (m *Metrics) IncAuditRun(failed bool) {
 	m.auditRunsTotal.Add(1)
 	if failed {
@@ -37,28 +58,95 @@ func (m *Metrics) IncAuditRun(failed bool) {
 	}
 }
 
-// Handler serves Prometheus text exposition at GET /metrics.
+func normalizePath(path string) string {
+	if path == "" {
+		return "/"
+	}
+	// Keep cardinality low: collapse UUIDs and numeric ids in path segments.
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		if looksLikeID(p) {
+			parts[i] = ":id"
+		}
+	}
+	return strings.Join(parts, "/")
+}
+
+func looksLikeID(s string) bool {
+	if len(s) == 36 && strings.Count(s, "-") == 4 {
+		return true
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// Handler exposes Prometheus text exposition format.
 func (m *Metrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		up := time.Since(m.startedAt).Seconds()
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_up Process up flag.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_up gauge\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_up 1\n")
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_uptime_seconds Seconds since process start.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_uptime_seconds gauge\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_uptime_seconds %.0f\n", up)
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_http_requests_total Total HTTP requests.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_http_requests_total counter\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_http_requests_total %d\n", m.httpRequests.Load())
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_http_errors_total HTTP responses with status >= 500.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_http_errors_total counter\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_http_errors_total %d\n", m.httpErrors.Load())
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_audit_runs_total Audit runs completed.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_audit_runs_total counter\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_audit_runs_total %d\n", m.auditRunsTotal.Load())
-		_, _ = fmt.Fprintf(w, "# HELP timescale_auditor_audit_runs_failed_total Audit runs that failed.\n")
-		_, _ = fmt.Fprintf(w, "# TYPE timescale_auditor_audit_runs_failed_total counter\n")
-		_, _ = fmt.Fprintf(w, "timescale_auditor_audit_runs_failed_total %d\n", m.auditRunsFailed.Load())
+		var b strings.Builder
+		b.WriteString("# HELP auditor_up Always 1 while process is alive.\n")
+		b.WriteString("# TYPE auditor_up gauge\n")
+		b.WriteString("auditor_up 1\n")
+		b.WriteString("# HELP auditor_process_start_time_seconds Process start time.\n")
+		b.WriteString("# TYPE auditor_process_start_time_seconds gauge\n")
+		fmt.Fprintf(&b, "auditor_process_start_time_seconds %d\n", m.startedAt.Unix())
+
+		b.WriteString("# HELP auditor_http_requests_total HTTP requests by method, path and status.\n")
+		b.WriteString("# TYPE auditor_http_requests_total counter\n")
+		keys := make([]string, 0)
+		m.httpRequests.Range(func(k, _ any) bool {
+			keys = append(keys, k.(string))
+			return true
+		})
+		sort.Strings(keys)
+		for _, k := range keys {
+			v, _ := m.httpRequests.Load(k)
+			parts := strings.SplitN(k, "|", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			fmt.Fprintf(&b, "auditor_http_requests_total{method=%q,path=%q,code=%q} %d\n",
+				parts[0], parts[1], parts[2], v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_http_request_duration_seconds_sum Sum of request durations.\n")
+		b.WriteString("# TYPE auditor_http_request_duration_seconds_sum counter\n")
+		b.WriteString("# HELP auditor_http_request_duration_seconds_count Count of observed durations.\n")
+		b.WriteString("# TYPE auditor_http_request_duration_seconds_count counter\n")
+		dkeys := make([]string, 0)
+		m.httpDurationNs.Range(func(k, _ any) bool {
+			dkeys = append(dkeys, k.(string))
+			return true
+		})
+		sort.Strings(dkeys)
+		for _, k := range dkeys {
+			sumV, _ := m.httpDurationNs.Load(k)
+			cntV, _ := m.httpDurationN.Load(k)
+			parts := strings.SplitN(k, "|", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			sum := float64(sumV.(*atomic.Uint64).Load()) / 1e9
+			cnt := cntV.(*atomic.Uint64).Load()
+			fmt.Fprintf(&b, "auditor_http_request_duration_seconds_sum{method=%q,path=%q} %g\n", parts[0], parts[1], sum)
+			fmt.Fprintf(&b, "auditor_http_request_duration_seconds_count{method=%q,path=%q} %d\n", parts[0], parts[1], cnt)
+		}
+
+		b.WriteString("# HELP auditor_audit_runs_total Audit runs started.\n")
+		b.WriteString("# TYPE auditor_audit_runs_total counter\n")
+		fmt.Fprintf(&b, "auditor_audit_runs_total %d\n", m.auditRunsTotal.Load())
+		b.WriteString("# HELP auditor_audit_runs_failed_total Audit runs that finished FAILED.\n")
+		b.WriteString("# TYPE auditor_audit_runs_failed_total counter\n")
+		fmt.Fprintf(&b, "auditor_audit_runs_failed_total %d\n", m.auditRunsFailed.Load())
+
+		_, _ = w.Write([]byte(b.String()))
 	}
 }
