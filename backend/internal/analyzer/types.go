@@ -66,6 +66,14 @@ type SnapshotFacts struct {
 	Policies      []PolicyFact
 	Jobs          []JobFact
 	Activity      []ActivityFact
+	// Sprint 9 — performance & security facts (demo or collector-fed).
+	Vacuum      []VacuumFact
+	Locks       []LockFact
+	Connections []ConnectionFact
+	QueryStats  []QueryStatFact
+	Roles       []RoleFact
+	Grants      []GrantFact
+	Functions   []FunctionSecurityFact
 }
 
 // TableFact is a minimal table size fact for storage analysis.
@@ -159,6 +167,81 @@ type ActivityFact struct {
 	LastDataChange *time.Time `json:"last_data_change,omitempty"`
 	MaxTimeValue   *time.Time `json:"max_time_value,omitempty"`
 	DaysSinceDML   int        `json:"days_since_dml"`
+}
+
+// VacuumFact carries live/dead tuple stats for vacuum analysis.
+type VacuumFact struct {
+	Database   string `json:"database"`
+	Schema     string `json:"schema"`
+	Name       string `json:"name"`
+	NLiveTup   int64  `json:"n_live_tup"`
+	NDeadTup   int64  `json:"n_dead_tup"`
+	LastVacuum string `json:"last_vacuum,omitempty"`
+	LastAutovacuum string `json:"last_autovacuum,omitempty"`
+}
+
+// LockFact is a waiting lock observation (no sensitive query text).
+type LockFact struct {
+	Database       string `json:"database"`
+	Relation       string `json:"relation,omitempty"`
+	Mode           string `json:"mode"`
+	Granted        bool   `json:"granted"`
+	WaitAgeSeconds int64  `json:"wait_age_seconds"`
+	PID            int    `json:"pid,omitempty"`
+}
+
+// ConnectionFact summarizes connection pressure per database/role.
+type ConnectionFact struct {
+	Database       string `json:"database"`
+	RoleName       string `json:"role_name,omitempty"`
+	State          string `json:"state,omitempty"`
+	Count          int    `json:"count"`
+	MaxConnections int    `json:"max_connections,omitempty"`
+}
+
+// QueryStatFact holds sanitized query fingerprints only — never raw SQL with literals.
+type QueryStatFact struct {
+	Database          string  `json:"database"`
+	QueryFingerprint  string  `json:"query_fingerprint"` // normalized, literals stripped
+	Calls             int64   `json:"calls"`
+	TotalExecTimeMs   float64 `json:"total_exec_time_ms"`
+	MeanExecTimeMs    float64 `json:"mean_exec_time_ms"`
+	Rows              int64   `json:"rows"`
+	PgStatStatements  bool    `json:"pg_stat_statements"`
+}
+
+// RoleFact describes a database role for privilege review.
+type RoleFact struct {
+	Database    string `json:"database"`
+	RoleName    string `json:"role_name"`
+	Superuser   bool   `json:"superuser"`
+	CreateDB    bool   `json:"createrole,omitempty"`
+	CreateRole  bool   `json:"create_role,omitempty"`
+	Login       bool   `json:"login"`
+	Replication bool   `json:"replication"`
+	BypassRLS   bool   `json:"bypass_rls"`
+}
+
+// GrantFact is an ACL entry for review (no automatic REVOKE).
+type GrantFact struct {
+	Database   string `json:"database"`
+	Schema     string `json:"schema,omitempty"`
+	ObjectType string `json:"object_type"` // table, schema, database, function
+	ObjectName string `json:"object_name"`
+	Grantee    string `json:"grantee"`
+	Privilege  string `json:"privilege"` // SELECT, INSERT, UPDATE, DELETE, ALL, ...
+	Grantable  bool   `json:"grantable"`
+}
+
+// FunctionSecurityFact flags SECURITY DEFINER routines for manual review.
+type FunctionSecurityFact struct {
+	Database          string `json:"database"`
+	Schema            string `json:"schema"`
+	FunctionName      string `json:"function_name"`
+	IdentityArgs      string `json:"identity_arguments,omitempty"`
+	IsSecurityDefiner bool   `json:"is_security_definer"`
+	Owner             string `json:"owner,omitempty"`
+	Language          string `json:"language,omitempty"`
 }
 
 // Analyzer produces findings from snapshot facts.
