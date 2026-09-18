@@ -14,7 +14,9 @@ import type {
 } from "../types";
 
 function formatBytes(n: number): string {
-  if (n <= 0) return "0 B";
+  if (n <= 0) {
+    return "0 B";
+  }
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   let v = n;
   let i = 0;
@@ -66,7 +68,9 @@ export function DashboardPage() {
           setError(formatError(e, "Falha ao carregar dashboard"));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     })();
     return () => {

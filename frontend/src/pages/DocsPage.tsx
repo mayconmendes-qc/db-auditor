@@ -88,7 +88,9 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
                       Ir para {target}
                     </Button>
                   ) : (
-                    <span className="text-xs text-slate-600">Configuração local</span>
+                    <span className="text-xs text-slate-600">
+                      Configuração local
+                    </span>
                   )}
                 </div>
               </Card>

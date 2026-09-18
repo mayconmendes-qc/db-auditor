@@ -27,7 +27,9 @@ export function Card({
       onKeyDown={
         onClick
           ? (e) => {
-              if (e.key === "Enter" || e.key === " ") onClick();
+              if (e.key === "Enter" || e.key === " ") {
+                onClick();
+              }
             }
           : undefined
       }
@@ -40,7 +42,9 @@ export function Card({
       {title ? (
         <strong className="text-base text-slate-50">{title}</strong>
       ) : null}
-      {children ? <div className="mt-auto flex flex-1 flex-col">{children}</div> : null}
+      {children ? (
+        <div className="mt-auto flex flex-1 flex-col">{children}</div>
+      ) : null}
     </article>
   );
 }
