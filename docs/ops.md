@@ -1,0 +1,58 @@
+# Operação em VPS — Timescale Auditor
+
+## Observabilidade (Sprint 10)
+
+| Endpoint | Uso |
+|----------|-----|
+| `GET /health` | Liveness |
+| `GET /ready` | Readiness (snapshot store) |
+| `GET /metrics` | Prometheus text exposition |
+| `GET /api/v1/status` | Visão operacional (UI Status) |
+
+Logs da API são **JSON estruturados** por padrão (`AUDITOR_LOG_FORMAT=json`).  
+Use `AUDITOR_LOG_FORMAT=text` e `AUDITOR_LOG_LEVEL=debug` em desenvolvimento.
+
+Cada resposta HTTP inclui `X-Request-ID` (ou propaga o valor enviado pelo cliente) para correlacionar logs e traces manuais.
+
+### Métricas principais
+
+- `auditor_up`
+- `auditor_http_requests_total{method,path,code}`
+- `auditor_http_request_duration_seconds_{sum,count}`
+- `auditor_audit_runs_total` / `auditor_audit_runs_failed_total`
+
+Paths com UUIDs são normalizados para `:id` para manter cardinalidade baixa.
+
+OpenTelemetry e Sentry são opcionais (P1): configure DSN/endpoints via env quando forem adotados — o núcleo atual não exige dependências externas de APM.
+
+## Deploy com Podman Compose
+
+1. Crie `.env.prod` (fora do git) com `POSTGRES_PASSWORD`, `AUDITOR_DOMAIN`, etc.
+2. Build e subida:
+
+```bash
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
+```
+
+3. Caddy termina TLS (quando o domínio aponta para a VPS) e encaminha:
+   - `/api/*`, `/health`, `/ready`, `/metrics` → API
+   - resto → frontend estático
+
+### Volumes e secrets
+
+- Volume `snapshot-store`: dados do PostgreSQL interno (backup/restore = dump deste volume ou `pg_dump`).
+- Senhas apenas em env files locais ou secret managers; nunca no repositório.
+- Rede `auditor` é privada; Postgres **não** publica porta no compose de produção.
+
+### Health e restart
+
+- `restart: unless-stopped` em todos os serviços long-running.
+- Healthchecks de Postgres e API controlam dependências de startup.
+
+## Checklist rápido de homologação
+
+1. `GET /health` → `ok`
+2. `GET /ready` → `ready`
+3. `GET /metrics` contém `auditor_up 1`
+4. UI **Status** lista API, store e runs
+5. Logs JSON incluem `request_id` e `duration_ms`

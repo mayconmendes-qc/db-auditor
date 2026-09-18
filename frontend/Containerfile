@@ -1,13 +1,14 @@
-# Optional production-style image for the SPA. Day-to-day dev uses compose profile "frontend".
+# Multi-stage production build for the React UI (static assets + Caddy serve optional).
 FROM oven/bun:1.2-alpine AS build
 WORKDIR /app
-COPY package.json bun.lock* ./
+COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile || bun install
 COPY . .
+ARG VITE_API_BASE_URL=/
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN bun run build
 
-FROM oven/bun:1.2-alpine
-WORKDIR /app
-COPY --from=build /app/dist ./dist
-EXPOSE 4173
-CMD ["bun", "x", "vite", "preview", "--host", "0.0.0.0", "--port", "4173"]
+FROM caddy:2.9-alpine
+COPY --from=build /app/dist /srv
+COPY Caddyfile.static /etc/caddy/Caddyfile
+EXPOSE 80

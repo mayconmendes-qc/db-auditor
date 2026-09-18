@@ -7,10 +7,33 @@ export type NavigationSection =
   | "Schema Drift"
   | "Findings"
   | "Performance"
-  | "Security";
+  | "Security"
+  | "Status";
 
 export interface HealthResponse {
   status: string;
+}
+
+export interface StatusRun {
+  id: string;
+  environment_id: string;
+  profile: string;
+  status: string;
+  started_at: string;
+  finished_at?: string | null;
+}
+
+export interface StatusResponse {
+  service: string;
+  version: string;
+  time_utc: string;
+  api_status: string;
+  database_status: string;
+  environments_count: number;
+  recent_runs: StatusRun[];
+  open_findings: number;
+  failed_runs_recent: number;
+  notes?: string[];
 }
 
 export interface Environment {

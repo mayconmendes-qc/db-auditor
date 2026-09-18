@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
@@ -95,12 +96,50 @@ func TestHealth(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
+	if w.Header().Get("X-Request-ID") == "" {
+		t.Fatal("expected X-Request-ID from middleware")
+	}
 	var body map[string]string
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
 	if body["status"] != "ok" {
 		t.Fatalf("body = %v", body)
+	}
+}
+
+func TestMetrics(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "auditor_up 1") {
+		t.Fatalf("metrics body: %s", w.Body.String())
+	}
+}
+
+func TestStatus(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["api_status"] != "ok" {
+		t.Fatalf("body = %v", body)
+	}
+	if body["database_status"] != "ready" {
+		t.Fatalf("database_status = %v", body["database_status"])
 	}
 }
 

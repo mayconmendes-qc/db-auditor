@@ -13,11 +13,14 @@ import (
 	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/database"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/observability"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
 	"github.com/mayconmendes-qc/timescale-auditor/internal/scheduler"
 )
 
 func main() {
+	observability.SetupLogging()
+
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
@@ -38,7 +41,7 @@ func main() {
 	runStore := &repository.AuditRunStore{Store: store}
 	registry := audit.NewDefaultRegistry()
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:   "0.3.0",
+		ServiceVersion:   "0.10.0",
 		CollectorVersion: "1.0.0",
 		MaxWorkers:       4,
 	})

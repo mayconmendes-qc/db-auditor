@@ -13,6 +13,7 @@ describe("navigationSections", () => {
       "Findings",
       "Performance",
       "Security",
+      "Status",
     ]);
   });
 });

@@ -1,0 +1,88 @@
+# Production-oriented stack for VPS (Podman/Docker Compose).
+# Secrets via env file — never commit real credentials.
+#
+#   podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-timescale_auditor}
+      POSTGRES_USER: ${POSTGRES_USER:-auditor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - snapshot-store:/var/lib/postgresql
+      - ../backend/migrations:/docker-entrypoint-initdb.d:ro
+    networks: [auditor]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Containerfile
+    restart: unless-stopped
+    environment:
+      AUDITOR_HTTP_ADDRESS: :8080
+      AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-timescale_auditor}?sslmode=disable
+      AUDITOR_STATEMENT_TIMEOUT: ${AUDITOR_STATEMENT_TIMEOUT:-15s}
+      AUDITOR_LOCK_TIMEOUT: ${AUDITOR_LOCK_TIMEOUT:-5s}
+      AUDITOR_APPLICATION_NAME: timescale-auditor
+      AUDITOR_LOG_FORMAT: ${AUDITOR_LOG_FORMAT:-json}
+      AUDITOR_LOG_LEVEL: ${AUDITOR_LOG_LEVEL:-info}
+      AUDITOR_DATABASE_DENYLIST: ${AUDITOR_DATABASE_DENYLIST:-template0,template1,postgres}
+      AUDITOR_SCHEMA_DENYLIST: ${AUDITOR_SCHEMA_DENYLIST:-pg_catalog,information_schema}
+    networks: [auditor]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/busybox", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Containerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/}
+    restart: unless-stopped
+    networks: [auditor]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      AUDITOR_DOMAIN: ${AUDITOR_DOMAIN:-localhost}
+      CADDY_EMAIL: ${CADDY_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [auditor]
+    depends_on:
+      - api
+      - frontend
+
+networks:
+  auditor:
+    driver: bridge
+
+volumes:
+  snapshot-store:
+  caddy-data:
+  caddy-config:
