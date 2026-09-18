@@ -103,7 +103,9 @@ export function AuditRunsPage() {
     setTriggerMsg(null);
     try {
       const res = await api.triggerAuditRun(triggerEnv, "manual");
-      setTriggerMsg(`Run ${res.audit_run_id} → ${labels.runStatus(res.status)}`);
+      setTriggerMsg(
+        `Run ${res.audit_run_id} → ${labels.runStatus(res.status)}`,
+      );
       loadRuns();
     } catch (err: unknown) {
       setTriggerMsg(formatError(err, "Falha no disparo"));
@@ -231,7 +233,10 @@ export function AuditRunsPage() {
             {collectors === null ? (
               <Skeleton className="h-32 w-full" />
             ) : collectors.length === 0 ? (
-              <EmptyState title="Sem collectors" description="Nenhum registro." />
+              <EmptyState
+                title="Sem collectors"
+                description="Nenhum registro."
+              />
             ) : (
               <Table headers={["Nome", "Status", "Rows"]}>
                 {collectors.map((c) => (
