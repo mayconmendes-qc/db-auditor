@@ -22,7 +22,16 @@ type ContinuousAggregateFacts struct {
 }
 
 // CollectContinuousAggregates lists CAGGs and applies schema scope on view schema.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectContinuousAggregates(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]ContinuousAggregateFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "cagg collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []ContinuousAggregateFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, continuousAggregatesSQL)
 	if err != nil {
 		return nil, fmt.Errorf("cagg collector: %w", err)

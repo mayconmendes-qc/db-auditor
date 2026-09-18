@@ -33,7 +33,16 @@ type JobFacts struct {
 }
 
 // CollectJobs lists background jobs. Schema scope filters jobs tied to a hypertable schema when present.
+// Returns an empty slice when timescaledb is not installed in this database.
 func CollectJobs(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]JobFacts, error) {
+	ok, err := ensureExtension(ctx, conn, "jobs collector")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []JobFacts{}, nil
+	}
+
 	rows, err := conn.Query(ctx, jobsSQL)
 	if err != nil {
 		return nil, fmt.Errorf("jobs collector: %w", err)
