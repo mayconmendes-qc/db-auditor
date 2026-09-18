@@ -1,4 +1,4 @@
-import { Shell } from "./components/layout/Shell";
+import { Shell, navigationSections } from "./components/layout/Shell";
 import { AppProvider, useApp } from "./context/AppContext";
 import {
   AuditRunsPage,
@@ -14,6 +14,8 @@ import {
   SecurityPage,
   StatusPage,
 } from "./pages";
+
+export { navigationSections };
 
 function AppRoutes() {
   const { section, setSection } = useApp();
