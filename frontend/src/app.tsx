@@ -3,6 +3,7 @@ import { navigationSections, Shell } from "./components/layout/Shell";
 import {
   AuditRunsPage,
   DashboardPage,
+  DocsPage,
   EnvironmentsPage,
   FindingsPage,
   InventoryPage,
@@ -20,24 +21,26 @@ export { navigationSections };
 export function App() {
   const [section, setSection] = useState<NavigationSection>("Visão geral");
 
-  let content = <OverviewPage />;
+  let content = <OverviewPage onNavigate={setSection} />;
   if (section === "Dashboard") {
     content = <DashboardPage />;
+  } else if (section === "Documentação") {
+    content = <DocsPage onNavigate={setSection} />;
   } else if (section === "Ambientes") {
-    content = <EnvironmentsPage />;
+    content = <EnvironmentsPage onNavigate={setSection} />;
   } else if (section === "Inventário") {
     content = <InventoryPage />;
-  } else if (section === "Audit runs") {
+  } else if (section === "Execuções") {
     content = <AuditRunsPage />;
-  } else if (section === "Mappings") {
+  } else if (section === "Mapeamentos") {
     content = <MappingsPage />;
-  } else if (section === "Schema Drift") {
+  } else if (section === "Desvio de schema") {
     content = <SchemaDriftPage />;
   } else if (section === "Findings") {
     content = <FindingsPage />;
   } else if (section === "Performance") {
     content = <PerformancePage />;
-  } else if (section === "Security") {
+  } else if (section === "Segurança") {
     content = <SecurityPage />;
   } else if (section === "Status") {
     content = <StatusPage />;

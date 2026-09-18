@@ -1,14 +1,15 @@
 export type NavigationSection =
   | "Visão geral"
   | "Dashboard"
+  | "Documentação"
   | "Ambientes"
-  | "Audit runs"
+  | "Execuções"
   | "Inventário"
-  | "Mappings"
-  | "Schema Drift"
+  | "Mapeamentos"
+  | "Desvio de schema"
   | "Findings"
   | "Performance"
-  | "Security"
+  | "Segurança"
   | "Status";
 
 export interface HealthResponse {

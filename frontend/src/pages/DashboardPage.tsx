@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Card } from "../components/ui";
+import { Card, ErrorBanner } from "../components/ui";
+import { formatError } from "../lib/errors";
+import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type {
   DashboardKPIs,
@@ -31,6 +33,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [envFilter, setEnvFilter] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,9 +56,7 @@ export function DashboardPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(
-            e instanceof Error ? e.message : "Falha ao carregar dashboard",
-          );
+          setError(formatError(e, "Falha ao carregar dashboard"));
         }
       } finally {
         if (!cancelled) {
@@ -66,7 +67,7 @@ export function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [envFilter]);
+  }, [envFilter, reloadKey]);
 
   return (
     <>
@@ -76,7 +77,7 @@ export function DashboardPage() {
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Visão executiva
       </h1>
-      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">
+      <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
         KPIs, storage, findings e saúde de jobs — apenas via API analítica.
       </p>
 
@@ -97,11 +98,11 @@ export function DashboardPage() {
         <p className="mt-8 text-sm text-slate-400">Carregando KPIs…</p>
       )}
       {error && (
-        <div
-          className="mt-8 rounded-md border border-rose-800/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
-          role="alert"
-        >
-          {error}
+        <div className="mt-8">
+          <ErrorBanner
+            message={error}
+            onRetry={() => setReloadKey((k) => k + 1)}
+          />
         </div>
       )}
 
@@ -192,7 +193,7 @@ export function DashboardPage() {
                     key={b.key}
                     className="flex justify-between text-slate-300"
                   >
-                    <span>{b.key || "(vazio)"}</span>
+                    <span>{labels.severity(b.key)}</span>
                     <span>{b.count}</span>
                   </li>
                 ))}
@@ -206,7 +207,7 @@ export function DashboardPage() {
                     key={b.key}
                     className="flex justify-between text-slate-300"
                   >
-                    <span>{b.key || "(vazio)"}</span>
+                    <span>{labels.findingStatus(b.key)}</span>
                     <span>{b.count}</span>
                   </li>
                 ))}
