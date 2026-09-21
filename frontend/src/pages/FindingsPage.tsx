@@ -11,6 +11,7 @@ import {
   Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
+import { downloadCSV, downloadJSON } from "../lib/export";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
@@ -180,7 +181,9 @@ export function FindingsPage() {
   const [items, setItems] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [typeFilter, setTypeFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
@@ -196,6 +199,7 @@ export function FindingsPage() {
         environment_id: environmentId || undefined,
       });
       setItems(res.items);
+      setSelectedIds(new Set());
     } catch (err: unknown) {
       setError(formatError(err, "Falha ao listar findings"));
       setItems([]);
@@ -225,10 +229,112 @@ export function FindingsPage() {
     try {
       const updated = await api.updateFindingStatus(id, status);
       setItems((prev) => prev.map((f) => (f.id === id ? updated : f)));
-      setSelected(updated);
+      setSelected((cur) => (cur?.id === id ? updated : cur));
     } catch (err: unknown) {
       setError(formatError(err, "Falha na triagem"));
     }
+  };
+
+  const bulkTriage = async (status: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    let failed = 0;
+    const updatedMap = new Map<string, Finding>();
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const updated = await api.updateFindingStatus(id, status);
+          updatedMap.set(id, updated);
+        } catch {
+          failed += 1;
+        }
+      }),
+    );
+    setItems((prev) =>
+      prev.map((f) => (updatedMap.has(f.id) ? (updatedMap.get(f.id) as Finding) : f)),
+    );
+    setSelected((cur) =>
+      cur && updatedMap.has(cur.id) ? (updatedMap.get(cur.id) as Finding) : cur,
+    );
+    setSelectedIds(new Set());
+    setBulkBusy(false);
+    if (failed > 0) {
+      setError(
+        `Triagem em lote parcial: ${ids.length - failed} ok, ${failed} falha(s).`,
+      );
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const allSelected =
+    items.length > 0 && items.every((f) => selectedIds.has(f.id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((f) => f.id)));
+    }
+  };
+
+  const exportRows = () => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const rows = items.map((f) => ({
+      id: f.id,
+      finding_type: f.finding_type,
+      severity: f.severity,
+      status: f.status,
+      title: f.title,
+      summary: f.summary,
+      object_key: f.object_key ?? "",
+      environment_id: f.environment_id ?? "",
+      last_seen_at: f.last_seen_at ?? "",
+    }));
+    downloadCSV(
+      `findings-${stamp}.csv`,
+      [
+        "id",
+        "finding_type",
+        "severity",
+        "status",
+        "title",
+        "summary",
+        "object_key",
+        "environment_id",
+        "last_seen_at",
+      ],
+      rows,
+    );
+  };
+
+  const exportJson = () => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadJSON(`findings-${stamp}.json`, {
+      exported_at: new Date().toISOString(),
+      filters: {
+        environment_id: environmentId || null,
+        finding_type: typeFilter || null,
+        severity: severityFilter || null,
+        status: statusFilter || null,
+      },
+      total: items.length,
+      items,
+    });
   };
 
   const health = useMemo(() => {
@@ -267,6 +373,8 @@ export function FindingsPage() {
     });
   }
 
+  const selectionCount = selectedIds.size;
+
   return (
     <>
       <PageHeader
@@ -274,9 +382,25 @@ export function FindingsPage() {
         title="Findings"
         description="Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e inatividade (POSSIBLY_INACTIVE — sem exclusão automática)."
         actions={
-          <Button onClick={() => void runAnalyze()} disabled={busy}>
-            {busy ? "Analisando…" : "Rodar analyzers (demo)"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={exportRows}
+              disabled={busy || items.length === 0}
+            >
+              Exportar CSV
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={exportJson}
+              disabled={busy || items.length === 0}
+            >
+              Exportar JSON
+            </Button>
+            <Button onClick={() => void runAnalyze()} disabled={busy}>
+              {busy ? "Analisando…" : "Rodar analyzers (demo)"}
+            </Button>
+          </div>
         }
       />
 
@@ -317,10 +441,45 @@ export function FindingsPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void load()} disabled={busy}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => void load()} disabled={busy || bulkBusy}>
             Atualizar
           </Button>
+          {selectionCount > 0 ? (
+            <>
+              <span className="text-xs text-slate-400">
+                {selectionCount} selecionado(s)
+              </span>
+              <Button
+                disabled={bulkBusy}
+                onClick={() => void bulkTriage("acknowledged")}
+              >
+                Reconhecer
+              </Button>
+              <Button
+                disabled={bulkBusy}
+                onClick={() => void bulkTriage("resolved")}
+              >
+                Resolver
+              </Button>
+              <Button
+                disabled={bulkBusy}
+                onClick={() => void bulkTriage("suppressed")}
+              >
+                Suprimir
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={bulkBusy}
+                onClick={() => void bulkTriage("open")}
+              >
+                Reabrir
+              </Button>
+            </>
+          ) : null}
+          {bulkBusy ? (
+            <span className="text-xs text-slate-400">Aplicando triagem…</span>
+          ) : null}
         </div>
 
         {error ? (
@@ -352,6 +511,7 @@ export function FindingsPage() {
           <Table
             dense
             headers={[
+              "",
               "Tipo",
               "Severidade",
               "Status",
@@ -360,12 +520,41 @@ export function FindingsPage() {
               "Última vez",
             ]}
           >
+            <tr className="border-t border-slate-800 bg-slate-900/40">
+              <td className="px-3 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Selecionar todos"
+                  className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
+                />
+              </td>
+              <td
+                className="px-3 py-1.5 text-xs text-slate-500"
+                colSpan={6}
+              >
+                Selecionar todos na página ({items.length})
+              </td>
+            </tr>
             {items.map((f) => (
               <tr
                 key={f.id}
                 className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
                 onClick={() => setSelected(f)}
               >
+                <td
+                  className="px-3 py-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(f.id)}
+                    onChange={() => toggleOne(f.id)}
+                    aria-label={`Selecionar ${f.title}`}
+                    className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
+                  />
+                </td>
                 <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
                   {f.finding_type}
                 </td>
