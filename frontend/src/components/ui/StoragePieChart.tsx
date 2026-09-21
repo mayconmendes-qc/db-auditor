@@ -1,4 +1,4 @@
-/** Pie chart — shadcn Chart + Recharts (Custom Label pattern). */
+/** Pie chart — shadcn Chart + Recharts (Custom Label); cores --chart-1…5. */
 
 import { useMemo } from "react";
 import { Pie, PieChart } from "recharts";
@@ -14,15 +14,14 @@ export interface StoragePieSlice {
   size_bytes: number;
 }
 
-/** Palette limitada aos tons Qualle / feedback (US-050). */
-const PALETTE = [
-  "#3b9222",
-  "#5c9259",
-  "#d4aa00",
-  "#f9323f",
-  "#696969",
-  "#b7bcb6",
-];
+/** Cores oficiais shadcn charts (CSS vars themáveis light/dark). */
+const CHART_KEYS = [
+  "chart-1",
+  "chart-2",
+  "chart-3",
+  "chart-4",
+  "chart-5",
+] as const;
 
 function formatBytes(n: number): string {
   if (n <= 0) {
@@ -55,7 +54,8 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
     };
     const data = items.map((item, idx) => {
       const key = slugKey(item.label, idx);
-      const color = PALETTE[idx % PALETTE.length];
+      const chartToken = CHART_KEYS[idx % CHART_KEYS.length];
+      const color = `var(--${chartToken})`;
       config[key] = { label: item.label, color };
       return {
         key,
@@ -74,29 +74,30 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
   return (
     <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
       <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%]">
-        {chartData.map((s) => (
-          <li
-            key={s.key}
-            className="flex items-center gap-2.5 text-sm text-slate-300"
-          >
-            <span
-              className="h-2.5 w-2.5 shrink-0 rounded-sm"
-              style={{
-                backgroundColor: chartConfig[s.key]?.color ?? PALETTE[0],
-              }}
-              aria-hidden
-            />
-            <span
-              className="min-w-0 flex-1 truncate font-medium text-slate-100"
-              title={s.label}
+        {chartData.map((s, idx) => {
+          const chartToken = CHART_KEYS[idx % CHART_KEYS.length];
+          return (
+            <li
+              key={s.key}
+              className="flex items-center gap-2.5 text-sm text-slate-300"
             >
-              {s.label}
-            </span>
-            <span className="shrink-0 font-mono text-xs text-slate-300">
-              {formatBytes(s.size_bytes)}
-            </span>
-          </li>
-        ))}
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ backgroundColor: `var(--${chartToken})` }}
+                aria-hidden
+              />
+              <span
+                className="min-w-0 flex-1 truncate font-medium text-slate-100"
+                title={s.label}
+              >
+                {s.label}
+              </span>
+              <span className="shrink-0 font-mono text-xs text-slate-300">
+                {formatBytes(s.size_bytes)}
+              </span>
+            </li>
+          );
+        })}
         <li className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs text-slate-400">
           <span>Total</span>
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
@@ -143,8 +144,8 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
                     y={props.y}
                     textAnchor={props.textAnchor}
                     dominantBaseline={props.dominantBaseline}
-                    fill="#e8e8e8"
-                    className="text-[12px] font-medium"
+                    fill="currentColor"
+                    className="fill-slate-100 text-[12px] font-medium"
                   >
                     {pct}%
                   </text>
@@ -155,7 +156,6 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
         </ChartContainer>
       </div>
 
-      {/* a11y: resumo tabular para leitores de tela (US-052) */}
       <table className="sr-only">
         <caption>Storage por ambiente</caption>
         <thead>

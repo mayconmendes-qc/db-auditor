@@ -1,5 +1,6 @@
 import { navigationSections, Shell } from "./components/layout/Shell";
 import { AppProvider, useApp } from "./context/AppContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import {
   AuditRunsPage,
   DashboardPage,
@@ -51,8 +52,10 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <AppProvider>
-      <AppRoutes />
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <AppRoutes />
+      </AppProvider>
+    </ThemeProvider>
   );
 }
