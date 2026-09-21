@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
+  Button,
   Card,
+  EmptyState,
   ErrorBanner,
   Skeleton,
   StoragePieChart,
@@ -61,7 +63,7 @@ function MiniBar({
         </span>
         <span className="shrink-0 font-mono text-slate-100">
           {valueLabel ?? value}
-          {max > 0 ? <span className="ml-1 text-slate-500">{pct}%</span> : null}
+          {max > 0 ? <span className="ml-1 text-slate-400">{pct}%</span> : null}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
@@ -75,8 +77,28 @@ function MiniBar({
   );
 }
 
+function KpiGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-slate-400">{title}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
-  const { environmentId, setEnvironmentId, setSection } = useApp();
+  const {
+    environmentId,
+    setEnvironmentId,
+    setSection,
+    selectedEnvironment,
+  } = useApp();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [storage, setStorage] = useState<StorageGrowthResponse | null>(null);
   const [trends, setTrends] = useState<FindingsTrendResponse | null>(null);
@@ -118,7 +140,12 @@ export function DashboardPage() {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(formatError(e, "Falha ao carregar dashboard"));
+          setError(
+            formatError(
+              e,
+              "Falha ao carregar o dashboard. Verifique a API e tente novamente.",
+            ),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -144,13 +171,32 @@ export function DashboardPage() {
     ? Math.max(1, ...trends.by_type.map((b) => b.count))
     : 1;
 
+  const envName =
+    selectedEnvironment?.name ??
+    (environmentId ? `${environmentId.slice(0, 8)}…` : null);
+
   return (
     <>
       <PageHeader
-        eyebrow="DASHBOARD"
+        eyebrow="Dashboard"
         title="Auditoria com evidências, sem mudanças automáticas"
-        description="Conexões, KPIs, storage, findings e saúde de jobs. O filtro de ambiente está na barra lateral."
+        description="Conexões, KPIs, storage, findings e saúde de jobs. Use o filtro de ambiente na barra lateral quando precisar focar um alvo."
       />
+
+      {environmentId && envName ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-200">
+          <span>
+            Mostrando: <strong className="text-slate-50">{envName}</strong>
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setEnvironmentId(null)}
+          >
+            Ver todos
+          </Button>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mt-8">
@@ -163,57 +209,50 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="mt-8 space-y-6">
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton className="h-12 w-full" />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-24 w-full" />
             ))}
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-40 w-full" />
           </div>
         </div>
       ) : null}
 
       {!loading && connections ? (
         <section className="mt-8" aria-labelledby="conn-heading">
-          <h2
-            id="conn-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
-            Conexões com ambientes auditados
+          <h2 id="conn-heading" className="text-sm font-medium text-slate-300">
+            Conexões
           </h2>
           {connections.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
+            <div className="mt-3">
+              <EmptyState
+                title="Nenhum ambiente configurado"
+                description="Configure AUDITOR_TARGET_DSN_* no backend e reinicie a API. Depois valide em Status."
+                action={
+                  <Button type="button" onClick={() => setSection("Status")}>
+                    Ir para Status
+                  </Button>
+                }
+              />
+            </div>
           ) : (
-            <ul className="mt-3 grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
+            <ul className="mt-3 flex flex-wrap gap-2">
               {connections.map((c) => {
                 const ok = c.dsn_configured && c.reachable;
                 return (
                   <li
                     key={c.environment_id}
-                    className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
+                    className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-sm"
                   >
-                    <div className="min-w-0">
-                      <span className="font-medium text-slate-100">
-                        {c.environment_name}
+                    <span className="truncate font-medium text-slate-100">
+                      {c.environment_name}
+                    </span>
+                    {c.server_version ? (
+                      <span className="hidden font-mono text-xs text-slate-400 sm:inline">
+                        PG {c.server_version}
+                        {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
                       </span>
-                      {c.server_version ? (
-                        <span className="ml-2 text-xs text-slate-400">
-                          PG {c.server_version}
-                          {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
-                        </span>
-                      ) : null}
-                      {c.error ? (
-                        <p className="mt-1 truncate text-xs text-rose-300">
-                          {c.error}
-                        </p>
-                      ) : null}
-                    </div>
+                    ) : null}
                     <Badge tone={ok ? "success" : "danger"}>
                       {ok
                         ? "Conectado"
@@ -230,35 +269,44 @@ export function DashboardPage() {
       ) : null}
 
       {!loading && kpis ? (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Card
-            subtitle="Ambientes"
-            title={String(kpis.environments)}
-            onClick={() => setSection("Ambientes")}
-          />
-          <Card
-            subtitle="Findings abertos"
-            title={String(kpis.open_findings)}
-            onClick={() => setSection("Findings")}
-          />
-          <Card
-            subtitle="Critical / High"
-            title={`${kpis.critical_findings} / ${kpis.high_findings}`}
-            onClick={() => setSection("Findings")}
-          />
-          <Card
-            subtitle="Storage total"
-            title={formatBytes(kpis.total_storage_bytes)}
-            onClick={() => setSection("Inventário")}
-          />
-          <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
-          <Card subtitle="Jobs agendados" title={String(kpis.jobs_scheduled)} />
-          <Card subtitle="Policies" title={String(kpis.policies)} />
-          <Card
-            subtitle="Runs ok / falha"
-            title={`${kpis.successful_runs_recent} / ${kpis.failed_runs_recent}`}
-            onClick={() => setSection("Execuções")}
-          />
+        <div className="mt-8 space-y-6">
+          <KpiGroup title="Risco">
+            <Card
+              subtitle="Findings abertos"
+              title={String(kpis.open_findings)}
+              onClick={() => setSection("Findings")}
+            />
+            <Card
+              subtitle="Critical / High"
+              title={`${kpis.critical_findings} / ${kpis.high_findings}`}
+              onClick={() => setSection("Findings")}
+            />
+            <Card
+              subtitle="Runs ok / falha"
+              title={`${kpis.successful_runs_recent} / ${kpis.failed_runs_recent}`}
+              onClick={() => setSection("Execuções")}
+            />
+          </KpiGroup>
+          <KpiGroup title="Capacidade">
+            <Card
+              subtitle="Storage total"
+              title={formatBytes(kpis.total_storage_bytes)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
+            <Card subtitle="Policies" title={String(kpis.policies)} />
+          </KpiGroup>
+          <KpiGroup title="Operação">
+            <Card
+              subtitle="Ambientes"
+              title={String(kpis.environments)}
+              onClick={() => setSection("Ambientes")}
+            />
+            <Card
+              subtitle="Jobs agendados"
+              title={String(kpis.jobs_scheduled)}
+            />
+          </KpiGroup>
         </div>
       ) : null}
 
@@ -279,7 +327,7 @@ export function DashboardPage() {
             >
               <div className="mt-2 grid flex-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <p className="mb-2 text-xs font-medium text-slate-400">
                     Severidade
                   </p>
                   <ul className="space-y-2.5">
@@ -302,7 +350,7 @@ export function DashboardPage() {
                   </ul>
                 </div>
                 <div>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <p className="mb-2 text-xs font-medium text-slate-400">
                     Status
                   </p>
                   <ul className="space-y-2.5">
@@ -364,18 +412,18 @@ export function DashboardPage() {
 
       {!loading && jobs ? (
         <section className="mt-8" aria-labelledby="jobs-heading">
-          <h2
-            id="jobs-heading"
-            className="text-sm font-semibold text-slate-200"
-          >
+          <h2 id="jobs-heading" className="text-sm font-medium text-slate-300">
             Saúde de jobs / policies
           </h2>
           {jobs.items.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Nenhum ambiente com dados de jobs. Dispare uma coleta em
+              Execuções.
+            </p>
           ) : (
-            <div className="mt-3 overflow-x-auto rounded-lg border border-slate-800">
+            <div className="mt-3 overflow-x-auto rounded-md border border-slate-800">
               <table className="w-full min-w-[28rem] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-900/95 text-xs uppercase text-slate-400">
+                <thead className="sticky top-0 bg-slate-900/95 text-xs text-slate-400">
                   <tr>
                     <th className="px-3 py-2 font-medium">Ambiente</th>
                     <th className="px-3 py-2 font-medium">Jobs</th>
@@ -390,9 +438,15 @@ export function DashboardPage() {
                         {item.environment_name ||
                           item.environment_id.slice(0, 8)}
                       </td>
-                      <td className="px-3 py-2">{item.jobs_total}</td>
-                      <td className="px-3 py-2">{item.jobs_scheduled}</td>
-                      <td className="px-3 py-2">{item.policies_total}</td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {item.jobs_total}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {item.jobs_scheduled}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {item.policies_total}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
