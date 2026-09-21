@@ -30,9 +30,7 @@ function SectionBody({
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Como usar
-        </h4>
+        <h4 className="text-xs font-medium text-slate-400">Como usar</h4>
         <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-sm text-slate-300">
           {howTo.map((step) => (
             <li key={step}>{step}</li>
@@ -41,7 +39,7 @@ function SectionBody({
       </div>
       {terms.length > 0 ? (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <h4 className="text-xs font-medium text-slate-400">
             Termos desta tela
           </h4>
           <ul className="mt-2 space-y-1.5">
@@ -75,7 +73,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Use o seletor de Ambiente na barra lateral para filtrar KPIs e gráficos (ou deixe em Todos).",
             "Confira o status de conexão de cada ambiente no topo (Conectado / Indisponível / DSN ausente).",
             "Clique nos cards de KPI (Findings, Storage, Runs) para ir à tela correspondente.",
-            "O gráfico de pizza mostra a distribuição de storage por ambiente; a legenda traz % e bytes.",
+            "O gráfico de pizza mostra a distribuição de storage: a legenda traz o armazenamento em bytes; o percentual aparece só nas fatias do gráfico.",
           ]}
           terms={[
             {
@@ -385,7 +383,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
   return (
     <>
       <PageHeader
-        eyebrow="GUIA"
+        eyebrow="Guia"
         title="Como usar o DB Auditor"
         description={
           <>
