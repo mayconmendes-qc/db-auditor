@@ -74,35 +74,33 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
 
   return (
     <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
-      {/* Legenda: nome + armazenamento (sem %). */}
+      {/* Legenda: nome + armazenamento na mesma linha (valor à direita). */}
       <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%]">
         {chartData.map((s) => (
           <li
             key={s.key}
-            className="flex items-start gap-2.5 text-sm text-slate-300"
+            className="flex items-center gap-2.5 text-sm text-slate-300"
           >
             <span
-              className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{
                 backgroundColor: chartConfig[s.key]?.color ?? PALETTE[0],
               }}
               aria-hidden
             />
-            <div className="min-w-0 flex-1">
-              <span
-                className="block truncate font-medium text-slate-100"
-                title={s.label}
-              >
-                {s.label}
-              </span>
-              <p className="font-mono text-xs text-slate-400">
-                {formatBytes(s.size_bytes)}
-              </p>
-            </div>
+            <span
+              className="min-w-0 flex-1 truncate font-medium text-slate-100"
+              title={s.label}
+            >
+              {s.label}
+            </span>
+            <span className="shrink-0 font-mono text-xs text-slate-300">
+              {formatBytes(s.size_bytes)}
+            </span>
           </li>
         ))}
-        <li className="border-t border-slate-800 pt-2 text-xs text-slate-500">
-          Total:{" "}
+        <li className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs text-slate-500">
+          <span>Total</span>
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
         </li>
       </ul>
