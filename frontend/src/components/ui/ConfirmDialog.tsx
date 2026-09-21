@@ -49,24 +49,27 @@ export function ConfirmDialog({
     return null;
   }
 
+  const dismiss = () => {
+    if (!busy) {
+      onCancel();
+    }
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
-      role="presentation"
-      onClick={() => {
-        if (!busy) {
-          onCancel();
-        }
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-950/70"
+        aria-label="Fechar diálogo"
+        disabled={busy}
+        onClick={dismiss}
+      />
       <div
-        className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-xl"
+        className="relative z-10 w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         <header className="border-b border-slate-700 px-5 py-4">
           <h2 id={titleId} className="text-lg font-semibold text-slate-50">
