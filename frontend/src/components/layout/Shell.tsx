@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
+import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
 import { Select } from "../ui";
@@ -36,6 +37,51 @@ export interface ShellProps {
   children: ReactNode;
   activeSection?: NavigationSection;
   onNavigate?: (section: NavigationSection) => void;
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+      aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"}
+      title={isDark ? "Tema claro" : "Tema escuro"}
+    >
+      {isDark ? (
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      ) : (
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 export function Shell({
@@ -133,24 +179,27 @@ export function Shell({
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
       <aside className="border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <strong className="text-sm font-semibold text-white">
+          <div className="min-w-0">
+            <strong className="text-sm font-semibold text-slate-50">
               DB Auditor
             </strong>
             <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
           </div>
-          <span
-            className={`mt-0.5 inline-block h-2 w-2 rounded-full ${
-              apiOk === null
-                ? "bg-slate-600"
-                : apiOk
-                  ? dsnDown > 0
-                    ? "bg-amber-400"
-                    : "bg-emerald-400"
-                  : "bg-rose-400"
-            }`}
-            title={healthTitle}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            <span
+              className={`mt-0.5 inline-block h-2 w-2 rounded-full ${
+                apiOk === null
+                  ? "bg-slate-600"
+                  : apiOk
+                    ? dsnDown > 0
+                      ? "bg-amber-400"
+                      : "bg-emerald-400"
+                    : "bg-rose-400"
+              }`}
+              title={healthTitle}
+            />
+          </div>
         </div>
         {apiOk === true && dsnDown > 0 ? (
           <p className="mt-1 text-xs text-amber-300/90">{dsnDown} DSN down</p>
@@ -183,8 +232,16 @@ export function Shell({
                       onClick={() => onNavigate?.(section)}
                       className={
                         isActive
-                          ? "flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                          : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                          ? "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                          : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                      }
+                      style={
+                        isActive
+                          ? {
+                              backgroundColor: "var(--nav-active-bg)",
+                              color: "var(--nav-active-fg)",
+                            }
+                          : undefined
                       }
                     >
                       <span className="min-w-0 truncate">{section}</span>
@@ -192,7 +249,7 @@ export function Shell({
                         <span
                           className={
                             isActive
-                              ? "shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 font-mono text-[10px] text-black"
+                              ? "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] opacity-70"
                               : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
                           }
                         >

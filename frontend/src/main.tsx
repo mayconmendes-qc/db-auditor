@@ -1,7 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
+import { bootstrapTheme } from "./context/ThemeContext";
 import "./styles.css";
+
+bootstrapTheme();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
