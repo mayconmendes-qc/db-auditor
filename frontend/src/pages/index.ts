@@ -5,7 +5,6 @@ export { EnvironmentsPage } from "./EnvironmentsPage";
 export { FindingsPage } from "./FindingsPage";
 export { InventoryPage } from "./InventoryPage";
 export { MappingsPage } from "./MappingsPage";
-export { OverviewPage } from "./OverviewPage";
 export { PerformancePage } from "./PerformancePage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
 export { SecurityPage } from "./SecurityPage";

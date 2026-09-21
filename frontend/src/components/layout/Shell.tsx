@@ -5,7 +5,6 @@ import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
 
 export const navigationSections: NavigationSection[] = [
-  "Visão geral",
   "Dashboard",
   "Documentação",
   "Ambientes",
@@ -20,7 +19,7 @@ export const navigationSections: NavigationSection[] = [
 ];
 
 const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
-  { label: "Início", items: ["Visão geral", "Dashboard", "Documentação"] },
+  { label: "Início", items: ["Dashboard", "Documentação"] },
   {
     label: "Operação",
     items: ["Ambientes", "Execuções", "Inventário", "Mapeamentos"],
@@ -40,7 +39,7 @@ export interface ShellProps {
 
 export function Shell({
   children,
-  activeSection = "Visão geral",
+  activeSection = "Dashboard",
   onNavigate,
 }: ShellProps) {
   const { environments, environmentId, setEnvironmentId } = useApp();
