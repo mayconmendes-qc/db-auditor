@@ -32,11 +32,13 @@ function MiniBar({
   value,
   max,
   tone = "emerald",
+  valueLabel,
 }: {
   label: string;
   value: number;
   max: number;
   tone?: "emerald" | "amber" | "rose" | "sky";
+  valueLabel?: string;
 }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   const colors = {
@@ -48,8 +50,15 @@ function MiniBar({
   return (
     <div className="space-y-1">
       <div className="flex justify-between gap-2 text-xs">
-        <span className="truncate text-slate-300">{label}</span>
-        <span className="shrink-0 font-mono text-slate-100">{value}</span>
+        <span className="truncate text-slate-300" title={label}>
+          {label}
+        </span>
+        <span className="shrink-0 font-mono text-slate-100">
+          {valueLabel ?? value}
+          {max > 0 ? (
+            <span className="ml-1 text-slate-500">{pct}%</span>
+          ) : null}
+        </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div
@@ -116,11 +125,17 @@ export function DashboardPage() {
   const storageMax = storage
     ? Math.max(1, ...storage.by_environment.map((p) => p.size_bytes))
     : 1;
+  const consumersMax = storage?.top_consumers?.length
+    ? Math.max(1, ...storage.top_consumers.map((p) => p.size_bytes))
+    : 1;
   const severityMax = trends
     ? Math.max(1, ...trends.by_severity.map((b) => b.count))
     : 1;
   const statusMax = trends
     ? Math.max(1, ...trends.by_status.map((b) => b.count))
+    : 1;
+  const typeMax = trends?.by_type?.length
+    ? Math.max(1, ...trends.by_type.map((b) => b.count))
     : 1;
 
   return (
@@ -257,10 +272,8 @@ export function DashboardPage() {
                         value={p.size_bytes}
                         max={storageMax}
                         tone="sky"
+                        valueLabel={formatBytes(p.size_bytes)}
                       />
-                      <p className="mt-0.5 text-right text-[11px] text-slate-400">
-                        {formatBytes(p.size_bytes)}
-                      </p>
                     </li>
                   ))}
                 </ul>
@@ -312,6 +325,45 @@ export function DashboardPage() {
                   </ul>
                 </div>
               </div>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!loading ? (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {storage?.top_consumers && storage.top_consumers.length > 0 ? (
+            <Card title="Maiores consumidores (tabelas)">
+              <ul className="mt-1 max-h-64 space-y-2.5 overflow-y-auto pr-1">
+                {storage.top_consumers.slice(0, 12).map((p) => (
+                  <li key={`${p.object_kind}-${p.label}`}>
+                    <MiniBar
+                      label={p.label}
+                      value={p.size_bytes}
+                      max={consumersMax}
+                      tone="sky"
+                      valueLabel={formatBytes(p.size_bytes)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {trends?.by_type && trends.by_type.length > 0 ? (
+            <Card title="Findings por tipo">
+              <ul className="mt-1 max-h-64 space-y-2.5 overflow-y-auto pr-1">
+                {trends.by_type.slice(0, 12).map((b) => (
+                  <li key={b.key}>
+                    <MiniBar
+                      label={b.key}
+                      value={b.count}
+                      max={typeMax}
+                      tone="emerald"
+                    />
+                  </li>
+                ))}
+              </ul>
             </Card>
           ) : null}
         </div>
