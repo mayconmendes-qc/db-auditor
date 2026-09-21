@@ -17,7 +17,7 @@ export function PageHeader({
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
+        <p className="text-xs font-bold tracking-[0.12em] text-slate-400">
           {eyebrow}
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">

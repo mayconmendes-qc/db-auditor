@@ -18,7 +18,7 @@ export function Select({
       {label ? <span>{label}</span> : null}
       <select
         id={selectId}
-        className={`rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 ${className}`}
+        className={`rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 focus:border-white focus:outline-none focus:ring-1 focus:ring-white ${className}`}
         {...props}
       >
         {options.map((option) => (
