@@ -73,63 +73,15 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
-      <div className="w-full shrink-0 sm:w-1/2">
-        <ChartContainer
-          config={chartConfig}
-          className="mx-auto aspect-square h-[220px] w-full max-w-[260px]"
-        >
-          <PieChart>
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  nameKey="key"
-                  hideLabel
-                  formatter={(value) => (
-                    <span className="font-mono tabular-nums">
-                      {formatBytes(Number(value))}
-                    </span>
-                  )}
-                />
-              }
-            />
-            <Pie
-              data={chartData}
-              dataKey="size_bytes"
-              nameKey="key"
-              labelLine={false}
-              label={({ payload, ...props }) => {
-                const pct =
-                  total > 0
-                    ? ((Number(payload.size_bytes) / total) * 100).toFixed(0)
-                    : "0";
-                return (
-                  <text
-                    cx={props.cx}
-                    cy={props.cy}
-                    x={props.x}
-                    y={props.y}
-                    textAnchor={props.textAnchor}
-                    dominantBaseline={props.dominantBaseline}
-                    fill="#e8e8e8"
-                    className="text-[11px] font-medium"
-                  >
-                    {pct}%
-                  </text>
-                );
-              }}
-            />
-          </PieChart>
-        </ChartContainer>
-      </div>
-
-      <ul className="flex min-w-0 w-full flex-col justify-center space-y-2 sm:w-1/2">
+    <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-stretch">
+      {/* Legenda à esquerda */}
+      <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%] sm:pr-4">
         {chartData.map((s) => {
           const pct = total > 0 ? (s.size_bytes / total) * 100 : 0;
           return (
             <li
               key={s.key}
-              className="flex items-start gap-2 text-sm text-slate-300"
+              className="flex items-start gap-2.5 text-sm text-slate-300"
             >
               <span
                 className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
@@ -162,6 +114,65 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
         </li>
       </ul>
+
+      {/* Divisor vertical */}
+      <div
+        className="hidden w-px shrink-0 self-stretch bg-slate-800 sm:block"
+        aria-hidden
+      />
+
+      {/* Gráfico à direita, ampliado */}
+      <div className="flex w-full items-center justify-center sm:w-[58%] sm:pl-2">
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-square h-[280px] w-full max-w-[300px]"
+        >
+          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  nameKey="key"
+                  hideLabel
+                  formatter={(value) => (
+                    <span className="font-mono tabular-nums">
+                      {formatBytes(Number(value))}
+                    </span>
+                  )}
+                />
+              }
+            />
+            <Pie
+              data={chartData}
+              dataKey="size_bytes"
+              nameKey="key"
+              cx="50%"
+              cy="50%"
+              outerRadius="80%"
+              labelLine={false}
+              label={({ payload, ...props }) => {
+                const pct =
+                  total > 0
+                    ? ((Number(payload.size_bytes) / total) * 100).toFixed(0)
+                    : "0";
+                return (
+                  <text
+                    cx={props.cx}
+                    cy={props.cy}
+                    x={props.x}
+                    y={props.y}
+                    textAnchor={props.textAnchor}
+                    dominantBaseline={props.dominantBaseline}
+                    fill="#e8e8e8"
+                    className="text-[12px] font-medium"
+                  >
+                    {pct}%
+                  </text>
+                );
+              }}
+            />
+          </PieChart>
+        </ChartContainer>
+      </div>
     </div>
   );
 }
