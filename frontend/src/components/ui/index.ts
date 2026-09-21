@@ -8,4 +8,5 @@ export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { Select } from "./Select";
 export { Skeleton } from "./Skeleton";
+export { StoragePie3D } from "./StoragePie3D";
 export { Table } from "./Table";
