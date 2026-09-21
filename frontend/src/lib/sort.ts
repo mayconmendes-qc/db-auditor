@@ -33,7 +33,10 @@ export function compareValues(
 export function sortBy<T>(
   items: T[],
   sort: SortState | null,
-  getters: Record<string, (item: T) => string | number | boolean | null | undefined>,
+  getters: Record<
+    string,
+    (item: T) => string | number | boolean | null | undefined
+  >,
 ): T[] {
   if (!sort || !getters[sort.key]) {
     return items;

@@ -66,7 +66,10 @@ export function Table({
                       className="inline-flex items-center gap-1 text-left text-slate-300 transition hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                     >
                       <span>{label}</span>
-                      <span className="font-mono text-[10px] text-slate-500" aria-hidden>
+                      <span
+                        className="font-mono text-[10px] text-slate-500"
+                        aria-hidden
+                      >
                         {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
                       </span>
                     </button>
