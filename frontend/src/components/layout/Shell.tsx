@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
+import { Select } from "../ui";
 
 export const navigationSections: NavigationSection[] = [
   "Dashboard",
@@ -45,6 +46,8 @@ export function Shell({
   const { environments, environmentId, setEnvironmentId } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [dsnDown, setDsnDown] = useState(0);
+  const [openFindings, setOpenFindings] = useState(0);
+  const [runningRuns, setRunningRuns] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +77,30 @@ export function Shell({
           setDsnDown(0);
         }
       });
+    api
+      .analyticsKpis()
+      .then((k) => {
+        if (!cancelled) {
+          setOpenFindings(k.open_findings ?? 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOpenFindings(0);
+        }
+      });
+    api
+      .auditRuns({ status: "running" })
+      .then((res) => {
+        if (!cancelled) {
+          setRunningRuns(res.items.length);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRunningRuns(0);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -87,17 +114,30 @@ export function Shell({
     healthTitle = "API indisponível";
   }
 
+  const envOptions = [
+    { value: "", label: "Todos" },
+    ...environments.map((env) => ({ value: env.id, label: env.name })),
+  ];
+
+  const badgeFor = (section: NavigationSection): number | null => {
+    if (section === "Findings" && openFindings > 0) {
+      return openFindings;
+    }
+    if (section === "Execuções" && runningRuns > 0) {
+      return runningRuns;
+    }
+    return null;
+  };
+
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
       <aside className="border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <strong className="text-sm font-semibold tracking-wide text-white">
+            <strong className="text-sm font-semibold text-white">
               DB Auditor
             </strong>
-            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
-              Qualle Control
-            </p>
+            <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
           </div>
           <span
             className={`mt-0.5 inline-block h-2 w-2 rounded-full ${
@@ -113,60 +153,29 @@ export function Shell({
           />
         </div>
         {apiOk === true && dsnDown > 0 ? (
-          <p className="mt-1 text-[10px] text-amber-300/90">
-            {dsnDown} DSN down
-          </p>
+          <p className="mt-1 text-xs text-amber-300/90">{dsnDown} DSN down</p>
         ) : null}
 
-        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Ambiente
-          <span className="relative mt-1 block">
-            <select
-              className="h-9 w-full appearance-none rounded-md border border-slate-600 bg-slate-900 py-1.5 pr-8 pl-2 text-xs text-slate-100 transition hover:border-slate-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
-              value={environmentId ?? ""}
-              onChange={(e) => setEnvironmentId(e.target.value || null)}
-              aria-label="Ambiente global"
-            >
-              <option value="">Todos</option>
-              {environments.map((env) => (
-                <option key={env.id} value={env.id}>
-                  {env.name}
-                </option>
-              ))}
-            </select>
-            <span
-              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 12 12"
-                fill="none"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path
-                  d="M2.5 4.5L6 8L9.5 4.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-          </span>
-        </label>
+        <div className="mt-4">
+          <Select
+            label="Ambiente"
+            options={envOptions}
+            value={environmentId ?? ""}
+            onChange={(e) => setEnvironmentId(e.target.value || null)}
+            aria-label="Ambiente global"
+          />
+        </div>
 
         <nav className="mt-5 space-y-4" aria-label="Principal">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <p className="mb-1 px-2 text-xs font-medium text-slate-500">
                 {group.label}
               </p>
-              <div className="grid grid-cols-2 gap-0.5 md:grid-cols-1">
+              <div className="grid grid-cols-1 gap-0.5">
                 {group.items.map((section) => {
                   const isActive = section === activeSection;
+                  const count = badgeFor(section);
                   return (
                     <button
                       key={section}
@@ -174,11 +183,22 @@ export function Shell({
                       onClick={() => onNavigate?.(section)}
                       className={
                         isActive
-                          ? "rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                          : "rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                          ? "flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                          : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                       }
                     >
-                      {section}
+                      <span className="min-w-0 truncate">{section}</span>
+                      {count != null ? (
+                        <span
+                          className={
+                            isActive
+                              ? "shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 font-mono text-[10px] text-black"
+                              : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+                          }
+                        >
+                          {count > 99 ? "99+" : count}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}

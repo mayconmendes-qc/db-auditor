@@ -169,7 +169,12 @@ export function AuditRunsPage() {
         return res.items;
       })
       .catch((err: unknown) => {
-        setError(formatError(err, "Falha ao listar execuções"));
+        setError(
+          formatError(
+            err,
+            "Falha ao listar execuções. Verifique a API e tente novamente.",
+          ),
+        );
         setRuns([]);
         return [] as AuditRun[];
       });
@@ -237,13 +242,18 @@ export function AuditRunsPage() {
     try {
       const res = await api.triggerAuditRun(triggerEnv, "manual");
       setTriggerMsg(
-        `Run ${res.audit_run_id.slice(0, 8)}… → ${labels.runStatus(res.status)}`,
+        `Execução iniciada (${res.audit_run_id.slice(0, 8)}…) — ${labels.runStatus(res.status)}`,
       );
       setSelectedId(res.audit_run_id);
       await loadRuns();
       await loadCollectors(res.audit_run_id);
     } catch (err: unknown) {
-      setTriggerMsg(formatError(err, "Falha no disparo"));
+      setTriggerMsg(
+        formatError(
+          err,
+          "Não foi possível iniciar a execução. Verifique o ambiente e a API.",
+        ),
+      );
     } finally {
       setBusy(false);
       setConfirmOpen(false);
@@ -260,7 +270,7 @@ export function AuditRunsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="EXECUÇÕES"
+        eyebrow="Execuções"
         title="Execuções de auditoria"
         description="Dispare coletas, acompanhe o progresso por collector e revise erros."
         actions={
@@ -311,7 +321,7 @@ export function AuditRunsPage() {
               />
             </div>
             <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
-              {busy ? "Disparando…" : "Executar agora"}
+              {busy ? "Executando…" : "Executar agora"}
             </Button>
           </div>
           {triggerMsg ? (
@@ -343,7 +353,7 @@ export function AuditRunsPage() {
         ) : runs.length === 0 ? (
           <EmptyState
             title="Nenhuma execução"
-            description="Dispare uma auditoria manual ou aguarde o scheduler. Ambientes demo vêm do seed local."
+            description="Dispare uma auditoria manual acima ou aguarde o scheduler. Ambientes demo vêm do seed local."
             action={
               <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
                 Executar agora
@@ -368,7 +378,7 @@ export function AuditRunsPage() {
                 </td>
                 <td className="px-3 py-1.5 text-xs text-slate-400">
                   {durationLabel(r.started_at, r.finished_at)}
-                  <span className="mt-0.5 block text-[10px] text-slate-500">
+                  <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
                     {new Date(r.started_at).toLocaleString()}
                   </span>
                 </td>
@@ -431,7 +441,7 @@ export function AuditRunsPage() {
                   title="Sem collectors ainda"
                   description={
                     selected.status === "running"
-                      ? "A run ainda está iniciando os collectors…"
+                      ? "A execução ainda está iniciando os collectors…"
                       : "Nenhum registro de collector para esta execução."
                   }
                 />
@@ -461,10 +471,10 @@ export function AuditRunsPage() {
                             {labels.runStatus(c.status)}
                           </Badge>
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-slate-300">
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
                           {c.rows_collected}
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-slate-400">
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
                           {durationLabel(c.started_at, c.finished_at)}
                         </td>
                       </tr>

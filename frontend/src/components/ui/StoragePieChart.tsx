@@ -14,15 +14,14 @@ export interface StoragePieSlice {
   size_bytes: number;
 }
 
+/** Palette limitada aos tons Qualle / feedback (US-050). */
 const PALETTE = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
+  "#3b9222",
+  "#5c9259",
+  "#d4aa00",
   "#f9323f",
-  "#a855f7",
-  "#06b6d4",
-  "#84cc16",
-  "#ec4899",
+  "#696969",
+  "#b7bcb6",
 ];
 
 function formatBytes(n: number): string {
@@ -74,7 +73,6 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
 
   return (
     <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
-      {/* Legenda: nome + armazenamento na mesma linha (valor à direita). */}
       <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%]">
         {chartData.map((s) => (
           <li
@@ -99,13 +97,12 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
             </span>
           </li>
         ))}
-        <li className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs text-slate-500">
+        <li className="flex items-center justify-between gap-2 border-t border-slate-800 pt-2 text-xs text-slate-400">
           <span>Total</span>
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
         </li>
       </ul>
 
-      {/* Gráfico: % apenas nos rótulos das fatias. */}
       <div className="flex w-full items-center justify-center sm:w-[58%]">
         <ChartContainer
           config={chartConfig}
@@ -157,6 +154,35 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
           </PieChart>
         </ChartContainer>
       </div>
+
+      {/* a11y: resumo tabular para leitores de tela (US-052) */}
+      <table className="sr-only">
+        <caption>Storage por ambiente</caption>
+        <thead>
+          <tr>
+            <th>Ambiente</th>
+            <th>Tamanho</th>
+            <th>Percentual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {chartData.map((s) => {
+            const pct = total > 0 ? (s.size_bytes / total) * 100 : 0;
+            return (
+              <tr key={s.key}>
+                <td>{s.label}</td>
+                <td>{formatBytes(s.size_bytes)}</td>
+                <td>{pct.toFixed(1)}%</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>Total</td>
+            <td>{formatBytes(total)}</td>
+            <td>100%</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
