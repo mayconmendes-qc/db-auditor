@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Card, ErrorBanner, Skeleton } from "../components/ui";
+import {
+  Badge,
+  Card,
+  ErrorBanner,
+  Skeleton,
+  StoragePie3D,
+} from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
@@ -120,9 +126,6 @@ export function DashboardPage() {
     };
   }, [environmentId, reloadKey]);
 
-  const storageMax = storage
-    ? Math.max(1, ...storage.by_environment.map((p) => p.size_bytes))
-    : 1;
   const consumersMax = storage?.top_consumers?.length
     ? Math.max(1, ...storage.top_consumers.map((p) => p.size_bytes))
     : 1;
@@ -259,23 +262,9 @@ export function DashboardPage() {
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
           {storage ? (
             <Card title="Storage por ambiente">
-              {storage.by_environment.length === 0 ? (
-                <p className="text-sm text-slate-400">Sem dados de storage.</p>
-              ) : (
-                <ul className="mt-1 space-y-3">
-                  {storage.by_environment.map((p) => (
-                    <li key={p.label}>
-                      <MiniBar
-                        label={p.label}
-                        value={p.size_bytes}
-                        max={storageMax}
-                        tone="sky"
-                        valueLabel={formatBytes(p.size_bytes)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="mt-2">
+                <StoragePie3D items={storage.by_environment} />
+              </div>
             </Card>
           ) : null}
 
