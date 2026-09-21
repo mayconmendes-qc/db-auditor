@@ -34,9 +34,7 @@ function parseHash(): { section: NavigationSection; env: string | null } {
   const slug = pathPart || "dashboard";
   // Legacy bookmark #/overview → Dashboard
   const section =
-    slug === "overview"
-      ? "Dashboard"
-      : (SLUG_TO_SECTION[slug] ?? "Dashboard");
+    slug === "overview" ? "Dashboard" : (SLUG_TO_SECTION[slug] ?? "Dashboard");
   let env: string | null = null;
   if (queryPart) {
     const params = new URLSearchParams(queryPart);
