@@ -1,14 +1,78 @@
 @import "tailwindcss";
 
+/*
+ * Design System Qualle Control — tokens (modo Dark como default do produto).
+ * Fonte: Figma Design System - Qualle Control (ySdloZuN2XxXfnFM5qhTro)
+ */
 @theme {
-  --color-surface: #0b1220;
-  --color-surface-elevated: #121d30;
-  --color-border: #26354c;
-  --color-muted: #93a4ba;
-  --color-text: #e7eef7;
-  --color-accent: #6ee7b7;
-  --color-accent-soft: #17233a;
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  /* Brand */
+  --color-brand: #000000;
+  --color-brand-foreground: #ffffff;
+
+  /* Semantic surfaces (Dark) */
+  --color-surface: #121212;
+  --color-surface-elevated: #1f1f1f;
+  --color-surface-raised: #2a2a2a;
+  --color-border: #4a4a4a;
+  --color-border-strong: #696969;
+  --color-muted: #8a8a8a;
+  --color-text: #ffffff;
+  --color-text-secondary: #b7bcb6;
+
+  /* Feedback */
+  --color-success: #3b9222;
+  --color-success-soft: #5c9259;
+  --color-warning: #d4aa00;
+  --color-warning-strong: #ff8400;
+  --color-danger: #f9323f;
+  --color-danger-soft: #ff535f;
+
+  /* Remap Tailwind slate → Qualle Cinza (dark-first) */
+  --color-slate-50: #f6f6f6;
+  --color-slate-100: #f0f0f0;
+  --color-slate-200: #ededed;
+  --color-slate-300: #e8e8e8;
+  --color-slate-400: #b7bcb6;
+  --color-slate-500: #8a8a8a;
+  --color-slate-600: #696969;
+  --color-slate-700: #4a4a4a;
+  --color-slate-800: #2a2a2a;
+  --color-slate-900: #1f1f1f;
+  --color-slate-950: #121212;
+
+  /* Remap emerald → Sucesso Qualle */
+  --color-emerald-300: #76a573;
+  --color-emerald-400: #5c9259;
+  --color-emerald-500: #3b9222;
+  --color-emerald-700: #3b9222;
+  --color-emerald-950: #1a2e18;
+
+  /* Remap rose → Erro Qualle */
+  --color-rose-100: #f9a0a9;
+  --color-rose-300: #ff535f;
+  --color-rose-400: #f9323f;
+  --color-rose-50: #fff1f2;
+  --color-rose-700: #bc4949;
+  --color-rose-800: #92464b;
+  --color-rose-950: #2a1214;
+
+  /* Remap amber → Atenção Qualle */
+  --color-amber-300: #f29c33;
+  --color-amber-400: #d4aa00;
+  --color-amber-700: #c54600;
+  --color-amber-950: #2a1c00;
+
+  /* Radius (DS: none/xs/sm/md/lg/xl/2xl/full) */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  /* Typography */
+  --font-sans: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Martian Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 html,
@@ -22,4 +86,12 @@ body {
   font-family: var(--font-sans);
   color: var(--color-text);
   background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus ring padrão Qualle (brand/preto com contraste no dark) */
+:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
 }

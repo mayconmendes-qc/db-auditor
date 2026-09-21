@@ -10,12 +10,12 @@ export function OverviewPage({ onNavigate }: OverviewPageProps) {
   return (
     <>
       <PageHeader
-        eyebrow="TIMESCALE AUDITOR"
+        eyebrow="DB AUDITOR"
         title="Auditoria com evidências, sem mudanças automáticas."
         description={
           <>
-            O painel consome exclusivamente a API do Timescale Auditor. A coleta
-            dos ambientes permanece somente leitura. Configure os bancos via{" "}
+            O painel consome exclusivamente a API do DB Auditor. A coleta dos
+            ambientes permanece somente leitura. Configure os bancos via{" "}
             <code className="text-slate-300">.env</code> e siga o guia de
             documentação para o primeiro uso.
           </>

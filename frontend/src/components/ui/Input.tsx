@@ -11,7 +11,7 @@ export function Input({ label, className = "", id, ...props }: InputProps) {
       {label ? <span>{label}</span> : null}
       <input
         id={inputId}
-        className={`rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 ${className}`}
+        className={`rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white ${className}`}
         {...props}
       />
     </label>
