@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
@@ -87,12 +87,8 @@ function KpiGroup({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export function DashboardPage() {
-  const {
-    environmentId,
-    setEnvironmentId,
-    setSection,
-    selectedEnvironment,
-  } = useApp();
+  const { environmentId, setEnvironmentId, setSection, selectedEnvironment } =
+    useApp();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [storage, setStorage] = useState<StorageGrowthResponse | null>(null);
   const [trends, setTrends] = useState<FindingsTrendResponse | null>(null);

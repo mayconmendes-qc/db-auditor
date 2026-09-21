@@ -153,9 +153,7 @@ export function Shell({
           />
         </div>
         {apiOk === true && dsnDown > 0 ? (
-          <p className="mt-1 text-xs text-amber-300/90">
-            {dsnDown} DSN down
-          </p>
+          <p className="mt-1 text-xs text-amber-300/90">{dsnDown} DSN down</p>
         ) : null}
 
         <div className="mt-4">
