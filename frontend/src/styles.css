@@ -15,7 +15,7 @@
   --color-surface-raised: #2a2a2a;
   --color-border: #4a4a4a;
   --color-border-strong: #696969;
-  --color-muted: #8a8a8a;
+  --color-muted: #9a9a9a;
   --color-text: #ffffff;
   --color-text-secondary: #b7bcb6;
 
@@ -33,7 +33,7 @@
   --color-slate-200: #ededed;
   --color-slate-300: #e8e8e8;
   --color-slate-400: #b7bcb6;
-  --color-slate-500: #8a8a8a;
+  --color-slate-500: #9a9a9a;
   --color-slate-600: #696969;
   --color-slate-700: #4a4a4a;
   --color-slate-800: #2a2a2a;
@@ -94,4 +94,16 @@ body {
 :focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 2px;
+}
+
+/* a11y: respeitar reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
