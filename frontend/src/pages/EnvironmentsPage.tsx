@@ -11,6 +11,7 @@ import {
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { labels } from "../lib/labels";
+import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
   DatabaseSnapshot,
@@ -32,6 +33,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [envSort, setEnvSort] = useState<SortState | null>(null);
+  const [dbSort, setDbSort] = useState<SortState | null>(null);
+  const [schemaSort, setSchemaSort] = useState<SortState | null>(null);
 
   const loadEnvironments = useCallback(() => {
     setError(null);
@@ -83,29 +87,53 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
     };
   }, [selectedId]);
 
+  const sortedEnvironments = useMemo(() => {
+    if (!items) {
+      return null;
+    }
+    return sortBy(items, envSort, {
+      name: (e) => e.name,
+      type: (e) => labels.envType(e.type),
+      discovery: (e) => labels.discoveryMode(e.discovery_mode),
+      status: (e) => (e.active ? "ativo" : "inativo"),
+    });
+  }, [items, envSort]);
+
   const filteredDatabases = useMemo(() => {
     if (!databases) {
       return null;
     }
-    return databases.filter((db) => matchesSearch(db.database_name, filter));
-  }, [databases, filter]);
+    const filtered = databases.filter((db) =>
+      matchesSearch(db.database_name, filter),
+    );
+    return sortBy(filtered, dbSort, {
+      name: (db) => db.database_name,
+      size: (db) => db.size_bytes,
+      connections: (db) => db.connection_count,
+    });
+  }, [databases, filter, dbSort]);
 
   const filteredSchemas = useMemo(() => {
     if (!schemas) {
       return null;
     }
-    return schemas.filter(
+    const filtered = schemas.filter(
       (sc) =>
         matchesSearch(sc.schema_name, filter) ||
         matchesSearch(sc.database_name, filter),
     );
-  }, [schemas, filter]);
+    return sortBy(filtered, schemaSort, {
+      database: (sc) => sc.database_name,
+      schema: (sc) => sc.schema_name,
+      tables: (sc) => sc.table_count,
+      views: (sc) => sc.view_count + sc.materialized_view_count,
+      size: (sc) => sc.size_bytes,
+    });
+  }, [schemas, filter, schemaSort]);
 
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        AMBIENTES
-      </p>
+      <p className="text-xs font-medium text-slate-400">Ambientes</p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Ambientes
       </h1>
@@ -122,9 +150,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
             message={error}
             onRetry={() => setReloadKey((k) => k + 1)}
           />
-        ) : items === null ? (
+        ) : sortedEnvironments === null ? (
           <Skeleton className="h-32 w-full" />
-        ) : items.length === 0 ? (
+        ) : sortedEnvironments.length === 0 ? (
           <EmptyState
             title="Nenhum ambiente registrado"
             description="Configure as connection strings no .env do backend, reinicie a API e execute a discovery. O guia passo a passo está em Documentação."
@@ -140,11 +168,21 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
             }
           />
         ) : (
-          <Table headers={["Nome", "Tipo", "Discovery", "Status"]}>
-            {items.map((env) => (
+          <Table
+            headers={[
+              { id: "name", label: "Nome", sortable: true },
+              { id: "type", label: "Tipo", sortable: true },
+              { id: "discovery", label: "Discovery", sortable: true },
+              { id: "status", label: "Status", sortable: true },
+            ]}
+            sortKey={envSort?.key}
+            sortDir={envSort?.dir}
+            onSort={(id) => setEnvSort((prev) => nextSort(prev, id))}
+          >
+            {sortedEnvironments.map((env) => (
               <tr
                 key={env.id}
-                className={`border-t border-slate-800 cursor-pointer ${
+                className={`cursor-pointer border-t border-slate-800 ${
                   selectedId === env.id ? "bg-slate-900/80" : ""
                 }`}
                 onClick={() => setSelectedId(env.id)}
@@ -174,18 +212,14 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
 
         {selectedId ? (
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <h2 className="text-xl font-semibold text-slate-100">
-                Topologia
-              </h2>
-              <div className="w-full sm:max-w-xs">
-                <Input
-                  label="Filtrar databases e schemas"
-                  placeholder="Buscar…"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-              </div>
+            <h2 className="text-xl font-semibold text-slate-100">Topologia</h2>
+            <div className="w-full max-w-md">
+              <Input
+                label="Filtrar databases e schemas"
+                placeholder="Buscar…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
             </div>
 
             {detailError ? <ErrorBanner message={detailError} /> : null}
@@ -203,7 +237,20 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                     description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
                   />
                 ) : (
-                  <Table headers={["Nome", "Tamanho", "Conexões"]}>
+                  <Table
+                    headers={[
+                      { id: "name", label: "Nome", sortable: true },
+                      { id: "size", label: "Tamanho", sortable: true },
+                      {
+                        id: "connections",
+                        label: "Conexões",
+                        sortable: true,
+                      },
+                    ]}
+                    sortKey={dbSort?.key}
+                    sortDir={dbSort?.dir}
+                    onSort={(id) => setDbSort((prev) => nextSort(prev, id))}
+                  >
                     {filteredDatabases.map((db) => (
                       <tr key={db.id} className="border-t border-slate-800">
                         <td className="px-4 py-3 text-slate-100">
@@ -235,12 +282,15 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                 ) : (
                   <Table
                     headers={[
-                      "Database",
-                      "Schema",
-                      "Tables",
-                      "Views",
-                      "Tamanho",
+                      { id: "database", label: "Database", sortable: true },
+                      { id: "schema", label: "Schema", sortable: true },
+                      { id: "tables", label: "Tables", sortable: true },
+                      { id: "views", label: "Views", sortable: true },
+                      { id: "size", label: "Tamanho", sortable: true },
                     ]}
+                    sortKey={schemaSort?.key}
+                    sortDir={schemaSort?.dir}
+                    onSort={(id) => setSchemaSort((prev) => nextSort(prev, id))}
                   >
                     {filteredSchemas.map((sc) => (
                       <tr key={sc.id} className="border-t border-slate-800">

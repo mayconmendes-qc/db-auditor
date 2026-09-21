@@ -8,7 +8,7 @@ export interface DocsPageProps {
 
 function Term({ name, children }: { name: string; children: string }) {
   return (
-    <li className="text-sm text-slate-300">
+    <li className="text-sm leading-relaxed text-slate-300">
       <span className="font-medium text-slate-100">{name}</span>
       {" — "}
       {children}
@@ -28,21 +28,25 @@ function SectionBody({
   onNavigate?: (section: NavigationSection) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       <div>
-        <h4 className="text-xs font-medium text-slate-400">Como usar</h4>
-        <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-sm text-slate-300">
+        <h4 className="text-xs font-medium tracking-wide text-slate-400">
+          Como usar
+        </h4>
+        <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-300">
           {howTo.map((step) => (
-            <li key={step}>{step}</li>
+            <li key={step} className="pl-1">
+              {step}
+            </li>
           ))}
         </ol>
       </div>
       {terms.length > 0 ? (
         <div>
-          <h4 className="text-xs font-medium text-slate-400">
+          <h4 className="text-xs font-medium tracking-wide text-slate-400">
             Termos desta tela
           </h4>
-          <ul className="mt-2 space-y-1.5">
+          <ul className="mt-3 space-y-3">
             {terms.map((t) => (
               <Term key={t.name} name={t.name}>
                 {t.def}
@@ -52,9 +56,11 @@ function SectionBody({
         </div>
       ) : null}
       {goTo && onNavigate ? (
-        <Button type="button" onClick={() => onNavigate(goTo)}>
-          Ir para {goTo}
-        </Button>
+        <div className="pt-1">
+          <Button type="button" onClick={() => onNavigate(goTo)}>
+            Ir para {goTo}
+          </Button>
+        </div>
       ) : null}
     </div>
   );
@@ -253,7 +259,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Findings"
           onNavigate={onNavigate}
           howTo={[
-            "Filtre por severidade, status e tipo de analyzer.",
+            "Filtre por severidade e status usando os seletores em português.",
             "Abra um finding para ler evidências e contexto do objeto.",
             "Triagem: reconheça, resolva ou suprima em lote quando fizer sentido.",
             "Exporte CSV/JSON para auditoria externa, se necessário.",
@@ -269,7 +275,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             },
             {
               name: "Severidade",
-              def: "critical, high, medium, low — prioridade relativa do risco ou da inconsistência.",
+              def: "Crítica, alta, média, baixa ou informativo — prioridade relativa do risco.",
             },
             {
               name: "Suprimir",
@@ -312,14 +318,14 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Segurança"
           onNavigate={onNavigate}
           howTo={[
-            "Consulte findings de segurança (permissões amplas, roles, extensões sensíveis, etc.).",
+            "Consulte findings de segurança (funções com privilégios elevados, roles e permissões amplas).",
             "Priorize critical/high e valide no ambiente de origem com a equipe de DBA.",
             "A auditoria é passiva: não revoga grants nem altera roles automaticamente.",
           ]}
           terms={[
             {
-              name: "Finding de segurança",
-              def: "Achado relacionado a privilégios, exposição ou configuração insegura.",
+              name: "Funções com privilégios elevados",
+              def: "Funções SECURITY DEFINER que executam com o dono da função, não com o chamador.",
             },
             {
               name: "Evidência",
@@ -394,7 +400,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
         }
       />
 
-      <div className="mt-8">
+      <div className="mt-10 max-w-3xl">
         <Accordion items={items} defaultOpenId="dashboard" />
       </div>
     </>

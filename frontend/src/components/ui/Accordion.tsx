@@ -17,7 +17,7 @@ export function Accordion({
   const [openId, setOpenId] = useState<string | null>(defaultOpenId ?? null);
 
   return (
-    <div className="divide-y divide-slate-800 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40">
+    <div className="divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-950/40">
       {items.map((item) => {
         const open = openId === item.id;
         const panelId = `${baseId}-${item.id}-panel`;
@@ -31,7 +31,7 @@ export function Accordion({
                 aria-expanded={open}
                 aria-controls={panelId}
                 onClick={() => setOpenId(open ? null : item.id)}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left text-sm font-medium text-slate-100 transition hover:bg-slate-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/50"
+                className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-slate-100 transition hover:bg-slate-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/50"
               >
                 <span>{item.title}</span>
                 <span
@@ -63,7 +63,7 @@ export function Accordion({
               <section
                 id={panelId}
                 aria-labelledby={btnId}
-                className="border-t border-slate-800/80 bg-slate-950/30 px-4 py-4 text-sm leading-relaxed text-slate-300"
+                className="border-t border-slate-800/80 bg-slate-950/30 px-5 py-6 text-sm leading-relaxed text-slate-300"
               >
                 {item.content}
               </section>
