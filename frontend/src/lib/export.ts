@@ -36,9 +36,7 @@ export function downloadCSV(
 ): void {
   const lines = [
     headers.map(escapeCsvCell).join(","),
-    ...rows.map((row) =>
-      headers.map((h) => escapeCsvCell(row[h])).join(","),
-    ),
+    ...rows.map((row) => headers.map((h) => escapeCsvCell(row[h])).join(",")),
   ];
   const body = `\uFEFF${lines.join("\n")}\n`;
   triggerDownload(

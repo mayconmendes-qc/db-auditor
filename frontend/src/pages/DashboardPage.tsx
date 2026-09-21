@@ -55,9 +55,7 @@ function MiniBar({
         </span>
         <span className="shrink-0 font-mono text-slate-100">
           {valueLabel ?? value}
-          {max > 0 ? (
-            <span className="ml-1 text-slate-500">{pct}%</span>
-          ) : null}
+          {max > 0 ? <span className="ml-1 text-slate-500">{pct}%</span> : null}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">

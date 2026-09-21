@@ -11,8 +11,8 @@ import {
   Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
-import { downloadCSV, downloadJSON } from "../lib/export";
 import { formatError } from "../lib/errors";
+import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { Finding } from "../types";
@@ -544,16 +544,20 @@ export function FindingsPage() {
                 key={f.id}
                 className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
                 onClick={() => setSelected(f)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelected(f);
+                  }
+                }}
               >
-                <td
-                  className="px-3 py-1.5"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
+                <td className="px-3 py-1.5">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(f.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                     onChange={() => {
                       toggleOne(f.id);
                     }}
