@@ -76,7 +76,7 @@ function MiniBar({
 }
 
 export function DashboardPage() {
-  const { environmentId, setSection } = useApp();
+  const { environmentId, setEnvironmentId, setSection } = useApp();
   const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
   const [storage, setStorage] = useState<StorageGrowthResponse | null>(null);
   const [trends, setTrends] = useState<FindingsTrendResponse | null>(null);
@@ -87,6 +87,11 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Ao montar o Dashboard, garante filtro "Todos".
+  useEffect(() => {
+    setEnvironmentId(null);
+  }, [setEnvironmentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,9 +163,7 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="mt-8 space-y-6">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
           </div>
@@ -187,13 +190,13 @@ export function DashboardPage() {
           {connections.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
           ) : (
-            <ul className="mt-3 grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <ul className="mt-3 grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
               {connections.map((c) => {
                 const ok = c.dsn_configured && c.reachable;
                 return (
                   <li
                     key={c.environment_id}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
+                    className="flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
                   >
                     <div className="min-w-0">
                       <span className="font-medium text-slate-100">

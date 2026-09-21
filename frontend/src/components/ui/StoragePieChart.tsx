@@ -73,55 +73,57 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <ChartContainer
-        config={chartConfig}
-        className="mx-auto aspect-square h-[220px] w-full max-w-[220px] shrink-0"
-      >
-        <PieChart>
-          <ChartTooltip
-            content={
-              <ChartTooltipContent
-                nameKey="key"
-                hideLabel
-                formatter={(value) => (
-                  <span className="font-mono tabular-nums">
-                    {formatBytes(Number(value))}
-                  </span>
-                )}
-              />
-            }
-          />
-          <Pie
-            data={chartData}
-            dataKey="size_bytes"
-            nameKey="key"
-            labelLine={false}
-            label={({ payload, ...props }) => {
-              const pct =
-                total > 0
-                  ? ((Number(payload.size_bytes) / total) * 100).toFixed(0)
-                  : "0";
-              return (
-                <text
-                  cx={props.cx}
-                  cy={props.cy}
-                  x={props.x}
-                  y={props.y}
-                  textAnchor={props.textAnchor}
-                  dominantBaseline={props.dominantBaseline}
-                  fill="#e8e8e8"
-                  className="text-[11px] font-medium"
-                >
-                  {pct}%
-                </text>
-              );
-            }}
-          />
-        </PieChart>
-      </ChartContainer>
+    <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="w-full shrink-0 sm:w-1/2">
+        <ChartContainer
+          config={chartConfig}
+          className="mx-auto aspect-square h-[220px] w-full max-w-[260px]"
+        >
+          <PieChart>
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  nameKey="key"
+                  hideLabel
+                  formatter={(value) => (
+                    <span className="font-mono tabular-nums">
+                      {formatBytes(Number(value))}
+                    </span>
+                  )}
+                />
+              }
+            />
+            <Pie
+              data={chartData}
+              dataKey="size_bytes"
+              nameKey="key"
+              labelLine={false}
+              label={({ payload, ...props }) => {
+                const pct =
+                  total > 0
+                    ? ((Number(payload.size_bytes) / total) * 100).toFixed(0)
+                    : "0";
+                return (
+                  <text
+                    cx={props.cx}
+                    cy={props.cy}
+                    x={props.x}
+                    y={props.y}
+                    textAnchor={props.textAnchor}
+                    dominantBaseline={props.dominantBaseline}
+                    fill="#e8e8e8"
+                    className="text-[11px] font-medium"
+                  >
+                    {pct}%
+                  </text>
+                );
+              }}
+            />
+          </PieChart>
+        </ChartContainer>
+      </div>
 
-      <ul className="min-w-0 flex-1 space-y-2">
+      <ul className="flex min-w-0 w-full flex-col justify-center space-y-2 sm:w-1/2">
         {chartData.map((s) => {
           const pct = total > 0 ? (s.size_bytes / total) * 100 : 0;
           return (
