@@ -7,7 +7,7 @@ import {
   ConfirmDialog,
   EmptyState,
   ErrorBanner,
-  Input,
+  Select,
   Skeleton,
   Table,
 } from "../components/ui";
@@ -18,6 +18,25 @@ import { api } from "../services/api";
 import type { AuditRun, CollectorRun } from "../types";
 
 const POLL_MS = 2500;
+
+const STATUS_OPTIONS = [
+  { value: "", label: "Todos os status" },
+  { value: "running", label: "Em execução" },
+  { value: "success", label: "Sucesso" },
+  { value: "partial_success", label: "Sucesso parcial" },
+  { value: "failed", label: "Falhou" },
+  { value: "cancelled", label: "Cancelado" },
+  { value: "skipped", label: "Ignorado" },
+];
+
+const PROFILE_OPTIONS = [
+  { value: "", label: "Todos os perfis" },
+  { value: "manual", label: "Manual" },
+  { value: "fast", label: "Rápido" },
+  { value: "daily", label: "Diário" },
+  { value: "weekly", label: "Semanal" },
+  { value: "monthly", label: "Mensal" },
+];
 
 function statusTone(
   status: string,
@@ -243,17 +262,7 @@ export function AuditRunsPage() {
       <PageHeader
         eyebrow="EXECUÇÕES"
         title="Execuções de auditoria"
-        description={
-          <>
-            Dispare coletas, acompanhe o progresso por collector e revise erros.
-            Configure{" "}
-            <code className="rounded bg-slate-800 px-1 text-slate-200">
-              {"AUDITOR_TARGET_DSN_<uuid>"}
-            </code>{" "}
-            no .env para dados reais. O filtro de ambiente da sidebar aplica-se
-            à lista.
-          </>
-        }
+        description="Dispare coletas, acompanhe o progresso por collector e revise erros."
         actions={
           polling ? (
             <span className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200">
@@ -288,46 +297,43 @@ export function AuditRunsPage() {
       />
 
       <div className="mt-8 space-y-8">
-        <Card title="Disparo manual">
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="w-full sm:max-w-md">
-              <label className="mb-1 block text-xs text-slate-400">
-                Ambiente
-                <select
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Card title="Disparo manual">
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1">
+                <Select
+                  label="Ambiente"
+                  options={environments.map((e) => ({
+                    value: e.id,
+                    label: e.name,
+                  }))}
                   value={triggerEnv}
                   onChange={(e) => setTriggerEnv(e.target.value)}
-                >
-                  {environments.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                />
+              </div>
+              <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
+                {busy ? "Disparando…" : "Executar agora"}
+              </Button>
             </div>
-            <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
-              {busy ? "Disparando…" : "Executar agora"}
-            </Button>
-          </div>
-          {triggerMsg ? (
-            <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
-          ) : null}
-        </Card>
+            {triggerMsg ? (
+              <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
+            ) : null}
+          </Card>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Input
-            label="Filtrar status"
-            placeholder="running, success, failed…"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          />
-          <Input
-            label="Filtrar profile"
-            placeholder="manual, daily…"
-            value={profileFilter}
-            onChange={(e) => setProfileFilter(e.target.value)}
-          />
+          <div className="grid gap-3 content-start">
+            <Select
+              label="Status"
+              options={STATUS_OPTIONS}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            />
+            <Select
+              label="Perfil"
+              options={PROFILE_OPTIONS}
+              value={profileFilter}
+              onChange={(e) => setProfileFilter(e.target.value)}
+            />
+          </div>
         </div>
 
         {error ? (
@@ -347,7 +353,7 @@ export function AuditRunsPage() {
             }
           />
         ) : (
-          <Table dense headers={["Profile", "Status", "Duração", "Ambiente"]}>
+          <Table dense headers={["Perfil", "Status", "Duração", "Ambiente"]}>
             {runs.map((r) => (
               <tr
                 key={r.id}
