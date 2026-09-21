@@ -40,7 +40,14 @@ export function Accordion({
                   }`}
                   aria-hidden
                 >
-                  <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
                     <path
                       d="M2.5 4.5L6 8L9.5 4.5"
                       stroke="currentColor"
@@ -53,14 +60,13 @@ export function Accordion({
               </button>
             </h3>
             {open ? (
-              <div
+              <section
                 id={panelId}
-                role="region"
                 aria-labelledby={btnId}
                 className="border-t border-slate-800/80 bg-slate-950/30 px-4 py-4 text-sm leading-relaxed text-slate-300"
               >
                 {item.content}
-              </div>
+              </section>
             ) : null}
           </div>
         );

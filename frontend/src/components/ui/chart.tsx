@@ -4,16 +4,16 @@ import { cn } from "../../lib/cn";
 
 const THEMES = { light: "", dark: ".dark" } as const;
 
+type ChartColorConfig =
+  | { color?: string; theme?: never }
+  | { color?: never; theme: Record<keyof typeof THEMES, string> };
+
 export type ChartConfig = Record<
   string,
   {
     label?: React.ReactNode;
     icon?: React.ComponentType;
-  } &
-    (
-      | { color?: string; theme?: never }
-      | { color?: never; theme: Record<keyof typeof THEMES, string> }
-    ),
+  } & ChartColorConfig
 >;
 
 type ChartContextProps = {
@@ -115,17 +115,16 @@ function ChartTooltipContent({
   labelKey,
 }: {
   active?: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: recharts payload is loosely typed
   payload?: Array<any>;
   className?: string;
   indicator?: "line" | "dot" | "dashed";
   hideLabel?: boolean;
   hideIndicator?: boolean;
   label?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: recharts payload is loosely typed
   labelFormatter?: (value: unknown, payload: Array<any>) => React.ReactNode;
   labelClassName?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formatter?: (
     value: unknown,
     name: unknown,
@@ -350,8 +349,8 @@ function getPayloadConfigFromPayload(
 
 export {
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   ChartLegendContent,
   ChartStyle,
+  ChartTooltip,
+  ChartTooltipContent,
 };

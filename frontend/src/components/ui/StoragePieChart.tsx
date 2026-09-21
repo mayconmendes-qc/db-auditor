@@ -132,8 +132,7 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
               <span
                 className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
                 style={{
-                  backgroundColor:
-                    chartConfig[s.key]?.color ?? PALETTE[0],
+                  backgroundColor: chartConfig[s.key]?.color ?? PALETTE[0],
                 }}
                 aria-hidden
               />
