@@ -133,20 +133,21 @@ export function SecurityPage() {
 
   return (
     <>
-      <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
-        SEGURANÇA
-      </p>
+      <p className="text-xs font-medium text-slate-400">Segurança</p>
       <h1 className="mt-2 text-3xl font-semibold text-slate-50 md:text-4xl">
         Revisão de segurança
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        SECURITY DEFINER, roles elevadas e privilégios amplos para revisão
-        humana. O auditor nunca emite REVOKE, ALTER ROLE ou DROP.
+        Funções com privilégios elevados, roles poderosas e permissões amplas
+        para revisão humana. O auditor nunca emite REVOKE, ALTER ROLE ou DROP.
       </p>
 
       <div className="mt-8 space-y-6">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Card title="SECURITY DEFINER" subtitle={String(summary.definer)} />
+          <Card
+            title="Funções com privilégios elevados"
+            subtitle={String(summary.definer)}
+          />
           <Card title="Roles poderosas" subtitle={String(summary.roles)} />
           <Card title="Privilégios amplos" subtitle={String(summary.grants)} />
         </div>
@@ -168,7 +169,7 @@ export function SecurityPage() {
         {!busy && items.length === 0 ? (
           <EmptyState
             title="Sem findings de segurança"
-            description="Rode os analyzers demo para listar SECURITY DEFINER e privilégios."
+            description="Rode os analyzers demo para listar funções com privilégios elevados e permissões amplas."
           />
         ) : null}
 
@@ -179,10 +180,10 @@ export function SecurityPage() {
             {items.map((f) => (
               <tr
                 key={f.id}
-                className="border-t border-slate-800 cursor-pointer"
+                className="cursor-pointer border-t border-slate-800"
                 onClick={() => setSelected(f)}
               >
-                <td className="px-4 py-3 text-slate-300 font-mono text-xs">
+                <td className="px-4 py-3 font-mono text-xs text-slate-300">
                   {f.finding_type}
                 </td>
                 <td className="px-4 py-3">
@@ -191,10 +192,10 @@ export function SecurityPage() {
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-slate-100">{f.title}</td>
-                <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                <td className="px-4 py-3 font-mono text-xs text-slate-400">
                   {f.object_key || "—"}
                 </td>
-                <td className="px-4 py-3 text-slate-400 text-xs">
+                <td className="px-4 py-3 text-xs text-slate-400">
                   {f.last_seen_at
                     ? new Date(f.last_seen_at).toLocaleString()
                     : "—"}
