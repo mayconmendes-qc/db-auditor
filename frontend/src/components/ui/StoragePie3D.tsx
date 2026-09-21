@@ -51,9 +51,7 @@ function arcPath(
 export function StoragePie3D({ items }: { items: StoragePieSlice[] }) {
   const total = items.reduce((s, i) => s + Math.max(0, i.size_bytes), 0);
   if (items.length === 0 || total <= 0) {
-    return (
-      <p className="text-sm text-slate-400">Sem dados de storage.</p>
-    );
+    return <p className="text-sm text-slate-400">Sem dados de storage.</p>;
   }
 
   const cx = 100;
@@ -146,7 +144,10 @@ export function StoragePie3D({ items }: { items: StoragePieSlice[] }) {
             />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                <span className="truncate font-medium text-slate-100" title={s.label}>
+                <span
+                  className="truncate font-medium text-slate-100"
+                  title={s.label}
+                >
                   {s.label}
                 </span>
                 <span className="shrink-0 font-mono text-xs text-slate-200">
@@ -160,7 +161,7 @@ export function StoragePie3D({ items }: { items: StoragePieSlice[] }) {
           </li>
         ))}
         <li className="border-t border-slate-800 pt-2 text-xs text-slate-500">
-          Total: {" "}
+          Total:{" "}
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
         </li>
       </ul>
