@@ -8,7 +8,6 @@ import {
   FindingsPage,
   InventoryPage,
   MappingsPage,
-  OverviewPage,
   PerformancePage,
   SchemaDriftPage,
   SecurityPage,
@@ -20,10 +19,8 @@ export { navigationSections };
 function AppRoutes() {
   const { section, setSection } = useApp();
 
-  let content = <OverviewPage onNavigate={setSection} />;
-  if (section === "Dashboard") {
-    content = <DashboardPage />;
-  } else if (section === "Documentação") {
+  let content = <DashboardPage />;
+  if (section === "Documentação") {
     content = <DocsPage onNavigate={setSection} />;
   } else if (section === "Ambientes") {
     content = <EnvironmentsPage onNavigate={setSection} />;

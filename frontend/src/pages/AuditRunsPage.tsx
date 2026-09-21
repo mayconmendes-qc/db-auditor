@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   EmptyState,
   ErrorBanner,
   Input,
@@ -126,6 +127,7 @@ export function AuditRunsPage() {
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (environmentId) {
@@ -203,11 +205,12 @@ export function AuditRunsPage() {
     return () => window.clearInterval(id);
   }, [runs, selected, selectedId, loadRuns, loadCollectors]);
 
-  const onTrigger = async () => {
+  const triggerEnvName =
+    environments.find((e) => e.id === triggerEnv)?.name ??
+    (triggerEnv ? `${triggerEnv.slice(0, 8)}…` : "—");
+
+  const executeTrigger = async () => {
     if (!triggerEnv) {
-      return;
-    }
-    if (!window.confirm("Disparar auditoria manual neste ambiente?")) {
       return;
     }
     setBusy(true);
@@ -224,7 +227,15 @@ export function AuditRunsPage() {
       setTriggerMsg(formatError(err, "Falha no disparo"));
     } finally {
       setBusy(false);
+      setConfirmOpen(false);
     }
+  };
+
+  const onTriggerClick = () => {
+    if (!triggerEnv) {
+      return;
+    }
+    setConfirmOpen(true);
   };
 
   return (
@@ -253,6 +264,29 @@ export function AuditRunsPage() {
         }
       />
 
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Disparar auditoria manual"
+        description={
+          <>
+            Será iniciada uma coleta somente leitura no ambiente{" "}
+            <strong className="text-slate-100">{triggerEnvName}</strong>.
+            Nenhuma alteração é aplicada nos bancos auditados.
+          </>
+        }
+        confirmLabel="Executar agora"
+        cancelLabel="Cancelar"
+        busy={busy}
+        onCancel={() => {
+          if (!busy) {
+            setConfirmOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          void executeTrigger();
+        }}
+      />
+
       <div className="mt-8 space-y-8">
         <Card title="Disparo manual">
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -272,10 +306,7 @@ export function AuditRunsPage() {
                 </select>
               </label>
             </div>
-            <Button
-              onClick={() => void onTrigger()}
-              disabled={busy || !triggerEnv}
-            >
+            <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
               {busy ? "Disparando…" : "Executar agora"}
             </Button>
           </div>
@@ -310,10 +341,7 @@ export function AuditRunsPage() {
             title="Nenhuma execução"
             description="Dispare uma auditoria manual ou aguarde o scheduler. Ambientes demo vêm do seed local."
             action={
-              <Button
-                onClick={() => void onTrigger()}
-                disabled={busy || !triggerEnv}
-              >
+              <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
                 Executar agora
               </Button>
             }

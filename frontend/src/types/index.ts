@@ -1,5 +1,4 @@
 export type NavigationSection =
-  | "Visão geral"
   | "Dashboard"
   | "Documentação"
   | "Ambientes"

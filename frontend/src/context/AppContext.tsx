@@ -11,7 +11,6 @@ import { api } from "../services/api";
 import type { Environment, NavigationSection } from "../types";
 
 const SECTION_SLUGS: Record<NavigationSection, string> = {
-  "Visão geral": "overview",
   Dashboard: "dashboard",
   Documentação: "docs",
   Ambientes: "environments",
@@ -32,8 +31,10 @@ const SLUG_TO_SECTION = Object.fromEntries(
 function parseHash(): { section: NavigationSection; env: string | null } {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [pathPart, queryPart] = raw.split("?");
-  const slug = pathPart || "overview";
-  const section = SLUG_TO_SECTION[slug] ?? "Visão geral";
+  const slug = pathPart || "dashboard";
+  // Legacy bookmark #/overview → Dashboard
+  const section =
+    slug === "overview" ? "Dashboard" : (SLUG_TO_SECTION[slug] ?? "Dashboard");
   let env: string | null = null;
   if (queryPart) {
     const params = new URLSearchParams(queryPart);
@@ -70,7 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const initial =
     typeof window !== "undefined"
       ? parseHash()
-      : { section: "Visão geral" as NavigationSection, env: null };
+      : { section: "Dashboard" as NavigationSection, env: null };
 
   const [section, setSectionState] = useState<NavigationSection>(
     initial.section,
@@ -121,7 +122,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (prev && res.items.some((e) => e.id === prev)) {
           return prev;
         }
-        // Keep hash env if still valid; otherwise first env
         return prev && res.items.some((e) => e.id === prev)
           ? prev
           : (res.items[0]?.id ?? null);
@@ -137,7 +137,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshEnvironments();
   }, [refreshEnvironments]);
 
-  // Keep hash in sync when env list settles
   useEffect(() => {
     writeHash(section, environmentId);
   }, [section, environmentId]);

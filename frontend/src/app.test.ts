@@ -4,7 +4,6 @@ import { navigationSections } from "./app";
 describe("navigationSections", () => {
   it("provides the auditor navigation in Portuguese", () => {
     expect(navigationSections).toEqual([
-      "Visão geral",
       "Dashboard",
       "Documentação",
       "Ambientes",
