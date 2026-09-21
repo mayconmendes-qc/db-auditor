@@ -6,7 +6,7 @@ import {
   Card,
   EmptyState,
   ErrorBanner,
-  Input,
+  Select,
   Skeleton,
   Table,
 } from "../components/ui";
@@ -14,6 +14,7 @@ import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
+import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 
@@ -43,6 +44,23 @@ function statusTone(
   }
   return "neutral";
 }
+
+const SEVERITY_OPTIONS = [
+  { value: "", label: "Todas as severidades" },
+  { value: "critical", label: "Crítica" },
+  { value: "high", label: "Alta" },
+  { value: "medium", label: "Média" },
+  { value: "low", label: "Baixa" },
+  { value: "info", label: "Informativo" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "", label: "Todos os status" },
+  { value: "open", label: "Aberto" },
+  { value: "acknowledged", label: "Reconhecido" },
+  { value: "resolved", label: "Resolvido" },
+  { value: "suppressed", label: "Suprimido" },
+];
 
 const demoFacts = {
   environment_id: "00000000-0000-0000-0000-000000000001",
@@ -184,16 +202,15 @@ export function FindingsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [typeFilter, setTypeFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
+  const [sort, setSort] = useState<SortState | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const res = await api.findings({
-        finding_type: typeFilter || undefined,
         severity: severityFilter || undefined,
         status: statusFilter || undefined,
         environment_id: environmentId || undefined,
@@ -206,7 +223,7 @@ export function FindingsPage() {
     } finally {
       setBusy(false);
     }
-  }, [typeFilter, severityFilter, statusFilter, environmentId]);
+  }, [severityFilter, statusFilter, environmentId]);
 
   useEffect(() => {
     void load();
@@ -297,9 +314,22 @@ export function FindingsPage() {
     }
   };
 
+  const sortedItems = useMemo(
+    () =>
+      sortBy(items, sort, {
+        type: (f) => f.finding_type,
+        severity: (f) => f.severity,
+        status: (f) => f.status,
+        title: (f) => f.title,
+        object: (f) => f.object_key ?? "",
+        last_seen: (f) => f.last_seen_at ?? "",
+      }),
+    [items, sort],
+  );
+
   const exportRows = () => {
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    const rows = items.map((f) => ({
+    const rows = sortedItems.map((f) => ({
       id: f.id,
       finding_type: f.finding_type,
       severity: f.severity,
@@ -333,12 +363,11 @@ export function FindingsPage() {
       exported_at: new Date().toISOString(),
       filters: {
         environment_id: environmentId || null,
-        finding_type: typeFilter || null,
         severity: severityFilter || null,
         status: statusFilter || null,
       },
-      total: items.length,
-      items,
+      total: sortedItems.length,
+      items: sortedItems,
     });
   };
 
@@ -356,24 +385,17 @@ export function FindingsPage() {
 
   const activeChips: Array<{ key: string; label: string; clear: () => void }> =
     [];
-  if (typeFilter) {
-    activeChips.push({
-      key: "type",
-      label: `Tipo: ${typeFilter}`,
-      clear: () => setTypeFilter(""),
-    });
-  }
   if (severityFilter) {
     activeChips.push({
       key: "sev",
-      label: `Severidade: ${severityFilter}`,
+      label: `Severidade: ${labels.severity(severityFilter)}`,
       clear: () => setSeverityFilter(""),
     });
   }
   if (statusFilter) {
     activeChips.push({
       key: "status",
-      label: `Status: ${statusFilter}`,
+      label: `Status: ${labels.findingStatus(statusFilter)}`,
       clear: () => setStatusFilter(""),
     });
   }
@@ -383,7 +405,7 @@ export function FindingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="FINDINGS"
+        eyebrow="Findings"
         title="Findings"
         description="Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e inatividade (POSSIBLY_INACTIVE — sem exclusão automática)."
         actions={
@@ -417,22 +439,16 @@ export function FindingsPage() {
           <Card title={String(health.inactivity)} subtitle="Inatividade" />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Input
-            label="Tipo de finding"
-            placeholder="cagg.missing_refresh_policy"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          />
-          <Input
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select
             label="Severidade"
-            placeholder="info, low, medium…"
+            options={SEVERITY_OPTIONS}
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
           />
-          <Input
+          <Select
             label="Status"
-            placeholder="open, acknowledged…"
+            options={STATUS_OPTIONS}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
@@ -512,18 +528,26 @@ export function FindingsPage() {
           />
         ) : null}
 
-        {!busy && items.length > 0 ? (
+        {!busy && sortedItems.length > 0 ? (
           <Table
             dense
             headers={[
-              "Sel.",
-              "Tipo",
-              "Severidade",
-              "Status",
-              "Título",
-              "Objeto",
-              "Última vez",
+              { id: "sel", label: "Sel." },
+              { id: "type", label: "Tipo", sortable: true },
+              { id: "severity", label: "Severidade", sortable: true },
+              { id: "status", label: "Status", sortable: true },
+              { id: "title", label: "Título", sortable: true },
+              { id: "object", label: "Objeto", sortable: true },
+              { id: "last_seen", label: "Última vez", sortable: true },
             ]}
+            sortKey={sort?.key}
+            sortDir={sort?.dir}
+            onSort={(id) => {
+              if (id === "sel") {
+                return;
+              }
+              setSort((prev) => nextSort(prev, id));
+            }}
           >
             <tr className="border-t border-slate-800 bg-slate-900/40">
               <td className="px-3 py-1.5">
@@ -536,10 +560,10 @@ export function FindingsPage() {
                 />
               </td>
               <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
-                Selecionar todos na página ({items.length})
+                Selecionar todos na página ({sortedItems.length})
               </td>
             </tr>
-            {items.map((f) => (
+            {sortedItems.map((f) => (
               <tr
                 key={f.id}
                 className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
