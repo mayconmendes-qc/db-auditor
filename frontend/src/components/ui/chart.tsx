@@ -74,7 +74,6 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   }
   return (
     <style
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: chart CSS vars from config
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
@@ -115,15 +114,16 @@ function ChartTooltipContent({
   labelKey,
 }: {
   active?: boolean;
-  // biome-ignore lint/suspicious/noExplicitAny: recharts payload is loosely typed
-  payload?: Array<any>;
+  payload?: Array<Record<string, unknown>>;
   className?: string;
   indicator?: "line" | "dot" | "dashed";
   hideLabel?: boolean;
   hideIndicator?: boolean;
   label?: string;
-  // biome-ignore lint/suspicious/noExplicitAny: recharts payload is loosely typed
-  labelFormatter?: (value: unknown, payload: Array<any>) => React.ReactNode;
+  labelFormatter?: (
+    value: unknown,
+    payload: Array<Record<string, unknown>>,
+  ) => React.ReactNode;
   labelClassName?: string;
   formatter?: (
     value: unknown,
@@ -190,7 +190,11 @@ function ChartTooltipContent({
           .map((item, index) => {
             const key = `${nameKey ?? item.name ?? item.dataKey ?? "value"}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const indicatorColor = color ?? item.payload?.fill ?? item.color;
+            const nested = item.payload as Record<string, unknown> | undefined;
+            const indicatorColor =
+              color ??
+              (typeof nested?.fill === "string" ? nested.fill : undefined) ??
+              (typeof item.color === "string" ? item.color : undefined);
 
             let indicatorClass = "shrink-0 rounded-[2px]";
             if (indicator === "dot") {
@@ -242,7 +246,7 @@ function ChartTooltipContent({
                       <div className="grid gap-1.5">
                         {nestLabel ? tooltipLabel : null}
                         <span className="text-slate-400">
-                          {itemConfig?.label ?? item.name}
+                          {itemConfig?.label ?? String(item.name ?? "")}
                         </span>
                       </div>
                       {item.value != null ? (
