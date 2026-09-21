@@ -68,7 +68,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
     <>
       <PageHeader
         eyebrow="GUIA"
-        title="Como usar o Timescale Auditor"
+        title="Como usar o DB Auditor"
         description={
           <>
             Fluxo recomendado para configurar os bancos auditados (somente via{" "}
