@@ -85,6 +85,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSection = useCallback(
     (next: NavigationSection) => {
       setSectionState(next);
+      // Dashboard sempre abre com filtro "Todos" (todos os ambientes).
+      if (next === "Dashboard") {
+        setEnvironmentIdState(null);
+        writeHash(next, null);
+        return;
+      }
       writeHash(next, environmentId);
     },
     [environmentId],
@@ -118,13 +124,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.environments();
       setEnvironments(res.items);
+      // Preserva null ("Todos") e IDs ainda válidos; não força o primeiro ambiente.
       setEnvironmentIdState((prev) => {
-        if (prev && res.items.some((e) => e.id === prev)) {
+        if (prev == null) {
+          return null;
+        }
+        if (res.items.some((e) => e.id === prev)) {
           return prev;
         }
-        return prev && res.items.some((e) => e.id === prev)
-          ? prev
-          : (res.items[0]?.id ?? null);
+        return null;
       });
     } catch {
       setEnvironments([]);
