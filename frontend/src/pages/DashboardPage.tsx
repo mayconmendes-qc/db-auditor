@@ -140,7 +140,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         eyebrow="DASHBOARD"
-        title="Visão executiva"
+        title="Auditoria com evidências, sem mudanças automáticas"
         description="Conexões, KPIs, storage, findings e saúde de jobs. O filtro de ambiente está na barra lateral."
       />
 
