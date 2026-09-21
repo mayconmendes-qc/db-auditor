@@ -1,3 +1,4 @@
+export { Accordion } from "./Accordion";
 export { Badge } from "./Badge";
 export { Button } from "./Button";
 export { Card } from "./Card";
@@ -8,5 +9,5 @@ export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { Select } from "./Select";
 export { Skeleton } from "./Skeleton";
-export { StoragePie3D } from "./StoragePie3D";
+export { StoragePieChart } from "./StoragePieChart";
 export { Table } from "./Table";
