@@ -14,7 +14,7 @@ import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
-import { nextSort, sortBy, type SortState } from "../lib/sort";
+import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 

@@ -11,7 +11,7 @@ import {
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { labels } from "../lib/labels";
-import { nextSort, sortBy, type SortState } from "../lib/sort";
+import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
   DatabaseSnapshot,
@@ -290,9 +290,7 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                     ]}
                     sortKey={schemaSort?.key}
                     sortDir={schemaSort?.dir}
-                    onSort={(id) =>
-                      setSchemaSort((prev) => nextSort(prev, id))
-                    }
+                    onSort={(id) => setSchemaSort((prev) => nextSort(prev, id))}
                   >
                     {filteredSchemas.map((sc) => (
                       <tr key={sc.id} className="border-t border-slate-800">
