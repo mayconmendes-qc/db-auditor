@@ -263,18 +263,21 @@ export function DashboardPage() {
       ) : null}
 
       {!loading ? (
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
+        <div className="mt-8 grid gap-4 lg:grid-cols-2 lg:items-stretch">
           {storage ? (
-            <Card title="Storage por ambiente">
-              <div className="mt-2">
+            <Card title="Storage por ambiente" className="min-h-[22rem]">
+              <div className="mt-2 flex flex-1 flex-col">
                 <StoragePieChart items={storage.by_environment} />
               </div>
             </Card>
           ) : null}
 
           {trends ? (
-            <Card title={`Findings (total ${trends.total})`}>
-              <div className="grid gap-4 sm:grid-cols-2">
+            <Card
+              title={`Findings (total ${trends.total})`}
+              className="min-h-[22rem]"
+            >
+              <div className="mt-2 grid flex-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     Severidade
@@ -318,14 +321,13 @@ export function DashboardPage() {
               </div>
             </Card>
           ) : null}
-        </div>
-      ) : null}
 
-      {!loading ? (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {storage?.top_consumers && storage.top_consumers.length > 0 ? (
-            <Card title="Maiores consumidores (tabelas)">
-              <ul className="mt-1 max-h-64 space-y-2.5 overflow-y-auto pr-1">
+            <Card
+              title="Maiores consumidores (tabelas)"
+              className="min-h-[22rem]"
+            >
+              <ul className="mt-1 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
                 {storage.top_consumers.slice(0, 12).map((p) => (
                   <li key={`${p.object_kind}-${p.label}`}>
                     <MiniBar
@@ -342,8 +344,8 @@ export function DashboardPage() {
           ) : null}
 
           {trends?.by_type && trends.by_type.length > 0 ? (
-            <Card title="Findings por tipo">
-              <ul className="mt-1 max-h-64 space-y-2.5 overflow-y-auto pr-1">
+            <Card title="Findings por tipo" className="min-h-[22rem]">
+              <ul className="mt-1 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
                 {trends.by_type.slice(0, 12).map((b) => (
                   <li key={b.key}>
                     <MiniBar
