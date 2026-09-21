@@ -150,11 +150,11 @@ export function Shell({
                       key={section}
                       type="button"
                       onClick={() => onNavigate?.(section)}
-                      className={`rounded-md px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+                      className={
                         isActive
-                          ? "bg-white text-black font-medium"
-                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                      }`}
+                          ? "rounded-md bg-white px-3 py-2 text-left text-sm font-medium text-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                          : "rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                      }
                     >
                       {section}
                     </button>

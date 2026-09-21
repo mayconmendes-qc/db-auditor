@@ -40,7 +40,9 @@ export function Card({
         <span className="text-sm text-slate-400">{subtitle}</span>
       ) : null}
       {title ? (
-        <strong className="text-base font-semibold text-slate-50">{title}</strong>
+        <strong className="text-base font-semibold text-slate-50">
+          {title}
+        </strong>
       ) : null}
       {children ? (
         <div className="mt-auto flex flex-1 flex-col">{children}</div>
