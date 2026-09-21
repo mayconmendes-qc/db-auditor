@@ -225,34 +225,40 @@ export function DashboardPage() {
               />
             </div>
           ) : (
-            <ul className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {connections.map((c) => {
                 const ok = c.dsn_configured && c.reachable;
+                const statusLabel = ok
+                  ? "Conectado"
+                  : c.dsn_configured
+                    ? "Indisponível"
+                    : "DSN ausente";
                 return (
-                  <li
+                  <Card
                     key={c.environment_id}
-                    className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-sm"
+                    subtitle="Ambiente auditado"
+                    title={c.environment_name}
                   >
-                    <span className="truncate font-medium text-slate-100">
-                      {c.environment_name}
-                    </span>
-                    {c.server_version ? (
-                      <span className="hidden font-mono text-xs text-slate-400 sm:inline">
-                        PG {c.server_version}
-                        {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
-                      </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <Badge tone={ok ? "success" : "danger"}>
+                        {statusLabel}
+                      </Badge>
+                      {c.server_version ? (
+                        <span className="font-mono text-xs text-slate-400">
+                          PG {c.server_version}
+                          {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
+                        </span>
+                      ) : null}
+                    </div>
+                    {c.error ? (
+                      <p className="mt-2 truncate text-xs text-rose-300">
+                        {c.error}
+                      </p>
                     ) : null}
-                    <Badge tone={ok ? "success" : "danger"}>
-                      {ok
-                        ? "Conectado"
-                        : c.dsn_configured
-                          ? "Indisponível"
-                          : "DSN ausente"}
-                    </Badge>
-                  </li>
+                  </Card>
                 );
               })}
-            </ul>
+            </div>
           )}
         </section>
       ) : null}
