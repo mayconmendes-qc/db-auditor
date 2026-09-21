@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   Badge,
@@ -77,13 +77,7 @@ function MiniBar({
   );
 }
 
-function KpiGroup({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function KpiGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium text-slate-400">{title}</p>
@@ -110,7 +104,6 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Ao montar o Dashboard, garante filtro "Todos".
   useEffect(() => {
     setEnvironmentId(null);
   }, [setEnvironmentId]);
