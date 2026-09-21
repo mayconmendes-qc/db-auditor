@@ -41,5 +41,8 @@ export function downloadCSV(
     ),
   ];
   const body = `\uFEFF${lines.join("\n")}\n`;
-  triggerDownload(filename, new Blob([body], { type: "text/csv;charset=utf-8" }));
+  triggerDownload(
+    filename,
+    new Blob([body], { type: "text/csv;charset=utf-8" }),
+  );
 }

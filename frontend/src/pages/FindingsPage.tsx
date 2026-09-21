@@ -255,17 +255,22 @@ export function FindingsPage() {
       }),
     );
     setItems((prev) =>
-      prev.map((f) => (updatedMap.has(f.id) ? (updatedMap.get(f.id) as Finding) : f)),
+      prev.map((f) => {
+        const next = updatedMap.get(f.id);
+        return next ?? f;
+      }),
     );
-    setSelected((cur) =>
-      cur && updatedMap.has(cur.id) ? (updatedMap.get(cur.id) as Finding) : cur,
-    );
+    setSelected((cur) => {
+      if (!cur) {
+        return cur;
+      }
+      return updatedMap.get(cur.id) ?? cur;
+    });
     setSelectedIds(new Set());
     setBulkBusy(false);
     if (failed > 0) {
-      setError(
-        `Triagem em lote parcial: ${ids.length - failed} ok, ${failed} falha(s).`,
-      );
+      const ok = ids.length - failed;
+      setError(`Triagem em lote parcial: ${ok} ok, ${failed} falha(s).`);
     }
   };
 
@@ -511,7 +516,7 @@ export function FindingsPage() {
           <Table
             dense
             headers={[
-              "",
+              "Sel.",
               "Tipo",
               "Severidade",
               "Status",
@@ -530,10 +535,7 @@ export function FindingsPage() {
                   className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
                 />
               </td>
-              <td
-                className="px-3 py-1.5 text-xs text-slate-500"
-                colSpan={6}
-              >
+              <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
                 Selecionar todos na página ({items.length})
               </td>
             </tr>
@@ -545,12 +547,16 @@ export function FindingsPage() {
               >
                 <td
                   className="px-3 py-1.5"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
                 >
                   <input
                     type="checkbox"
                     checked={selectedIds.has(f.id)}
-                    onChange={() => toggleOne(f.id)}
+                    onChange={() => {
+                      toggleOne(f.id);
+                    }}
                     aria-label={`Selecionar ${f.title}`}
                     className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
                   />
