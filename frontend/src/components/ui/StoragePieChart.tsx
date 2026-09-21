@@ -73,61 +73,47 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-stretch">
-      {/* Legenda à esquerda */}
-      <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%] sm:pr-4">
-        {chartData.map((s) => {
-          const pct = total > 0 ? (s.size_bytes / total) * 100 : 0;
-          return (
-            <li
-              key={s.key}
-              className="flex items-start gap-2.5 text-sm text-slate-300"
-            >
+    <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center">
+      {/* Legenda: nome + armazenamento (sem %). */}
+      <ul className="flex min-w-0 w-full flex-col justify-center space-y-3 sm:w-[42%]">
+        {chartData.map((s) => (
+          <li
+            key={s.key}
+            className="flex items-start gap-2.5 text-sm text-slate-300"
+          >
+            <span
+              className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{
+                backgroundColor: chartConfig[s.key]?.color ?? PALETTE[0],
+              }}
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
               <span
-                className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{
-                  backgroundColor: chartConfig[s.key]?.color ?? PALETTE[0],
-                }}
-                aria-hidden
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                  <span
-                    className="truncate font-medium text-slate-100"
-                    title={s.label}
-                  >
-                    {s.label}
-                  </span>
-                  <span className="shrink-0 font-mono text-xs text-slate-200">
-                    {pct.toFixed(1)}%
-                  </span>
-                </div>
-                <p className="font-mono text-xs text-slate-400">
-                  {formatBytes(s.size_bytes)}
-                </p>
-              </div>
-            </li>
-          );
-        })}
+                className="block truncate font-medium text-slate-100"
+                title={s.label}
+              >
+                {s.label}
+              </span>
+              <p className="font-mono text-xs text-slate-400">
+                {formatBytes(s.size_bytes)}
+              </p>
+            </div>
+          </li>
+        ))}
         <li className="border-t border-slate-800 pt-2 text-xs text-slate-500">
           Total:{" "}
           <span className="font-mono text-slate-300">{formatBytes(total)}</span>
         </li>
       </ul>
 
-      {/* Divisor vertical */}
-      <div
-        className="hidden w-px shrink-0 self-stretch bg-slate-800 sm:block"
-        aria-hidden
-      />
-
-      {/* Gráfico à direita, ampliado */}
-      <div className="flex w-full items-center justify-center sm:w-[58%] sm:pl-2">
+      {/* Gráfico: % apenas nos rótulos das fatias. */}
+      <div className="flex w-full items-center justify-center sm:w-[58%]">
         <ChartContainer
           config={chartConfig}
           className="aspect-square h-[280px] w-full max-w-[300px]"
         >
-          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <PieChart margin={{ top: 12, right: 12, bottom: 12, left: 12 }}>
             <ChartTooltip
               content={
                 <ChartTooltipContent
@@ -147,7 +133,7 @@ export function StoragePieChart({ items }: { items: StoragePieSlice[] }) {
               nameKey="key"
               cx="50%"
               cy="50%"
-              outerRadius="80%"
+              outerRadius="78%"
               labelLine={false}
               label={({ payload, ...props }) => {
                 const pct =
