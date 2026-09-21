@@ -113,14 +113,30 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean;
-    hideIndicator?: boolean;
-    indicator?: "line" | "dot" | "dashed";
-    nameKey?: string;
-    labelKey?: string;
-  }) {
+}: {
+  active?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: Array<any>;
+  className?: string;
+  indicator?: "line" | "dot" | "dashed";
+  hideLabel?: boolean;
+  hideIndicator?: boolean;
+  label?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  labelFormatter?: (value: unknown, payload: Array<any>) => React.ReactNode;
+  labelClassName?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formatter?: (
+    value: unknown,
+    name: unknown,
+    item: unknown,
+    index: number,
+    payload: unknown,
+  ) => React.ReactNode;
+  color?: string;
+  nameKey?: string;
+  labelKey?: string;
+}) {
   const { config } = useChart();
 
   const tooltipLabel = React.useMemo(() => {
@@ -177,12 +193,25 @@ function ChartTooltipContent({
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
+            let indicatorClass = "shrink-0 rounded-[2px]";
+            if (indicator === "dot") {
+              indicatorClass += " h-2.5 w-2.5";
+            } else if (indicator === "line") {
+              indicatorClass += " w-1";
+            } else {
+              indicatorClass +=
+                " w-0 border-[1.5px] border-dashed bg-transparent";
+              if (nestLabel) {
+                indicatorClass += " my-0.5";
+              }
+            }
+
             return (
               <div
                 key={String(item.dataKey ?? index)}
                 className={cn(
                   "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-slate-400",
-                  indicator === "dot" && "items-center",
+                  indicator === "dot" ? "items-center" : undefined,
                 )}
               >
                 {formatter && item?.value !== undefined && item.name ? (
@@ -194,22 +223,14 @@ function ChartTooltipContent({
                     ) : (
                       !hideIndicator && (
                         <div
-                          className={cn(
-                            "shrink-0 rounded-[2px] border-[--color-border] bg-[--color-bg]",
-                            {
-                              "h-2.5 w-2.5": indicator === "dot",
-                              "w-1": indicator === "line",
-                              "w-0 border-[1.5px] border-dashed bg-transparent":
-                                indicator === "dashed",
-                              "my-0.5": nestLabel && indicator === "dashed",
-                            },
-                          )}
-                          style={
-                            {
-                              "--color-bg": indicatorColor,
-                              "--color-border": indicatorColor,
-                            } as React.CSSProperties
-                          }
+                          className={indicatorClass}
+                          style={{
+                            backgroundColor:
+                              indicator === "dashed"
+                                ? "transparent"
+                                : indicatorColor,
+                            borderColor: indicatorColor,
+                          }}
                         />
                       )
                     )}
@@ -243,18 +264,22 @@ function ChartTooltipContent({
   );
 }
 
-const ChartLegend = RechartsPrimitive.Legend;
-
 function ChartLegendContent({
   className,
   hideIcon = false,
   payload,
   verticalAlign = "bottom",
   nameKey,
-}: React.ComponentProps<"div"> & {
+}: {
+  className?: string;
   hideIcon?: boolean;
   nameKey?: string;
-  payload?: Array<{ value?: string; dataKey?: string | number; color?: string; type?: string }>;
+  payload?: Array<{
+    value?: string;
+    dataKey?: string | number;
+    color?: string;
+    type?: string;
+  }>;
   verticalAlign?: "top" | "bottom";
 }) {
   const { config } = useChart();
@@ -305,24 +330,20 @@ function getPayloadConfigFromPayload(
   }
   const payloadPayload =
     "payload" in payload &&
-    typeof payload.payload === "object" &&
-    payload.payload !== null
-      ? payload.payload
+    typeof (payload as { payload?: unknown }).payload === "object" &&
+    (payload as { payload?: unknown }).payload !== null
+      ? (payload as { payload: Record<string, unknown> }).payload
       : undefined;
   let configLabelKey: string = key;
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === "string"
-  ) {
-    configLabelKey = payload[key as keyof typeof payload] as string;
+  const p = payload as Record<string, unknown>;
+  if (key in p && typeof p[key] === "string") {
+    configLabelKey = p[key] as string;
   } else if (
     payloadPayload &&
     key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === "string"
+    typeof payloadPayload[key] === "string"
   ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string;
+    configLabelKey = payloadPayload[key] as string;
   }
   return configLabelKey in config ? config[configLabelKey] : config[key];
 }
@@ -331,7 +352,6 @@ export {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
   ChartLegendContent,
   ChartStyle,
 };
