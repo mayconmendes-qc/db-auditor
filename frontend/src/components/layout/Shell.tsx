@@ -120,19 +120,35 @@ export function Shell({
 
         <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Ambiente
-          <select
-            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-            value={environmentId ?? ""}
-            onChange={(e) => setEnvironmentId(e.target.value || null)}
-            aria-label="Ambiente global"
-          >
-            <option value="">Todos</option>
-            {environments.map((env) => (
-              <option key={env.id} value={env.id}>
-                {env.name}
-              </option>
-            ))}
-          </select>
+          <span className="relative mt-1 block">
+            <select
+              className="h-9 w-full appearance-none rounded-md border border-slate-600 bg-slate-900 py-1.5 pr-8 pl-2 text-xs text-slate-100 transition hover:border-slate-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+              value={environmentId ?? ""}
+              onChange={(e) => setEnvironmentId(e.target.value || null)}
+              aria-label="Ambiente global"
+            >
+              <option value="">Todos</option>
+              {environments.map((env) => (
+                <option key={env.id} value={env.id}>
+                  {env.name}
+                </option>
+              ))}
+            </select>
+            <span
+              className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M2.5 4.5L6 8L9.5 4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </span>
         </label>
 
         <nav className="mt-5 space-y-4" aria-label="Principal">
