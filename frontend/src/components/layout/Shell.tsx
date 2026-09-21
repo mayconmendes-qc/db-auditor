@@ -90,11 +90,16 @@ export function Shell({
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
-      <aside className="border-b border-slate-800 bg-slate-950/95 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
+      <aside className="border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
         <div className="flex items-start justify-between gap-2">
-          <strong className="text-sm font-semibold tracking-wide text-slate-50">
-            Timescale Auditor
-          </strong>
+          <div>
+            <strong className="text-sm font-semibold tracking-wide text-white">
+              DB Auditor
+            </strong>
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              Qualle Control
+            </p>
+          </div>
           <span
             className={`mt-0.5 inline-block h-2 w-2 rounded-full ${
               apiOk === null
@@ -117,7 +122,7 @@ export function Shell({
         <label className="mt-4 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           Ambiente
           <select
-            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             value={environmentId ?? ""}
             onChange={(e) => setEnvironmentId(e.target.value || null)}
             aria-label="Ambiente global"
@@ -145,10 +150,10 @@ export function Shell({
                       key={section}
                       type="button"
                       onClick={() => onNavigate?.(section)}
-                      className={`rounded-md px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 ${
+                      className={`rounded-md px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
                         isActive
-                          ? "bg-slate-800 text-white"
-                          : "text-slate-300 hover:bg-slate-800/70 hover:text-white"
+                          ? "bg-white text-black font-medium"
+                          : "text-slate-300 hover:bg-slate-800 hover:text-white"
                       }`}
                     >
                       {section}
