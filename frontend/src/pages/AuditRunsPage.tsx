@@ -296,44 +296,42 @@ export function AuditRunsPage() {
         }}
       />
 
-      <div className="mt-8 space-y-8">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Card title="Disparo manual">
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="min-w-0 flex-1">
-                <Select
-                  label="Ambiente"
-                  options={environments.map((e) => ({
-                    value: e.id,
-                    label: e.name,
-                  }))}
-                  value={triggerEnv}
-                  onChange={(e) => setTriggerEnv(e.target.value)}
-                />
-              </div>
-              <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
-                {busy ? "Disparando…" : "Executar agora"}
-              </Button>
+      <div className="mt-8 space-y-6">
+        <Card title="Disparo manual">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Select
+                label="Ambiente"
+                options={environments.map((e) => ({
+                  value: e.id,
+                  label: e.name,
+                }))}
+                value={triggerEnv}
+                onChange={(e) => setTriggerEnv(e.target.value)}
+              />
             </div>
-            {triggerMsg ? (
-              <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
-            ) : null}
-          </Card>
-
-          <div className="grid gap-3 content-start">
-            <Select
-              label="Status"
-              options={STATUS_OPTIONS}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            />
-            <Select
-              label="Perfil"
-              options={PROFILE_OPTIONS}
-              value={profileFilter}
-              onChange={(e) => setProfileFilter(e.target.value)}
-            />
+            <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
+              {busy ? "Disparando…" : "Executar agora"}
+            </Button>
           </div>
+          {triggerMsg ? (
+            <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
+          ) : null}
+        </Card>
+
+        <div className="grid w-full gap-3 sm:grid-cols-2">
+          <Select
+            label="Status"
+            options={STATUS_OPTIONS}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          />
+          <Select
+            label="Perfil"
+            options={PROFILE_OPTIONS}
+            value={profileFilter}
+            onChange={(e) => setProfileFilter(e.target.value)}
+          />
         </div>
 
         {error ? (

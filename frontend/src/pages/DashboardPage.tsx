@@ -5,7 +5,7 @@ import {
   Card,
   ErrorBanner,
   Skeleton,
-  StoragePie3D,
+  StoragePieChart,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
@@ -158,7 +158,8 @@ export function DashboardPage() {
 
       {loading ? (
         <div className="mt-8 space-y-6">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
@@ -186,13 +187,13 @@ export function DashboardPage() {
           {connections.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">Nenhum ambiente.</p>
           ) : (
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-3 grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {connections.map((c) => {
                 const ok = c.dsn_configured && c.reachable;
                 return (
                   <li
                     key={c.environment_id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2.5 text-sm"
                   >
                     <div className="min-w-0">
                       <span className="font-medium text-slate-100">
@@ -263,7 +264,7 @@ export function DashboardPage() {
           {storage ? (
             <Card title="Storage por ambiente">
               <div className="mt-2">
-                <StoragePie3D items={storage.by_environment} />
+                <StoragePieChart items={storage.by_environment} />
               </div>
             </Card>
           ) : null}
