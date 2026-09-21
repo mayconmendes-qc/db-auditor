@@ -306,10 +306,7 @@ export function AuditRunsPage() {
                 </select>
               </label>
             </div>
-            <Button
-              onClick={onTriggerClick}
-              disabled={busy || !triggerEnv}
-            >
+            <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
               {busy ? "Disparando…" : "Executar agora"}
             </Button>
           </div>
@@ -344,10 +341,7 @@ export function AuditRunsPage() {
             title="Nenhuma execução"
             description="Dispare uma auditoria manual ou aguarde o scheduler. Ambientes demo vêm do seed local."
             action={
-              <Button
-                onClick={onTriggerClick}
-                disabled={busy || !triggerEnv}
-              >
+              <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
                 Executar agora
               </Button>
             }
