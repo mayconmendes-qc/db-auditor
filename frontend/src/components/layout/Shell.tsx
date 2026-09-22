@@ -175,7 +175,10 @@ export function Shell({
     };
   }, [activeSection]);
 
-  const { title: healthTitle, short: healthShort } = healthLabel(apiOk, dsnDown);
+  const { title: healthTitle, short: healthShort } = healthLabel(
+    apiOk,
+    dsnDown,
+  );
 
   const statusDotClass =
     apiOk === null
@@ -287,7 +290,7 @@ export function Shell({
                 ? "Verificando…"
                 : apiOk === false
                   ? "Indisponível"
-                  : healthShort ?? "Disponível"}
+                  : (healthShort ?? "Disponível")}
             </span>
           </button>
           <ThemeToggle />
