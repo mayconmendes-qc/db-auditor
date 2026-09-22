@@ -84,6 +84,29 @@ function ThemeToggle() {
   );
 }
 
+function healthLabel(
+  apiOk: boolean | null,
+  dsnDown: number,
+): { title: string; short: string | null } {
+  if (apiOk === null) {
+    return { title: "Verificando conexão…", short: null };
+  }
+  if (apiOk === false) {
+    return {
+      title: "Serviço indisponível — verifique se a API está no ar",
+      short: "Indisponível",
+    };
+  }
+  if (dsnDown > 0) {
+    const n = dsnDown;
+    return {
+      title: `Serviço disponível · ${n} ambiente${n > 1 ? "s" : ""} sem conexão`,
+      short: `${n} sem conexão`,
+    };
+  }
+  return { title: "Serviço disponível", short: null };
+}
+
 export function Shell({
   children,
   activeSection = "Dashboard",
@@ -152,13 +175,16 @@ export function Shell({
     };
   }, [activeSection]);
 
-  let healthTitle = "…";
-  if (apiOk === true) {
-    healthTitle =
-      dsnDown > 0 ? `API ok · ${dsnDown} DSN indisponível(is)` : "API ok";
-  } else if (apiOk === false) {
-    healthTitle = "API indisponível";
-  }
+  const { title: healthTitle, short: healthShort } = healthLabel(apiOk, dsnDown);
+
+  const statusDotClass =
+    apiOk === null
+      ? "bg-slate-600"
+      : apiOk
+        ? dsnDown > 0
+          ? "bg-amber-400"
+          : "bg-emerald-400"
+        : "bg-rose-400";
 
   const envOptions = [
     { value: "", label: "Todos" },
@@ -177,33 +203,13 @@ export function Shell({
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
-      <aside className="border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <strong className="text-sm font-semibold text-slate-50">
-              DB Auditor
-            </strong>
-            <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <ThemeToggle />
-            <span
-              className={`mt-0.5 inline-block h-2 w-2 rounded-full ${
-                apiOk === null
-                  ? "bg-slate-600"
-                  : apiOk
-                    ? dsnDown > 0
-                      ? "bg-amber-400"
-                      : "bg-emerald-400"
-                    : "bg-rose-400"
-              }`}
-              title={healthTitle}
-            />
-          </div>
+      <aside className="flex flex-col border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
+        <div className="min-w-0">
+          <strong className="text-sm font-semibold text-slate-50">
+            DB Auditor
+          </strong>
+          <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
         </div>
-        {apiOk === true && dsnDown > 0 ? (
-          <p className="mt-1 text-xs text-amber-300/90">{dsnDown} DSN down</p>
-        ) : null}
 
         <div className="mt-4">
           <Select
@@ -215,7 +221,7 @@ export function Shell({
           />
         </div>
 
-        <nav className="mt-5 space-y-4" aria-label="Principal">
+        <nav className="mt-5 min-h-0 flex-1 space-y-4" aria-label="Principal">
           {navGroups.map((group) => (
             <div key={group.label}>
               <p className="mb-1 px-2 text-xs font-medium text-slate-500">
@@ -263,6 +269,29 @@ export function Shell({
             </div>
           ))}
         </nav>
+
+        <div className="mt-4 flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 pt-3">
+          <button
+            type="button"
+            onClick={() => onNavigate?.("Status")}
+            className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left text-xs text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            title={healthTitle}
+            aria-label={healthTitle}
+          >
+            <span
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusDotClass}`}
+              aria-hidden="true"
+            />
+            <span className="truncate">
+              {apiOk === null
+                ? "Verificando…"
+                : apiOk === false
+                  ? "Indisponível"
+                  : healthShort ?? "Disponível"}
+            </span>
+          </button>
+          <ThemeToggle />
+        </div>
       </aside>
 
       <main className="w-full min-w-0 px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-10">
