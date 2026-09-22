@@ -71,11 +71,17 @@ export function Sheet({
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-700 px-5 py-4">
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="truncate text-base font-semibold text-slate-50">
+            <h2
+              id={titleId}
+              className="truncate text-base font-semibold text-slate-50"
+            >
               {title}
             </h2>
             {description ? (
-              <div id={descId} className="mt-1 text-xs leading-relaxed text-slate-400">
+              <div
+                id={descId}
+                className="mt-1 text-xs leading-relaxed text-slate-400"
+              >
                 {description}
               </div>
             ) : null}
@@ -89,7 +95,9 @@ export function Sheet({
             ✕
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -107,7 +115,9 @@ export function DetailGrid({
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             {item.label}
           </dt>
-          <dd className="mt-0.5 break-all text-sm text-slate-200">{item.value ?? "—"}</dd>
+          <dd className="mt-0.5 break-all text-sm text-slate-200">
+            {item.value ?? "—"}
+          </dd>
         </div>
       ))}
     </dl>
