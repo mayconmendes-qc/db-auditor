@@ -1,3 +1,5 @@
+import { DetailGrid, DetailSection } from "../components/ui/Sheet";
+import { formatBytes } from "../lib/format";
 import type {
   FunctionSnapshot,
   HypertableSnapshot,
@@ -6,11 +8,11 @@ import type {
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
-import { formatBytes } from "../lib/format";
-import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) {
+    return "—";
+  }
   try {
     return new Date(iso).toLocaleString("pt-BR");
   } catch {
@@ -19,12 +21,16 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 function formatNumber(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "—";
+  if (n == null || !Number.isFinite(n)) {
+    return "—";
+  }
   return n.toLocaleString("pt-BR");
 }
 
 function boolLabel(v: boolean | null | undefined): string {
-  if (v == null) return "—";
+  if (v == null) {
+    return "—";
+  }
   return v ? "Sim" : "Não";
 }
 
@@ -40,7 +46,10 @@ export function TableDetail({ t }: { t: TableSnapshot }) {
             { label: "Owner", value: t.owner_name ?? "—" },
             { label: "Relkind", value: t.relkind },
             { label: "Chave primária", value: boolLabel(t.has_primary_key) },
-            { label: "Colunas (contagem)", value: formatNumber(t.column_count) },
+            {
+              label: "Colunas (contagem)",
+              value: formatNumber(t.column_count),
+            },
             { label: "Coletado em", value: formatDate(t.collected_at) },
           ]}
         />
@@ -51,16 +60,22 @@ export function TableDetail({ t }: { t: TableSnapshot }) {
             { label: "Total", value: formatBytes(t.total_size_bytes) },
             { label: "Dados", value: formatBytes(t.data_size_bytes) },
             { label: "Índices", value: formatBytes(t.index_size_bytes) },
-            { label: "Estimativa de linhas", value: formatNumber(t.row_estimate) },
+            {
+              label: "Estimativa de linhas",
+              value: formatNumber(t.row_estimate),
+            },
           ]}
         />
       </DetailSection>
       <DetailSection title="Colunas">
         <p className="text-sm text-slate-400">
           Esta tabela possui{" "}
-          <span className="font-medium text-slate-200">{formatNumber(t.column_count)}</span>{" "}
-          coluna(s) no snapshot. O detalhamento por coluna (nome, tipo, nullable)
-          ainda não está exposto na API de inventário — a contagem vem do coletor de objetos.
+          <span className="font-medium text-slate-200">
+            {formatNumber(t.column_count)}
+          </span>{" "}
+          coluna(s) no snapshot. O detalhamento por coluna (nome, tipo,
+          nullable) ainda não está exposto na API de inventário — a contagem vem
+          do coletor de objetos.
         </p>
       </DetailSection>
       <DetailSection title="Referência">
@@ -132,7 +147,8 @@ export function ViewDetail({
             { label: "Nome", value: v.view_name },
             {
               label: "Tipo",
-              value: kind === "caggs" ? "Continuous Aggregate" : v.relkind || "view",
+              value:
+                kind === "caggs" ? "Continuous Aggregate" : v.relkind || "view",
             },
             { label: "Owner", value: v.owner_name ?? "—" },
             { label: "Tamanho", value: formatBytes(v.size_bytes) },
@@ -159,7 +175,10 @@ export function FunctionDetail({ f }: { f: FunctionSnapshot }) {
             { label: "Argumentos", value: f.identity_arguments || "—" },
             { label: "Linguagem", value: f.language_name ?? "—" },
             { label: "Kind", value: f.kind ?? "—" },
-            { label: "SECURITY DEFINER", value: boolLabel(f.is_security_definer) },
+            {
+              label: "SECURITY DEFINER",
+              value: boolLabel(f.is_security_definer),
+            },
             { label: "Owner", value: f.owner_name ?? "—" },
             { label: "Coletado em", value: formatDate(f.collected_at) },
           ]}
