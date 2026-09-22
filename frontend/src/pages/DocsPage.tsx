@@ -400,7 +400,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
         }
       />
 
-      <div className="mt-10 max-w-3xl">
+      <div className="mt-10 w-full">
         <Accordion items={items} defaultOpenId="dashboard" />
       </div>
     </>

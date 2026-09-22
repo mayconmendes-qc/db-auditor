@@ -234,22 +234,21 @@ export function DashboardPage() {
                     ? "Indisponível"
                     : "DSN ausente";
                 return (
-                  <Card
-                    key={c.environment_id}
-                    subtitle="Ambiente auditado"
-                    title={c.environment_name}
-                  >
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Card key={c.environment_id}>
+                    <div className="flex items-center justify-between gap-3">
+                      <strong className="min-w-0 truncate text-base font-semibold text-slate-50">
+                        {c.environment_name}
+                      </strong>
                       <Badge tone={ok ? "success" : "danger"}>
                         {statusLabel}
                       </Badge>
-                      {c.server_version ? (
-                        <span className="font-mono text-xs text-slate-400">
-                          PG {c.server_version}
-                          {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
-                        </span>
-                      ) : null}
                     </div>
+                    {c.server_version ? (
+                      <p className="mt-2 font-mono text-xs text-slate-400">
+                        PG {c.server_version}
+                        {c.latency_ms != null ? ` · ${c.latency_ms} ms` : ""}
+                      </p>
+                    ) : null}
                     {c.error ? (
                       <p className="mt-2 truncate text-xs text-rose-300">
                         {c.error}
