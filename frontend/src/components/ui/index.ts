@@ -8,6 +8,7 @@ export { ErrorBanner } from "./ErrorBanner";
 export { Input } from "./Input";
 export { Modal } from "./Modal";
 export { Select } from "./Select";
+export { DetailGrid, DetailSection, Sheet } from "./Sheet";
 export { Skeleton } from "./Skeleton";
 export { StoragePieChart } from "./StoragePieChart";
 export { Table } from "./Table";
