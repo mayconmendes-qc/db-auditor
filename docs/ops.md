@@ -1,4 +1,4 @@
-# Operação em VPS — Timescale Auditor
+# Operação em VPS — DB Auditor
 
 ## Schema do snapshot store
 

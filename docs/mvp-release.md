@@ -1,4 +1,4 @@
-# MVP Release — Timescale Auditor (Sprint 12)
+# MVP Release — DB Auditor (Sprint 12)
 
 Versão alvo: **0.12.0-mvp**
 
