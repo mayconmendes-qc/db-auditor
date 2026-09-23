@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
-	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
-	"github.com/mayconmendes-qc/timescale-auditor/internal/scheduler"
+	"github.com/mayconmendes-qc/db-auditor/internal/audit"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
 )
 
 // RunService exposes audit run operations to HTTP handlers.

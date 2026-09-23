@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
+	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 )
 
 // ProfileInterval maps profile name to recurrence.

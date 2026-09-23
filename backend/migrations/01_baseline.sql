@@ -1,4 +1,4 @@
--- Timescale Auditor — snapshot store baseline (MVP 0.12+)
+-- DB Auditor — snapshot store baseline (MVP 0.12+)
 -- Applied once by Postgres docker-entrypoint-initdb.d on empty volume.
 -- After changing this file in development: make reset-volume && make up
 

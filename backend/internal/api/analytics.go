@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 // DashboardKPIs is the executive summary for the main dashboard.

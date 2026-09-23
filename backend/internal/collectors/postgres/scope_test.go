@@ -3,7 +3,7 @@ package postgres
 import (
 	"testing"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
+	"github.com/mayconmendes-qc/db-auditor/internal/config"
 )
 
 func TestNormalizeSizeBytesNonNegative(t *testing.T) {

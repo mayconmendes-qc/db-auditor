@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/analyzer"
-	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 // FindingStore exposes finding persistence.

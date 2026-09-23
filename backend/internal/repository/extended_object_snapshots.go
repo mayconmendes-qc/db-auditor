@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/mayconmendes-qc/timescale-auditor/internal/collectors/postgres"
+	"github.com/mayconmendes-qc/db-auditor/internal/collectors/postgres"
 )
 
 // SaveExtendedObjectInventory persists constraint/view/function/extension facts.
