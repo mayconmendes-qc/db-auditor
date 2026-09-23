@@ -75,7 +75,7 @@ function TableColumnsList({ t }: { t: TableSnapshot }) {
   if (error) {
     return <p className="text-sm text-slate-400">{error}</p>;
   }
-  if (columns.length === ace0) {
+  if (columns.length === 0) {
     return (
       <p className="text-sm text-slate-400">
         Nenhuma coluna no snapshot para esta tabela (rode uma auditoria se o
