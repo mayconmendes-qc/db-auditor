@@ -5,6 +5,7 @@ import type {
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
+  ColumnSnapshot,
   CompareObjectItem,
   CompareResult,
   ConnectionStatus,
@@ -101,6 +102,7 @@ export type InventoryListParams = {
   q?: string;
   database?: string;
   schema?: string;
+  table?: string;
 };
 
 export type AnalyticsParams = {
@@ -166,6 +168,10 @@ export const api = {
   tables: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<TableSnapshot>>(
       `/api/v1/environments/${environmentId}/tables${qs(params)}`,
+    ),
+  columns: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<ColumnSnapshot>>(
+      `/api/v1/environments/${environmentId}/columns${qs(params)}`,
     ),
   indexes: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<IndexSnapshot>>(

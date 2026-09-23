@@ -8,6 +8,7 @@ import (
 
 func registerInventoryRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("GET /api/v1/environments/{id}/tables", listTables(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/columns", listColumns(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/indexes", listIndexes(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/views", listViews(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/functions", listFunctions(store))
@@ -25,6 +26,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 			EnvironmentID: id,
 			Database:      q.Database,
 			Schema:        q.Schema,
+			Table:         q.Table,
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,
@@ -40,6 +42,38 @@ func listTables(store InventoryStore) http.HandlerFunc {
 	}
 }
 
+func listColumns(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
+			return
+		}
+		q := parseInventoryQuery(r)
+		limit := q.Limit
+		if limit <= 0 {
+			limit = 200
+		}
+		items, total, err := store.ListColumnSnapshots(r.Context(), repository.InventoryFilter{
+			EnvironmentID: id,
+			Database:      q.Database,
+			Schema:        q.Schema,
+			Table:         q.Table,
+			Q:             q.Q,
+			Limit:         limit,
+			Offset:        q.Offset,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as colunas.")
+			return
+		}
+		if items == nil {
+			items = []repository.ColumnSnapshotRow{}
+		}
+		writePage(w, items, limit, q.Offset, total)
+	}
+}
+
 func listIndexes(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -52,6 +86,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 			EnvironmentID: id,
 			Database:      q.Database,
 			Schema:        q.Schema,
+			Table:         q.Table,
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,

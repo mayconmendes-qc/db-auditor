@@ -176,6 +176,22 @@ export interface TableSnapshot {
   collected_at: string;
 }
 
+export interface ColumnSnapshot {
+  id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  column_name: string;
+  ordinal_position: number;
+  data_type: string;
+  is_nullable: boolean;
+  column_default: string | null;
+  is_generated: boolean;
+  identity_generation: string | null;
+  collation_name: string | null;
+  collected_at: string;
+}
+
 export interface IndexSnapshot {
   id: string;
   database_name: string;

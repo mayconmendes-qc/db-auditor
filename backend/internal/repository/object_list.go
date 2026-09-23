@@ -11,6 +11,7 @@ type InventoryFilter struct {
 	EnvironmentID string
 	Database      string
 	Schema        string
+	Table         string
 	Q             string
 	Limit         int
 	Offset        int
@@ -32,6 +33,22 @@ type TableSnapshotRow struct {
 	ColumnCount    int       `json:"column_count"`
 	HasPrimaryKey  bool      `json:"has_primary_key"`
 	CollectedAt    time.Time `json:"collected_at"`
+}
+
+type ColumnSnapshotRow struct {
+	ID                 string    `json:"id"`
+	DatabaseName       string    `json:"database_name"`
+	SchemaName         string    `json:"schema_name"`
+	TableName          string    `json:"table_name"`
+	ColumnName         string    `json:"column_name"`
+	OrdinalPosition    int       `json:"ordinal_position"`
+	DataType           string    `json:"data_type"`
+	IsNullable         bool      `json:"is_nullable"`
+	ColumnDefault      *string   `json:"column_default"`
+	IsGenerated        bool      `json:"is_generated"`
+	IdentityGeneration *string   `json:"identity_generation"`
+	CollationName      *string   `json:"collation_name"`
+	CollectedAt        time.Time `json:"collected_at"`
 }
 
 type IndexSnapshotRow struct {
@@ -93,6 +110,11 @@ func inventoryWhereFor(table string, f InventoryFilter, startArg int) (string, [
 		args = append(args, f.Schema)
 		n++
 	}
+	if f.Table != "" {
+		conds = append(conds, fmt.Sprintf("table_name = $%d", n))
+		args = append(args, f.Table)
+		n++
+	}
 	return strings.Join(conds, " AND "), args, n
 }
 
@@ -133,6 +155,51 @@ LIMIT $%d OFFSET $%d
 			&r.ID, &r.AuditRunID, &r.EnvironmentID, &r.DatabaseName, &r.SchemaName, &r.TableName,
 			&r.OwnerName, &r.Relkind, &r.TotalSizeBytes, &r.DataSizeBytes, &r.IndexSizeBytes,
 			&r.RowEstimate, &r.ColumnCount, &r.HasPrimaryKey, &r.CollectedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		out = append(out, r)
+	}
+	return out, total, rows.Err()
+}
+
+func (s *Store) ListColumnSnapshots(ctx context.Context, f InventoryFilter) ([]ColumnSnapshotRow, int, error) {
+	where, args, next := inventoryWhereFor("column_snapshot", f, 1)
+	if f.Q != "" {
+		where += fmt.Sprintf(" AND (column_name ILIKE $%d OR data_type ILIKE $%d)", next, next)
+		args = append(args, "%"+f.Q+"%")
+		next++
+	}
+	var total int
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM column_snapshot WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	limit, offset := f.Limit, f.Offset
+	if limit <= 0 {
+		limit = 200
+	}
+	query := fmt.Sprintf(`
+SELECT id::text, database_name, schema_name, table_name, column_name,
+  ordinal_position, data_type, is_nullable, column_default, is_generated,
+  identity_generation, collation_name, collected_at
+FROM column_snapshot
+WHERE %s
+ORDER BY database_name, schema_name, table_name, ordinal_position
+LIMIT $%d OFFSET $%d
+`, where, next, next+1)
+	args = append(args, limit, offset)
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := make([]ColumnSnapshotRow, 0)
+	for rows.Next() {
+		var r ColumnSnapshotRow
+		if err := rows.Scan(
+			&r.ID, &r.DatabaseName, &r.SchemaName, &r.TableName, &r.ColumnName,
+			&r.OrdinalPosition, &r.DataType, &r.IsNullable, &r.ColumnDefault, &r.IsGenerated,
+			&r.IdentityGeneration, &r.CollationName, &r.CollectedAt,
 		); err != nil {
 			return nil, 0, err
 		}
