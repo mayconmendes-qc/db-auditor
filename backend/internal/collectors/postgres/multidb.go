@@ -32,7 +32,7 @@ func ForEachUserDatabase(
 
 	root, err := pgx.Connect(ctx, baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("connect target: %w", err)
+		return nil, fmt.Errorf("connect target: %s", config.SanitizeError(err))
 	}
 	defer func() { _ = root.Close(ctx) }()
 
@@ -56,14 +56,14 @@ func ForEachUserDatabase(
 		dbURL, err := rewriteDatabase(baseURL, db.Name)
 		if err != nil {
 			partial = append(partial, PartialError{
-				Database: db.Name, Op: "rewrite_url", Message: err.Error(),
+				Database: db.Name, Op: "rewrite_url", Message: config.SanitizeError(err),
 			})
 			continue
 		}
 		dbConn, err := pgx.Connect(ctx, dbURL)
 		if err != nil {
 			partial = append(partial, PartialError{
-				Database: db.Name, Op: "connect", Message: err.Error(),
+				Database: db.Name, Op: "connect", Message: config.SanitizeError(err),
 			})
 			continue
 		}
@@ -71,7 +71,7 @@ func ForEachUserDatabase(
 		_ = dbConn.Close(ctx)
 		if visitErr != nil {
 			partial = append(partial, PartialError{
-				Database: db.Name, Op: "collect", Message: visitErr.Error(),
+				Database: db.Name, Op: "collect", Message: config.SanitizeError(visitErr),
 			})
 			continue
 		}
@@ -80,6 +80,7 @@ func ForEachUserDatabase(
 }
 
 // FormatPartialErrors returns a short human-readable summary of partial errors.
+// Messages are passed through SanitizeDSN for safety in logs and UI.
 func FormatPartialErrors(partial []PartialError, max int) string {
 	if len(partial) == 0 {
 		return ""
@@ -94,7 +95,8 @@ func FormatPartialErrors(partial []PartialError, max int) string {
 	parts := make([]string, 0, n)
 	for i := 0; i < n; i++ {
 		p := partial[i]
-		parts = append(parts, fmt.Sprintf("%s[%s]: %s", p.Database, p.Op, p.Message))
+		msg := config.SanitizeDSN(p.Message)
+		parts = append(parts, fmt.Sprintf("%s[%s]: %s", p.Database, p.Op, msg))
 	}
 	s := strings.Join(parts, "; ")
 	if len(partial) > max {
