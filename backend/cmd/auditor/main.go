@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/api"
-	"github.com/mayconmendes-qc/db-auditor/internal/audit"
-	"github.com/mayconmendes-qc/db-auditor/internal/config"
-	"github.com/mayconmendes-qc/db-auditor/internal/database"
-	"github.com/mayconmendes-qc/db-auditor/internal/observability"
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
-	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/api"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/database"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/observability"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/timescale-auditor/internal/scheduler"
 )
 
 func main() {

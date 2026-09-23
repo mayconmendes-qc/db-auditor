@@ -1,4 +1,4 @@
-module github.com/mayconmendes-qc/db-auditor
+module github.com/mayconmendes-qc/timescale-auditor
 
 go 1.27
 
