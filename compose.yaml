@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-timescale_auditor}
+      POSTGRES_DB: ${POSTGRES_DB:-db_auditor}
       POSTGRES_USER: ${POSTGRES_USER:-auditor}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     # PostgreSQL 18+ official image: VOLUME is /var/lib/postgresql (not .../data).
@@ -28,10 +28,10 @@ services:
         required: false
     environment:
       AUDITOR_HTTP_ADDRESS: :8080
-      AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-timescale_auditor}?sslmode=disable
+      AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-db_auditor}?sslmode=disable
       AUDITOR_STATEMENT_TIMEOUT: ${AUDITOR_STATEMENT_TIMEOUT:-15s}
       AUDITOR_LOCK_TIMEOUT: ${AUDITOR_LOCK_TIMEOUT:-5s}
-      AUDITOR_APPLICATION_NAME: timescale-auditor
+      AUDITOR_APPLICATION_NAME: db-auditor
       AUDITOR_DATABASE_DENYLIST: ${AUDITOR_DATABASE_DENYLIST:-template0,template1,postgres}
       AUDITOR_SCHEMA_DENYLIST: ${AUDITOR_SCHEMA_DENYLIST:-pg_catalog,information_schema}
       AUDITOR_CORS_ORIGINS: ${AUDITOR_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}

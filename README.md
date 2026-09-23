@@ -1,8 +1,8 @@
-# Timescale Auditor
+# DB Auditor
 
-Serviço **read-only** de inventário, comparação e diagnóstico dos ambientes TimescaleDB (Tiger Cloud e Datacenter Unifique).
+Serviço **read-only** de inventário, comparação e diagnóstico de ambientes PostgreSQL/TimescaleDB (ex.: Tiger Cloud e datacenter self-hosted).
 
-**MVP 0.12** — sprints 0–12 no backlog Notion concluídas no repositório (fundação → inventário → findings → performance → ops → dashboard → release).
+**MVP 0.12** — sprints 0–12 no backlog concluídas no repositório (fundação → inventário → findings → performance → ops → dashboard → release).
 
 ## Pré-requisito no host
 
@@ -63,4 +63,4 @@ make frontend-check frontend-typecheck frontend-test
 
 ## Documentação de produto
 
-Notion: *Anotações / Timescale Auditor* (EF, Backlog, Fluxo de Desenvolvimento).
+Notion: *Anotações / DB Auditor* (EF, Backlog, Fluxo de Desenvolvimento).
