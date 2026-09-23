@@ -32,6 +32,7 @@ type InventoryQuery struct {
 	Q        string
 	Database string
 	Schema   string
+	Table    string
 	OrderBy  string
 }
 
@@ -42,6 +43,7 @@ func parseInventoryQuery(r *http.Request) InventoryQuery {
 		Q:        strings.TrimSpace(r.URL.Query().Get("q")),
 		Database: strings.TrimSpace(r.URL.Query().Get("database")),
 		Schema:   strings.TrimSpace(r.URL.Query().Get("schema")),
+		Table:    strings.TrimSpace(r.URL.Query().Get("table")),
 		OrderBy:  strings.TrimSpace(r.URL.Query().Get("order_by")),
 	}
 	if v := r.URL.Query().Get("limit"); v != "" {

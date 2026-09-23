@@ -26,6 +26,7 @@ type InventoryStore interface {
 	ListJobSnapshots(ctx context.Context, environmentID string) ([]repository.JobSnapshotRow, error)
 	ListPolicySnapshots(ctx context.Context, environmentID string) ([]repository.PolicySnapshotRow, error)
 	ListTableSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error)
+	ListColumnSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ColumnSnapshotRow, int, error)
 	ListIndexSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error)
 	ListViewSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ViewSnapshotRow, int, error)
 	ListFunctionSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.FunctionSnapshotRow, int, error)
