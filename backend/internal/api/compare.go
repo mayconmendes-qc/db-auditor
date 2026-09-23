@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/comparison"
+	"github.com/mayconmendes-qc/db-auditor/internal/comparison"
 )
 
 type compareBody struct {

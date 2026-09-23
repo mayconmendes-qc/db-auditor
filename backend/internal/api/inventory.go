@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 func registerInventoryRoutes(mux *http.ServeMux, store InventoryStore) {

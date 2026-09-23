@@ -12,6 +12,8 @@ make reset-volume   # destrutivo
 make up
 ```
 
+**Nome do banco interno:** default `db_auditor` (`.env` / `POSTGRES_DB`). Se o volume foi criado com o nome legado `timescale_auditor`, alinhe o `.env` ou recrie o volume.
+
 Detalhes: `backend/migrations/README.md`.
 
 ## Observabilidade (Sprint 10)
@@ -27,6 +29,8 @@ Logs da API são **JSON estruturados** por padrão (`AUDITOR_LOG_FORMAT=json`).
 Use `AUDITOR_LOG_FORMAT=text` e `AUDITOR_LOG_LEVEL=debug` em desenvolvimento.
 
 Cada resposta HTTP inclui `X-Request-ID` (ou propaga o valor enviado pelo cliente) para correlacionar logs e traces manuais.
+
+Erros de conexão a targets **não** incluem senha (ver `config.SanitizeDSN`). Warnings parciais multi-database aparecem no `collector_run.warning`.
 
 ### Métricas principais
 

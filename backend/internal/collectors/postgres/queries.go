@@ -1,6 +1,8 @@
 package postgres
 
 // SQL kept in sync with backend/sql/collectors/postgres/*.sql (source of truth for review).
+// When changing a query: update the .sql under backend/sql/collectors/ first, then mirror here.
+// Runtime collectors execute the constants in this file — the .sql files are documentation/review only.
 
 const serverSQL = `
 SELECT
