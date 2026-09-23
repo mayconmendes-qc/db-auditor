@@ -33,8 +33,9 @@ func (o RunnerOptions) withDefaults() RunnerOptions {
 	if o.CollectorVersion == "" {
 		o.CollectorVersion = "1.0.0"
 	}
+	// Multi-database environments (dozens of DBs) need more than a couple of minutes per collector.
 	if o.CollectorTimeout <= 0 {
-		o.CollectorTimeout = 2 * time.Minute
+		o.CollectorTimeout = 10 * time.Minute
 	}
 	if o.MaxRetries < 0 {
 		o.MaxRetries = 0
@@ -184,6 +185,14 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 		if runErr == nil {
 			break
 		}
+		// Soft partial multi-DB warning: collector returns *PartialWarning with rows.
+		var pw *PartialWarning
+		if errors.As(runErr, &pw) {
+			rows = pw.Rows
+			warning = pw.Warning
+			runErr = nil
+			break
+		}
 		if !isRetryable(runErr) || attempt == attempts-1 {
 			break
 		}
@@ -235,3 +244,20 @@ func (e *TransientError) Error() string {
 }
 
 func (e *TransientError) Unwrap() error { return e.Err }
+
+// PartialWarning means the collector completed with data but some databases failed.
+// runOne treats it as success and records Warning on the collector_run.
+type PartialWarning struct {
+	Rows    int64
+	Warning string
+}
+
+func (e *PartialWarning) Error() string {
+	if e == nil {
+		return "partial warning"
+	}
+	if e.Warning != "" {
+		return e.Warning
+	}
+	return "partial multi-database collection"
+}
