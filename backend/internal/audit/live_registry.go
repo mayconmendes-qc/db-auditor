@@ -52,8 +52,40 @@ func runIDs(ctx context.Context) (envID, runID pgtype.UUID, err error) {
 	return envID, runID, nil
 }
 
+func dsnFromContext(ctx context.Context, targets map[string]string) (string, error) {
+	meta, ok := RunMetaFromContext(ctx)
+	if !ok || meta.EnvironmentID == "" {
+		return "", fmt.Errorf("contexto da execução sem environment_id")
+	}
+	dsn := config.DSNForEnvironment(targets, meta.EnvironmentID)
+	if dsn == "" {
+		return "", fmt.Errorf(
+			"credenciais do ambiente não configuradas. Defina %s no .env (somente leitura) e reinicie a API",
+			config.TargetSlotHint(meta.EnvironmentID),
+		)
+	}
+	return dsn, nil
+}
+
+// finishMulti returns rows and either nil, *PartialWarning, or a hard error from listing DBs.
+// Per-database failures never abort the audit run: they become warnings on the collector.
+func finishMulti(rows int64, partial []postgres.PartialError, hard error) (int64, error) {
+	if hard != nil {
+		return 0, hard
+	}
+	if len(partial) == 0 {
+		return rows, nil
+	}
+	msg := postgres.FormatPartialErrors(partial, 5)
+	return rows, &PartialWarning{
+		Rows:    rows,
+		Warning: fmt.Sprintf("%d database(s) com falha parcial: %s", len(partial), msg),
+	}
+}
+
 // NewLiveRegistry registers collectors that connect using AUDITOR_TARGET_N_* credentials
 // and optionally persist inventory snapshots when Writer is set.
+// Object collectors iterate every connectable database, continuing on per-DB errors.
 func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	r := NewRegistry()
 	scope := opts.Scope
@@ -63,17 +95,10 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	}
 	writer := opts.Writer
 
-	connect := func(ctx context.Context) (*pgx.Conn, error) {
-		meta, ok := RunMetaFromContext(ctx)
-		if !ok || meta.EnvironmentID == "" {
-			return nil, fmt.Errorf("contexto da execução sem environment_id")
-		}
-		dsn := config.DSNForEnvironment(targets, meta.EnvironmentID)
-		if dsn == "" {
-			return nil, fmt.Errorf(
-				"credenciais do ambiente não configuradas. Defina %s no .env (somente leitura) e reinicie a API",
-				config.TargetSlotHint(meta.EnvironmentID),
-			)
+	connectRoot := func(ctx context.Context) (*pgx.Conn, error) {
+		dsn, err := dsnFromContext(ctx, targets)
+		if err != nil {
+			return nil, err
 		}
 		conn, err := pgx.Connect(ctx, dsn)
 		if err != nil {
@@ -92,7 +117,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	}
 
 	must("postgres.server", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		conn, err := connectRoot(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -104,7 +129,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.databases", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		conn, err := connectRoot(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -126,361 +151,466 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	must("postgres.schemas", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		schemas, err := postgres.CollectSchemas(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.SchemaFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectSchemas(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(schemas) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveDiscovery(ctx, envID, runID, nil, schemas); err != nil {
+			if err := writer.SaveDiscovery(ctx, envID, runID, nil, all); err != nil {
 				return 0, fmt.Errorf("persistir schemas: %w", err)
 			}
 		}
-		return int64(len(schemas)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.tables", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		tables, err := postgres.CollectTables(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.TableFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectTables(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(tables) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveObjectInventory(ctx, envID, runID, tables, nil, nil); err != nil {
+			if err := writer.SaveObjectInventory(ctx, envID, runID, all, nil, nil); err != nil {
 				return 0, fmt.Errorf("persistir tables: %w", err)
 			}
 		}
-		return int64(len(tables)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.columns", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		cols, err := postgres.CollectColumns(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.ColumnFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectColumns(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(cols) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveObjectInventory(ctx, envID, runID, nil, cols, nil); err != nil {
+			if err := writer.SaveObjectInventory(ctx, envID, runID, nil, all, nil); err != nil {
 				return 0, fmt.Errorf("persistir columns: %w", err)
 			}
 		}
-		return int64(len(cols)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.indexes", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		idxs, err := postgres.CollectIndexes(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.IndexFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectIndexes(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(idxs) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveObjectInventory(ctx, envID, runID, nil, nil, idxs); err != nil {
+			if err := writer.SaveObjectInventory(ctx, envID, runID, nil, nil, all); err != nil {
 				return 0, fmt.Errorf("persistir indexes: %w", err)
 			}
 		}
-		return int64(len(idxs)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.constraints", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := postgres.CollectConstraints(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.ConstraintFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectConstraints(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, items, nil, nil, nil); err != nil {
+			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, all, nil, nil, nil); err != nil {
 				return 0, fmt.Errorf("persistir constraints: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.views", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := postgres.CollectViews(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.ViewFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectViews(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, items, nil, nil); err != nil {
+			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, all, nil, nil); err != nil {
 				return 0, fmt.Errorf("persistir views: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.functions", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := postgres.CollectFunctions(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []postgres.FunctionFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectFunctions(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, nil, items, nil); err != nil {
+			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, nil, all, nil); err != nil {
 				return 0, fmt.Errorf("persistir functions: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("postgres.extensions", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := postgres.CollectExtensions(ctx, conn)
-		if err != nil {
-			return 0, err
+		var all []postgres.ExtensionFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := postgres.CollectExtensions(cctx, conn)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
-			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, nil, nil, items); err != nil {
+			if err := writer.SaveExtendedObjectInventory(ctx, envID, runID, nil, nil, nil, all); err != nil {
 				return 0, fmt.Errorf("persistir extensions: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.version", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		v, err := timescale.CollectVersion(ctx, conn)
-		if err != nil {
-			return 0, err
-		}
-		if v == nil {
-			return 0, nil
-		}
-		if writer != nil {
-			envID, runID, err := runIDs(ctx)
+		var n int64
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			v, err := timescale.CollectVersion(cctx, conn)
 			if err != nil {
-				return 0, err
+				return err
 			}
-			status := timescale.StatusOK
-			if !v.Compatible {
-				status = timescale.StatusSkippedUnsupported
+			if v == nil {
+				return nil
 			}
-			if err := writer.SaveTimescaleCoreInventory(ctx, envID, runID, timescale.InventoryResult{
-				Status:  status,
-				Version: v,
-			}); err != nil {
-				return 0, fmt.Errorf("persistir timescale version: %w", err)
+			n++
+			if writer != nil {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return err
+				}
+				status := timescale.StatusOK
+				if !v.Compatible {
+					status = timescale.StatusSkippedUnsupported
+				}
+				if err := writer.SaveTimescaleCoreInventory(ctx, envID, runID, timescale.InventoryResult{
+					Status:  status,
+					Version: v,
+				}); err != nil {
+					return fmt.Errorf("persistir timescale version: %w", err)
+				}
 			}
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		return 1, nil
+		return finishMulti(n, partial, nil)
 	})
 
 	must("timescale.hypertables", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectHypertables(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.HypertableFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectHypertables(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescaleCoreInventory(ctx, envID, runID, timescale.InventoryResult{
 				Status:      timescale.StatusOK,
-				Hypertables: items,
+				Hypertables: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir hypertables: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.dimensions", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectDimensions(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.DimensionFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectDimensions(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescaleCoreInventory(ctx, envID, runID, timescale.InventoryResult{
 				Status:     timescale.StatusOK,
-				Dimensions: items,
+				Dimensions: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir dimensions: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.chunks", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectChunks(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.ChunkFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectChunks(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescaleCoreInventory(ctx, envID, runID, timescale.InventoryResult{
 				Status: timescale.StatusOK,
-				Chunks: items,
+				Chunks: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir chunks: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.continuous_aggregates", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectContinuousAggregates(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.ContinuousAggregateFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectContinuousAggregates(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescalePolicyInventory(ctx, envID, runID, timescale.PolicyInventoryResult{
 				Status:               timescale.StatusOK,
-				ContinuousAggregates: items,
+				ContinuousAggregates: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir continuous aggregates: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.jobs", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectJobs(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.JobFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectJobs(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescalePolicyInventory(ctx, envID, runID, timescale.PolicyInventoryResult{
 				Status: timescale.StatusOK,
-				Jobs:   items,
+				Jobs:   all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir jobs: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	must("timescale.policies", func(ctx context.Context) (int64, error) {
-		conn, err := connect(ctx)
+		dsn, err := dsnFromContext(ctx, targets)
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = conn.Close(ctx) }()
-		items, err := timescale.CollectPolicies(ctx, conn, scope)
-		if err != nil {
-			return 0, err
+		var all []timescale.PolicyFacts
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectPolicies(cctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
 		}
-		if writer != nil && len(items) > 0 {
+		if writer != nil && len(all) > 0 {
 			envID, runID, err := runIDs(ctx)
 			if err != nil {
 				return 0, err
 			}
 			if err := writer.SaveTimescalePolicyInventory(ctx, envID, runID, timescale.PolicyInventoryResult{
 				Status:   timescale.StatusOK,
-				Policies: items,
+				Policies: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir policies: %w", err)
 			}
 		}
-		return int64(len(items)), nil
+		return finishMulti(int64(len(all)), partial, nil)
 	})
 
 	return r
