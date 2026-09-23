@@ -47,6 +47,9 @@ func (s *stubStore) ListPolicySnapshots(context.Context, string) ([]repository.P
 func (s *stubStore) ListTableSnapshots(context.Context, repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error) {
 	return []repository.TableSnapshotRow{}, 0, nil
 }
+func (s *stubStore) ListColumnSnapshots(context.Context, repository.InventoryFilter) ([]repository.ColumnSnapshotRow, int, error) {
+	return []repository.ColumnSnapshotRow{}, 0, nil
+}
 func (s *stubStore) ListIndexSnapshots(context.Context, repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error) {
 	return []repository.IndexSnapshotRow{}, 0, nil
 }
