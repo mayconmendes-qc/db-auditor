@@ -67,7 +67,8 @@ func dsnFromContext(ctx context.Context, targets map[string]string) (string, err
 	return dsn, nil
 }
 
-// finishMulti returns rows and either nil, *PartialWarning, or a hard error.
+// finishMulti returns rows and either nil, *PartialWarning, or a hard error from listing DBs.
+// Per-database failures never abort the audit run: they become warnings on the collector.
 func finishMulti(rows int64, partial []postgres.PartialError, hard error) (int64, error) {
 	if hard != nil {
 		return 0, hard
@@ -76,9 +77,6 @@ func finishMulti(rows int64, partial []postgres.PartialError, hard error) (int64
 		return rows, nil
 	}
 	msg := postgres.FormatPartialErrors(partial, 5)
-	if rows == 0 {
-		return 0, fmt.Errorf("falha em todos os databases visitados: %s", msg)
-	}
 	return rows, &PartialWarning{
 		Rows:    rows,
 		Warning: fmt.Sprintf("%d database(s) com falha parcial: %s", len(partial), msg),
@@ -87,7 +85,7 @@ func finishMulti(rows int64, partial []postgres.PartialError, hard error) (int64
 
 // NewLiveRegistry registers collectors that connect using AUDITOR_TARGET_N_* credentials
 // and optionally persist inventory snapshots when Writer is set.
-// Object collectors iterate every connectable database (multi_database), continuing on per-DB errors.
+// Object collectors iterate every connectable database, continuing on per-DB errors.
 func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	r := NewRegistry()
 	scope := opts.Scope
@@ -420,15 +418,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if hard != nil {
 			return 0, hard
 		}
-		// Empty (no timescaledb) is success, not failure.
-		if len(partial) > 0 && n > 0 {
-			return finishMulti(n, partial, nil)
-		}
-		if len(partial) > 0 && n == 0 {
-			// All DBs failed connect/collect — still soft if only missing extension noise
-			return finishMulti(0, partial, nil)
-		}
-		return n, nil
+		return finishMulti(n, partial, nil)
 	})
 
 	must("timescale.hypertables", func(ctx context.Context) (int64, error) {
