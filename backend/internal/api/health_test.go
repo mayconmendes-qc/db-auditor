@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 type stubStore struct {

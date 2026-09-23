@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/mayconmendes-qc/timescale-auditor/internal/config"
+	"github.com/mayconmendes-qc/db-auditor/internal/config"
 )
 
 // CollectDatabases lists databases and applies scope allow/deny filters.

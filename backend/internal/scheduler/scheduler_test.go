@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mayconmendes-qc/timescale-auditor/internal/audit"
+	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 )
 
 type stubRunner struct {
