@@ -19,6 +19,9 @@ func TestSanitizeDSN_URI(t *testing.T) {
 	if !strings.Contains(got, "***") {
 		t.Fatalf("expected redaction marker: %s", got)
 	}
+	if !strings.Contains(got, "db.example") {
+		t.Fatalf("host should remain: %s", got)
+	}
 }
 
 func TestSanitizeDSN_ErrorText(t *testing.T) {

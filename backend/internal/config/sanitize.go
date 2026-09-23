@@ -20,16 +20,18 @@ func SanitizeDSN(s string) string {
 	if s == "" {
 		return s
 	}
-	if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Host != "" {
-		if u.User != nil {
-			name := u.User.Username()
-			if _, has := u.User.Password(); has {
-				u.User = url.UserPassword(name, "***")
-			} else if name != "" {
-				u.User = url.User(name)
+	if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Host != "" && u.User != nil {
+		name := u.User.Username()
+		if _, has := u.User.Password(); has {
+			// Rebuild without relying on UserPassword encoding quirks.
+			u.User = nil
+			redacted := u.String()
+			// Insert user:***@ after scheme://
+			if i := strings.Index(redacted, "://"); i >= 0 {
+				redacted = redacted[:i+3] + name + ":***@" + redacted[i+3:]
 			}
+			return redacted
 		}
-		return u.String()
 	}
 	// Fallback for free-form error strings that embed URIs or password=...
 	out := uriUserPass.ReplaceAllString(s, `${1}:***@`)
