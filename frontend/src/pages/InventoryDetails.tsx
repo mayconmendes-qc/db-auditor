@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { Skeleton } from "../components/ui";
+import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { formatBytes } from "../lib/format";
 import { api } from "../services/api";
 import type {
@@ -75,7 +75,7 @@ function TableColumnsList({ t }: { t: TableSnapshot }) {
   if (error) {
     return <p className="text-sm text-slate-400">{error}</p>;
   }
-  if (columns.length === 0) {
+  if (columns.length === ace0) {
     return (
       <p className="text-sm text-slate-400">
         Nenhuma coluna no snapshot para esta tabela (rode uma auditoria se o
