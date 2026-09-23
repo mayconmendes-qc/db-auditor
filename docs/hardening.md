@@ -1,4 +1,4 @@
-# Hardening notes (Sprint 12)
+# Hardening notes — DB Auditor (Sprint 12)
 
 ## Backend
 

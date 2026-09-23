@@ -1,4 +1,4 @@
-# Production-oriented stack for VPS (Podman/Docker Compose).
+# Production-oriented stack for VPS (Podman/Docker Compose) — DB Auditor.
 # Secrets via env file — never commit real credentials.
 #
 #   podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
@@ -8,7 +8,7 @@ services:
     image: postgres:18-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-timescale_auditor}
+      POSTGRES_DB: ${POSTGRES_DB:-db_auditor}
       POSTGRES_USER: ${POSTGRES_USER:-auditor}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
@@ -29,10 +29,10 @@ services:
     restart: unless-stopped
     environment:
       AUDITOR_HTTP_ADDRESS: :8080
-      AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-timescale_auditor}?sslmode=disable
+      AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-db_auditor}?sslmode=disable
       AUDITOR_STATEMENT_TIMEOUT: ${AUDITOR_STATEMENT_TIMEOUT:-15s}
       AUDITOR_LOCK_TIMEOUT: ${AUDITOR_LOCK_TIMEOUT:-5s}
-      AUDITOR_APPLICATION_NAME: timescale-auditor
+      AUDITOR_APPLICATION_NAME: db-auditor
       AUDITOR_LOG_FORMAT: ${AUDITOR_LOG_FORMAT:-json}
       AUDITOR_LOG_LEVEL: ${AUDITOR_LOG_LEVEL:-info}
       AUDITOR_DATABASE_DENYLIST: ${AUDITOR_DATABASE_DENYLIST:-template0,template1,postgres}
