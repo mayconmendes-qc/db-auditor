@@ -148,8 +148,6 @@ export function IndexDetail({ i }: { i: IndexSnapshot }) {
           items={[
             { label: "Tamanho", value: formatBytes(i.size_bytes) },
             { label: "idx_scan", value: formatNumber(i.idx_scan) },
-            { label: "idx_tup_read", value: formatNumber(i.idx_tup_read) },
-            { label: "idx_tup_fetch", value: formatNumber(i.idx_tup_fetch) },
           ]}
         />
       </DetailSection>
