@@ -9,7 +9,7 @@ import (
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
 )
 
-// CollectTables lists user tables in the current database and applies schema scope filters.
+// CollectTables lists user relations (table, partitioned, partition, foreign) and applies schema scope.
 func CollectTables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]TableFacts, error) {
 	rows, err := conn.Query(ctx, tablesSQL)
 	if err != nil {
@@ -21,12 +21,22 @@ func CollectTables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]T
 	for rows.Next() {
 		var f TableFacts
 		var lastVacuum, lastAutovacuum, lastAnalyze, lastAutoanalyze *time.Time
+		var parentSchema, parentTable, partitionBound, tablespace, tableComment *string
 		if err := rows.Scan(
 			&f.DatabaseName,
 			&f.SchemaName,
 			&f.TableName,
 			&f.Owner,
 			&f.Relkind,
+			&f.IsPartition,
+			&parentSchema,
+			&parentTable,
+			&partitionBound,
+			&tablespace,
+			&f.RelPersistence,
+			&f.RelRowSecurity,
+			&f.RelForceRowSecurity,
+			&tableComment,
 			&f.DataSizeBytes,
 			&f.IndexSizeBytes,
 			&f.TotalSizeBytes,
@@ -48,6 +58,12 @@ func CollectTables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]T
 		); err != nil {
 			return nil, fmt.Errorf("table collector scan: %w", err)
 		}
+		f.ParentSchemaName = parentSchema
+		f.ParentTableName = parentTable
+		f.PartitionBound = partitionBound
+		f.TablespaceName = tablespace
+		f.TableComment = tableComment
+		f.RelationClass = ClassifyRelation(f.Relkind, f.IsPartition)
 		f.LastVacuum = lastVacuum
 		f.LastAutovacuum = lastAutovacuum
 		f.LastAnalyze = lastAnalyze
