@@ -27,11 +27,15 @@ func (s *Store) SaveExtendedObjectInventory(
 		_, err := tx.Exec(ctx, `
 INSERT INTO constraint_snapshot (
   audit_run_id, environment_id, database_name, schema_name, table_name, constraint_name,
-  constraint_type, constraint_definition, is_validated, is_deferrable, is_deferred, collected_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+  constraint_type, constraint_definition, is_validated, is_deferrable, is_deferred,
+  constrained_columns, referenced_schema_name, referenced_table_name, referenced_columns,
+  fk_update_action, fk_delete_action, fk_match_type, collected_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
 ON CONFLICT (audit_run_id, database_name, schema_name, constraint_name) DO NOTHING
 `, auditRunID, environmentID, c.DatabaseName, c.SchemaName, c.TableName, c.ConstraintName,
-			c.ConstraintType, c.ConstraintDefinition, c.IsValidated, c.IsDeferrable, c.IsDeferred)
+			c.ConstraintType, c.ConstraintDefinition, c.IsValidated, c.IsDeferrable, c.IsDeferred,
+			c.ConstrainedColumns, nullStringPtr(c.ReferencedSchema), nullStringPtr(c.ReferencedTable), c.ReferencedColumns,
+			nullStringPtr(c.FKUpdateAction), nullStringPtr(c.FKDeleteAction), nullStringPtr(c.FKMatchType))
 		if err != nil {
 			return fmt.Errorf("insert constraint_snapshot %s.%s.%s: %w", c.DatabaseName, c.SchemaName, c.ConstraintName, err)
 		}

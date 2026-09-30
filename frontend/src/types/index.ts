@@ -167,6 +167,9 @@ export interface TableSnapshot {
   table_name: string;
   owner_name: string | null;
   relkind: string;
+  /** table | partitioned_table | partition | foreign_table */
+  relation_class?: string;
+  is_partition?: boolean;
   total_size_bytes: number;
   data_size_bytes: number;
   index_size_bytes: number;

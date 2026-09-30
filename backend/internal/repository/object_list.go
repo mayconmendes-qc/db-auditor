@@ -13,6 +13,7 @@ type InventoryFilter struct {
 	Database      string
 	Schema        string
 	Table         string
+	RelationClass string
 	Q             string
 	Limit         int
 	Offset        int
@@ -27,6 +28,8 @@ type TableSnapshotRow struct {
 	TableName      string    `json:"table_name"`
 	OwnerName      *string   `json:"owner_name"`
 	Relkind        string    `json:"relkind"`
+	RelationClass  string    `json:"relation_class"`
+	IsPartition    bool      `json:"is_partition"`
 	TotalSizeBytes int64     `json:"total_size_bytes"`
 	DataSizeBytes  int64     `json:"data_size_bytes"`
 	IndexSizeBytes int64     `json:"index_size_bytes"`
@@ -120,6 +123,11 @@ func inventoryWhereFor(f InventoryFilter, startArg int) (string, []any, int) {
 		args = append(args, f.Table)
 		n++
 	}
+	if f.RelationClass != "" {
+		conds = append(conds, fmt.Sprintf("relation_class = $%d", n))
+		args = append(args, f.RelationClass)
+		n++
+	}
 	return strings.Join(conds, " AND "), args, n
 }
 
@@ -140,7 +148,8 @@ func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]Ta
 	}
 	query := fmt.Sprintf(`
 SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema_name, table_name,
-  owner_name, COALESCE(relkind,''), total_size_bytes, data_size_bytes, index_size_bytes,
+  owner_name, COALESCE(relkind,''), COALESCE(relation_class,''), COALESCE(is_partition,false),
+  total_size_bytes, data_size_bytes, index_size_bytes,
   COALESCE(row_estimate,0), COALESCE(column_count,0), COALESCE(has_primary_key,false), collected_at
 FROM table_snapshot
 WHERE %s
@@ -158,7 +167,8 @@ LIMIT $%d OFFSET $%d
 		var r TableSnapshotRow
 		if err := rows.Scan(
 			&r.ID, &r.AuditRunID, &r.EnvironmentID, &r.DatabaseName, &r.SchemaName, &r.TableName,
-			&r.OwnerName, &r.Relkind, &r.TotalSizeBytes, &r.DataSizeBytes, &r.IndexSizeBytes,
+			&r.OwnerName, &r.Relkind, &r.RelationClass, &r.IsPartition,
+			&r.TotalSizeBytes, &r.DataSizeBytes, &r.IndexSizeBytes,
 			&r.RowEstimate, &r.ColumnCount, &r.HasPrimaryKey, &r.CollectedAt,
 		); err != nil {
 			return nil, 0, err
