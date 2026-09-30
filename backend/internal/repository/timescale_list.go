@@ -92,14 +92,23 @@ type PolicySnapshotRow struct {
 }
 
 func (s *Store) ListHypertableSnapshots(ctx context.Context, environmentID string) ([]HypertableSnapshotRow, error) {
+	return s.ListHypertableSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListHypertableSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]HypertableSnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema_name, hypertable_name,
   owner_name, num_dimensions, num_chunks, compression_enabled, is_distributed,
   total_size_bytes, data_size_bytes, index_size_bytes, collected_at
 FROM hypertable_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name, schema_name, hypertable_name
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY database_name, schema_name, hypertable_name
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,13 +129,22 @@ ORDER BY collected_at DESC, database_name, schema_name, hypertable_name
 }
 
 func (s *Store) ListDimensionSnapshots(ctx context.Context, environmentID string) ([]DimensionSnapshotRow, error) {
+	return s.ListDimensionSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListDimensionSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]DimensionSnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, database_name, schema_name, hypertable_name, dimension_number,
   column_name, column_type, dimension_type, time_interval, collected_at
 FROM dimension_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name, schema_name, hypertable_name, dimension_number
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY database_name, schema_name, hypertable_name, dimension_number
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,13 +164,22 @@ ORDER BY collected_at DESC, database_name, schema_name, hypertable_name, dimensi
 }
 
 func (s *Store) ListChunkSnapshots(ctx context.Context, environmentID string) ([]ChunkSnapshotRow, error) {
+	return s.ListChunkSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListChunkSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]ChunkSnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, database_name, schema_name, hypertable_name, chunk_schema, chunk_name,
   range_start, range_end, is_compressed, total_size_bytes, collected_at
 FROM chunk_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name, schema_name, hypertable_name, chunk_name
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY database_name, schema_name, hypertable_name, chunk_name
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,13 +199,22 @@ ORDER BY collected_at DESC, database_name, schema_name, hypertable_name, chunk_n
 }
 
 func (s *Store) ListCAGGSnapshots(ctx context.Context, environmentID string) ([]CAGGSnapshotRow, error) {
+	return s.ListCAGGSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListCAGGSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]CAGGSnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, database_name, schema_name, view_name, owner_name,
   materialization_schema, materialization_hypertable, materialized_only, compression_enabled, collected_at
 FROM continuous_aggregate_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, database_name, schema_name, view_name
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY database_name, schema_name, view_name
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,13 +234,22 @@ ORDER BY collected_at DESC, database_name, schema_name, view_name
 }
 
 func (s *Store) ListJobSnapshots(ctx context.Context, environmentID string) ([]JobSnapshotRow, error) {
+	return s.ListJobSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListJobSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]JobSnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, database_name, job_id, application_name, proc_name, scheduled,
   schedule_interval, next_start, hypertable_schema, hypertable_name, collected_at
 FROM job_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, job_id
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY job_id
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,13 +269,22 @@ ORDER BY collected_at DESC, job_id
 }
 
 func (s *Store) ListPolicySnapshots(ctx context.Context, environmentID string) ([]PolicySnapshotRow, error) {
+	return s.ListPolicySnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListPolicySnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]PolicySnapshotRow, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, database_name, job_id, policy_type, proc_name, hypertable_schema, hypertable_name,
   schedule_interval, scheduled, next_start, collected_at
 FROM policy_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY collected_at DESC, policy_type, job_id
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY policy_type, job_id
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}

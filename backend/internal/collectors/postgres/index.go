@@ -32,6 +32,7 @@ func CollectIndexes(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]
 			&f.IdxScan,
 			&f.IdxTupRead,
 			&f.IdxTupFetch,
+			&f.StatsReset,
 		); err != nil {
 			return nil, fmt.Errorf("index collector scan: %w", err)
 		}

@@ -62,117 +62,6 @@ const STATUS_OPTIONS = [
   { value: "suppressed", label: "Suprimido" },
 ];
 
-const demoFacts = {
-  environment_id: "00000000-0000-0000-0000-000000000001",
-  tables: [
-    {
-      database: "app",
-      schema: "public",
-      name: "events",
-      size_bytes: 3_000_000_000,
-    },
-    {
-      database: "app",
-      schema: "public",
-      name: "orders",
-      size_bytes: 50_000_000,
-    },
-  ],
-  indexes: [
-    {
-      database: "app",
-      schema: "public",
-      table_name: "orders",
-      index_name: "idx_orders_legacy",
-      idx_scan: 0,
-      size_bytes: 12_000_000,
-    },
-  ],
-  hypertables: [
-    {
-      database: "app",
-      schema: "public",
-      name: "metrics",
-      num_chunks: 620,
-      size_bytes: 8_000_000_000,
-    },
-  ],
-  chunks: [
-    {
-      database: "app",
-      schema: "public",
-      hypertable_name: "metrics",
-      chunk_name: "_hyper_1_1",
-      size_bytes: 100_000_000,
-    },
-    {
-      database: "app",
-      schema: "public",
-      hypertable_name: "metrics",
-      chunk_name: "_hyper_1_2",
-      size_bytes: 100_000_000,
-    },
-    {
-      database: "app",
-      schema: "public",
-      hypertable_name: "metrics",
-      chunk_name: "_hyper_1_3",
-      size_bytes: 900_000_000,
-    },
-  ],
-  caggs: [
-    {
-      database: "app",
-      schema: "public",
-      view_name: "metrics_1h",
-      has_refresh_policy: false,
-      materialization_schema: "_timescaledb_internal",
-      materialization_hypertable: "_materialized_hypertable_1",
-    },
-    {
-      database: "app",
-      schema: "public",
-      view_name: "metrics_1d",
-      has_refresh_policy: true,
-    },
-  ],
-  policies: [
-    {
-      database: "app",
-      job_id: 101,
-      policy_type: "retention",
-      hypertable_schema: "public",
-      hypertable_name: "metrics",
-      last_run_status: "failed",
-      schedule_interval: "1 day",
-      proc_name: "policy_retention",
-    },
-  ],
-  jobs: [
-    {
-      database: "app",
-      job_id: 202,
-      proc_name: "custom_cleanup",
-      last_run_status: "failed",
-      total_failures: 4,
-      scheduled: true,
-    },
-  ],
-  activity: [
-    {
-      database: "app",
-      schema: "public",
-      name: "legacy_events",
-      object_type: "table",
-      days_since_dml: 180,
-      n_live_tup: 1000,
-      n_tup_ins: 0,
-      n_tup_upd: 0,
-      n_tup_del: 0,
-    },
-  ],
-};
-
 function FilterChip({
   label,
   onClear,
@@ -228,19 +117,6 @@ export function FindingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const runAnalyze = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.analyzeFindings(demoFacts);
-      await load();
-    } catch (err: unknown) {
-      setError(formatError(err, "Falha no analyze"));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const triage = async (id: string, status: string) => {
     try {
@@ -424,9 +300,6 @@ export function FindingsPage() {
             >
               Exportar JSON
             </Button>
-            <Button onClick={() => void runAnalyze()} disabled={busy}>
-              {busy ? "Analisando…" : "Rodar analyzers (demo)"}
-            </Button>
           </div>
         }
       />
@@ -511,12 +384,9 @@ export function FindingsPage() {
         {!busy && items.length === 0 ? (
           <EmptyState
             title="Sem findings"
-            description="Nenhum resultado após filtros. Rode os analyzers demo ou limpe os filtros."
+            description="Nenhum resultado após filtros. Execute uma auditoria ou limpe os filtros."
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <Button onClick={() => void runAnalyze()} disabled={busy}>
-                  Rodar analyzers (demo)
-                </Button>
                 <Button
                   variant="secondary"
                   onClick={() => setSection("Execuções")}

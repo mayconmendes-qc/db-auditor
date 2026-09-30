@@ -15,7 +15,12 @@ import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
-import type { AuditRun, CollectorRun } from "../types";
+import type {
+  AnalysisRun,
+  AuditRun,
+  AuditRunCoverage,
+  CollectorRun,
+} from "../types";
 
 const POLL_MS = 2500;
 
@@ -142,6 +147,8 @@ export function AuditRunsPage() {
   const [profileFilter, setProfileFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [collectors, setCollectors] = useState<CollectorRun[] | null>(null);
+  const [coverage, setCoverage] = useState<AuditRunCoverage[] | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisRun | null>(null);
   const [triggerEnv, setTriggerEnv] = useState("");
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -196,14 +203,31 @@ export function AuditRunsPage() {
     }
   }, []);
 
+  const loadRunDiagnostics = useCallback(async (runId: string) => {
+    const [coverageResult, analysisResult] = await Promise.allSettled([
+      api.auditRunCoverage(runId),
+      api.auditRunAnalysis(runId),
+    ]);
+    setCoverage(
+      coverageResult.status === "fulfilled" ? coverageResult.value.items : [],
+    );
+    setAnalysis(
+      analysisResult.status === "fulfilled" ? analysisResult.value : null,
+    );
+  }, []);
+
   useEffect(() => {
     if (!selectedId) {
       setCollectors(null);
+      setCoverage(null);
+      setAnalysis(null);
       return;
     }
     setCollectors(null);
+    setCoverage(null);
     void loadCollectors(selectedId);
-  }, [selectedId, loadCollectors]);
+    void loadRunDiagnostics(selectedId);
+  }, [selectedId, loadCollectors, loadRunDiagnostics]);
 
   const selected = useMemo(
     () => runs?.find((r) => r.id === selectedId) ?? null,
@@ -223,11 +247,19 @@ export function AuditRunsPage() {
         const still = items.find((r) => r.id === selectedId);
         if (still && selectedId) {
           void loadCollectors(selectedId);
+          void loadRunDiagnostics(selectedId);
         }
       });
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [runs, selected, selectedId, loadRuns, loadCollectors]);
+  }, [
+    runs,
+    selected,
+    selectedId,
+    loadRuns,
+    loadCollectors,
+    loadRunDiagnostics,
+  ]);
 
   const triggerEnvName =
     environments.find((e) => e.id === triggerEnv)?.name ??
@@ -420,6 +452,57 @@ export function AuditRunsPage() {
                 </ul>
               ) : null}
             </Card>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card
+                title="Análise automática"
+                subtitle={
+                  analysis ? labels.runStatus(analysis.status) : "Aguardando"
+                }
+              >
+                <p className="mt-2 text-sm text-slate-300">
+                  {analysis
+                    ? `${analysis.findings_saved}/${analysis.findings_produced} findings persistidos`
+                    : "A análise será executada após a coleta."}
+                </p>
+                {analysis?.error ? (
+                  <p className="mt-2 text-xs text-rose-300">{analysis.error}</p>
+                ) : null}
+              </Card>
+              <Card
+                title="Cobertura"
+                subtitle={
+                  coverage === null
+                    ? "Carregando…"
+                    : `${coverage.filter((item) => item.database_name).length} combinações collector/database`
+                }
+              >
+                <p className="mt-2 text-sm text-slate-300">
+                  {coverage
+                    ? `${coverage.filter((item) => item.status === "failed").length} falha(s) registradas`
+                    : "—"}
+                </p>
+              </Card>
+            </div>
+
+            {coverage?.some((item) => item.status === "failed") ? (
+              <Card title="Falhas de cobertura">
+                <ul className="mt-2 space-y-1 text-xs text-rose-300">
+                  {coverage
+                    .filter((item) => item.status === "failed")
+                    .slice(0, 12)
+                    .map((item) => (
+                      <li
+                        key={`${item.collector_name}:${item.database_name ?? "all"}`}
+                      >
+                        {item.collector_name}
+                        {item.database_name ? ` · ${item.database_name}` : ""}
+                        {item.error ? ` — ${item.error}` : ""}
+                      </li>
+                    ))}
+                </ul>
+              </Card>
+            ) : null}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">

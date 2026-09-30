@@ -68,6 +68,7 @@ type TableFacts struct {
 	LastAutoanalyze *time.Time `json:"last_autoanalyze,omitempty"`
 	ColumnCount     int        `json:"column_count"`
 	HasPrimaryKey   bool       `json:"has_primary_key"`
+	StatsReset      *time.Time `json:"stats_reset,omitempty"`
 }
 
 // ColumnFacts is one row from the column collector (current database).
@@ -87,18 +88,19 @@ type ColumnFacts struct {
 
 // IndexFacts is one row from the index collector (current database).
 type IndexFacts struct {
-	DatabaseName    string `json:"database_name"`
-	SchemaName      string `json:"schema_name"`
-	TableName       string `json:"table_name"`
-	IndexName       string `json:"index_name"`
-	IndexDefinition string `json:"index_definition"`
-	AccessMethod    string `json:"access_method"`
-	IsUnique        bool   `json:"is_unique"`
-	IsPrimary       bool   `json:"is_primary"`
-	SizeBytes       int64  `json:"size_bytes"`
-	IdxScan         int64  `json:"idx_scan"`
-	IdxTupRead      int64  `json:"idx_tup_read"`
-	IdxTupFetch     int64  `json:"idx_tup_fetch"`
+	DatabaseName    string     `json:"database_name"`
+	SchemaName      string     `json:"schema_name"`
+	TableName       string     `json:"table_name"`
+	IndexName       string     `json:"index_name"`
+	IndexDefinition string     `json:"index_definition"`
+	AccessMethod    string     `json:"access_method"`
+	IsUnique        bool       `json:"is_unique"`
+	IsPrimary       bool       `json:"is_primary"`
+	SizeBytes       int64      `json:"size_bytes"`
+	IdxScan         int64      `json:"idx_scan"`
+	IdxTupRead      int64      `json:"idx_tup_read"`
+	IdxTupFetch     int64      `json:"idx_tup_fetch"`
+	StatsReset      *time.Time `json:"stats_reset,omitempty"`
 }
 
 // ConstraintFacts is one row from the constraint collector.

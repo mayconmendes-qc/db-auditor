@@ -87,15 +87,17 @@ type TableFact struct {
 
 // IndexFact carries scan counters when available.
 type IndexFact struct {
-	Database   string `json:"database"`
-	Schema     string `json:"schema"`
-	TableName  string `json:"table_name"`
-	IndexName  string `json:"index_name"`
-	IdxScan    int64  `json:"idx_scan"`
-	SizeBytes  int64  `json:"size_bytes"`
-	IsPrimary  bool   `json:"is_primary"`
-	IsUnique   bool   `json:"is_unique"`
-	Definition string `json:"definition"`
+	Database    string     `json:"database"`
+	Schema      string     `json:"schema"`
+	TableName   string     `json:"table_name"`
+	IndexName   string     `json:"index_name"`
+	IdxScan     int64      `json:"idx_scan"`
+	SizeBytes   int64      `json:"size_bytes"`
+	IsPrimary   bool       `json:"is_primary"`
+	IsUnique    bool       `json:"is_unique"`
+	Definition  string     `json:"definition"`
+	CollectedAt time.Time  `json:"collected_at,omitempty"`
+	StatsReset  *time.Time `json:"stats_reset,omitempty"`
 }
 
 // HypertableFact summarizes chunk topology.

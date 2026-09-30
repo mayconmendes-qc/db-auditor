@@ -32,7 +32,8 @@ SELECT
     SELECT 1
     FROM pg_index i
     WHERE i.indrelid = c.oid AND i.indisprimary
-  ) AS has_primary_key
+  ) AS has_primary_key,
+  (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 LEFT JOIN pg_stat_user_tables s

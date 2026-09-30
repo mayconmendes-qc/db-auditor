@@ -25,56 +25,6 @@ function severityTone(
   return "neutral";
 }
 
-const performanceDemoFacts = {
-  environment_id: "00000000-0000-0000-0000-000000000001",
-  vacuum: [
-    {
-      database: "app",
-      schema: "public",
-      name: "events",
-      n_live_tup: 8_000_000,
-      n_dead_tup: 3_200_000,
-      last_autovacuum: "2026-09-10T00:00:00Z",
-    },
-    {
-      database: "app",
-      schema: "public",
-      name: "orders",
-      n_live_tup: 500_000,
-      n_dead_tup: 2_000,
-    },
-  ],
-  locks: [
-    {
-      database: "app",
-      relation: "public.orders",
-      mode: "AccessExclusiveLock",
-      granted: false,
-      wait_age_seconds: 95,
-      pid: 1842,
-    },
-  ],
-  connections: [
-    {
-      database: "app",
-      count: 92,
-      max_connections: 100,
-      state: "active",
-    },
-  ],
-  query_stats: [
-    {
-      database: "app",
-      query_fingerprint: "SELECT * FROM events WHERE ts >= ? ORDER BY ts",
-      calls: 1_200,
-      mean_exec_time_ms: 780,
-      total_exec_time_ms: 936_000,
-      rows: 4_000_000,
-      pg_stat_statements: true,
-    },
-  ],
-};
-
 export function PerformancePage() {
   const [items, setItems] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,19 +53,6 @@ export function PerformancePage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const runAnalyze = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.analyzeFindings(performanceDemoFacts);
-      await load();
-    } catch (err: unknown) {
-      setError(formatError(err, "Falha no analyze"));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const summary = useMemo(() => {
     const by = (prefix: string) =>
@@ -154,9 +91,6 @@ export function PerformancePage() {
           <Button onClick={() => void load()} disabled={busy}>
             Atualizar
           </Button>
-          <Button onClick={() => void runAnalyze()} disabled={busy}>
-            {busy ? "Analisando…" : "Rodar analyzers (demo)"}
-          </Button>
         </div>
 
         {error ? (
@@ -167,7 +101,7 @@ export function PerformancePage() {
         {!busy && items.length === 0 ? (
           <EmptyState
             title="Sem findings de performance"
-            description="Rode os analyzers demo para popular vacuum, locks e queries."
+            description="Execute uma auditoria para analisar vacuum, locks e queries."
           />
         ) : null}
 

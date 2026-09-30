@@ -30,6 +30,8 @@ type JobFacts struct {
 	HypertableName   *string    `json:"hypertable_name,omitempty"`
 	CheckSchema      *string    `json:"check_schema,omitempty"`
 	CheckName        *string    `json:"check_name,omitempty"`
+	LastRunStatus    string     `json:"last_run_status,omitempty"`
+	TotalFailures    int64      `json:"total_failures"`
 }
 
 // CollectJobs lists background jobs. Schema scope filters jobs tied to a hypertable schema when present.
@@ -74,6 +76,8 @@ func CollectJobs(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]Job
 			&htName,
 			&checkSchema,
 			&checkName,
+			&f.LastRunStatus,
+			&f.TotalFailures,
 		); err != nil {
 			return nil, fmt.Errorf("jobs collector scan: %w", err)
 		}

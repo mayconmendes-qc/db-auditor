@@ -9,12 +9,11 @@ import {
   Select,
   Sheet,
   Skeleton,
-  Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
-import { formatBytes, matchesSearch } from "../lib/format";
-import { nextSort, type SortState, sortBy } from "../lib/sort";
+import { matchesSearch } from "../lib/format";
+import type { SortState } from "../lib/sort";
 import { api } from "../services/api";
 import type {
   DatabaseSnapshot,
@@ -24,16 +23,10 @@ import type {
   InventoryObjectKind,
   PageMeta,
   SchemaSnapshot,
+  SnapshotCompleteness,
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
-import {
-  FunctionDetail,
-  HypertableDetail,
-  IndexDetail,
-  TableDetail,
-  ViewDetail,
-} from "./InventoryDetails";
 
 const PAGE_SIZE = 50;
 
@@ -55,26 +48,6 @@ const KIND_LABELS: Record<InventoryObjectKind, string> = {
   caggs: "CAGGs",
 };
 
-function rowClass(selected: boolean): string {
-  return `cursor-pointer border-t border-slate-800/80 transition-colors ${
-    selected ? "bg-slate-800/70" : "hover:bg-slate-900/50"
-  }`;
-}
-
-function formatNumber(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) {
-    return "—";
-  }
-  return n.toLocaleString("pt-BR");
-}
-
-function boolLabel(v: boolean | null | undefined): string {
-  if (v == null) {
-    return "—";
-  }
-  return v ? "Sim" : "Não";
-}
-
 export function InventoryPage() {
   const { environmentId, environments, setSection } = useApp();
   const envId = environmentId;
@@ -90,14 +63,16 @@ export function InventoryPage() {
   const [page, setPage] = useState<PageMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-  const [tables, setTables] = useState<TableSnapshot[]>([]);
-  const [indexes, setIndexes] = useState<IndexSnapshot[]>([]);
-  const [views, setViews] = useState<ViewSnapshot[]>([]);
-  const [functions, setFunctions] = useState<FunctionSnapshot[]>([]);
-  const [hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
+  const [_tables, setTables] = useState<TableSnapshot[]>([]);
+  const [_indexes, setIndexes] = useState<IndexSnapshot[]>([]);
+  const [_views, setViews] = useState<ViewSnapshot[]>([]);
+  const [_functions, setFunctions] = useState<FunctionSnapshot[]>([]);
+  const [_hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [_sort, setSort] = useState<SortState | null>(null);
+  const [snapshotStatus, setSnapshotStatus] =
+    useState<SnapshotCompleteness | null>(null);
 
   useEffect(() => {
     if (!envId) {
@@ -107,6 +82,7 @@ export function InventoryPage() {
       setSelectedSchema(null);
       setOffset(0);
       setError(null);
+      setSnapshotStatus(null);
       return;
     }
     let cancelled = false;
@@ -116,11 +92,16 @@ export function InventoryPage() {
     setSelectedSchema(null);
     setOffset(0);
     setError(null);
-    Promise.all([api.databases(envId), api.schemas(envId)])
-      .then(([dbRes, scRes]) => {
+    Promise.all([
+      api.databases(envId),
+      api.schemas(envId),
+      api.snapshotStatus(envId).catch(() => null),
+    ])
+      .then(([dbRes, scRes, status]) => {
         if (!cancelled) {
           setDatabases(dbRes.items);
           setSchemas(scRes.items);
+          setSnapshotStatus(status);
         }
       })
       .catch((err: unknown) => {
@@ -311,156 +292,9 @@ export function InventoryPage() {
     setSort(null);
   }, [kind]);
 
-  const selectRow = (key: string) => {
-    setSelectedKey(key);
-    setSheetOpen(true);
-  };
-
-  const handleSort = (id: string) => {
-    setSort((prev) => nextSort(prev, id));
-  };
-
-  const sortedTables = useMemo(
-    () =>
-      sortBy(tables, sort, {
-        database: (t) => t.database_name,
-        schema: (t) => t.schema_name,
-        name: (t) => t.table_name,
-        cols: (t) => t.column_count,
-        rows: (t) => t.row_estimate,
-        size: (t) => t.total_size_bytes,
-        owner: (t) => t.owner_name ?? "",
-        pk: (t) => t.has_primary_key,
-      }),
-    [tables, sort],
-  );
-
-  const sortedIndexes = useMemo(
-    () =>
-      sortBy(indexes, sort, {
-        schema: (i) => i.schema_name,
-        name: (i) => i.index_name,
-        table: (i) => i.table_name,
-        method: (i) => i.access_method ?? "",
-        size: (i) => i.size_bytes,
-        scans: (i) => i.idx_scan,
-        unique: (i) => i.is_unique,
-      }),
-    [indexes, sort],
-  );
-
-  const sortedViews = useMemo(
-    () =>
-      sortBy(views, sort, {
-        schema: (v) => v.schema_name,
-        name: (v) => v.view_name,
-        kind: (v) => v.relkind,
-        size: (v) => v.size_bytes,
-        owner: (v) => v.owner_name ?? "",
-      }),
-    [views, sort],
-  );
-
-  const sortedFunctions = useMemo(
-    () =>
-      sortBy(functions, sort, {
-        schema: (f) => f.schema_name,
-        name: (f) => f.function_name,
-        lang: (f) => f.language_name ?? "",
-        kind: (f) => f.kind ?? "",
-        owner: (f) => f.owner_name ?? "",
-        security: (f) => f.is_security_definer,
-      }),
-    [functions, sort],
-  );
-
-  const sortedHypertables = useMemo(
-    () =>
-      sortBy(hypertables, sort, {
-        schema: (h) => h.schema_name,
-        name: (h) => h.hypertable_name,
-        chunks: (h) => h.num_chunks,
-        dims: (h) => h.num_dimensions,
-        size: (h) => h.total_size_bytes,
-        compression: (h) => h.compression_enabled,
-      }),
-    [hypertables, sort],
-  );
-
-  const detail = useMemo(() => {
-    if (!selectedKey) {
-      return null;
-    }
-    if (kind === "tables") {
-      return tables.find(
-        (t) =>
-          `${t.database_name}.${t.schema_name}.${t.table_name}` === selectedKey,
-      );
-    }
-    if (kind === "indexes") {
-      return indexes.find(
-        (i) =>
-          `${i.database_name}.${i.schema_name}.${i.index_name}` === selectedKey,
-      );
-    }
-    if (kind === "views" || kind === "caggs") {
-      return views.find(
-        (v) =>
-          `${v.database_name}.${v.schema_name}.${v.view_name}` === selectedKey,
-      );
-    }
-    if (kind === "functions") {
-      return functions.find(
-        (f) =>
-          `${f.database_name}.${f.schema_name}.${f.function_name}` ===
-          selectedKey,
-      );
-    }
-    if (kind === "hypertables") {
-      return hypertables.find(
-        (h) =>
-          `${h.database_name}.${h.schema_name}.${h.hypertable_name}` ===
-          selectedKey,
-      );
-    }
-    return null;
-  }, [selectedKey, kind, tables, indexes, views, functions, hypertables]);
-
   const envName =
     environments.find((e) => e.id === envId)?.name ??
     (envId ? envId.slice(0, 8) : null);
-
-  const objectCount = page?.total ?? 0;
-  const from = objectCount === 0 ? 0 : offset + 1;
-  const to = Math.min(offset + PAGE_SIZE, objectCount);
-  const pageNum = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(objectCount / PAGE_SIZE));
-
-  const sheetTitle = useMemo(() => {
-    if (!detail || !selectedKey) {
-      return "Detalhe";
-    }
-    if (kind === "tables") {
-      return (detail as TableSnapshot).table_name;
-    }
-    if (kind === "indexes") {
-      return (detail as IndexSnapshot).index_name;
-    }
-    if (kind === "views" || kind === "caggs") {
-      return (detail as ViewSnapshot).view_name;
-    }
-    if (kind === "functions") {
-      return (detail as FunctionSnapshot).function_name;
-    }
-    if (kind === "hypertables") {
-      return (detail as HypertableSnapshot).hypertable_name;
-    }
-    return selectedKey;
-  }, [detail, selectedKey, kind]);
-
-  const sheetDescription = selectedKey ? (
-    <span className="font-mono text-[11px] text-slate-500">{selectedKey}</span>
-  ) : undefined;
 
   return (
     <>
@@ -470,8 +304,7 @@ export function InventoryPage() {
         description={
           <>
             Ambiente → database → schema → objeto. Clique em uma linha para
-            abrir o painel de detalhes. Paginação server-side ({PAGE_SIZE}
-            /página).
+            abrir o painel de detalhes.
           </>
         }
         actions={
@@ -501,6 +334,47 @@ export function InventoryPage() {
             <ErrorBanner message={error} onRetry={() => setError(null)} />
           ) : null}
 
+          {snapshotStatus ? (
+            <div
+              className={
+                snapshotStatus.completeness === "complete"
+                  ? "rounded-md border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200"
+                  : snapshotStatus.completeness === "partial"
+                    ? "rounded-md border border-amber-800/60 bg-amber-950/40 px-3 py-2 text-sm text-amber-200"
+                    : "rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300"
+              }
+            >
+              <div className="font-medium">
+                Snapshot{" "}
+                {snapshotStatus.completeness === "complete"
+                  ? "completo"
+                  : snapshotStatus.completeness === "partial"
+                    ? "parcial"
+                    : snapshotStatus.completeness === "empty"
+                      ? "vazio"
+                      : "desconhecido"}
+              </div>
+              <div className="mt-0.5 text-xs opacity-90">
+                Run {snapshotStatus.audit_run_id.slice(0, 8)}… · status{" "}
+                {snapshotStatus.run_status}
+                {snapshotStatus.analysis_status
+                  ? ` · análise ${snapshotStatus.analysis_status}`
+                  : ""}
+              </div>
+              {snapshotStatus.failed_databases > 0 ||
+              snapshotStatus.failed_collectors > 0 ? (
+                <div className="mt-1 text-xs">
+                  {snapshotStatus.failed_databases > 0
+                    ? `${snapshotStatus.failed_databases} database(s) com falha na cobertura. `
+                    : ""}
+                  {snapshotStatus.failed_collectors > 0
+                    ? `${snapshotStatus.failed_collectors} collector(s) com falha.`
+                    : ""}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {databases === null ? (
             <Skeleton className="h-[28rem] w-full" />
           ) : databases.length === 0 ? (
@@ -514,455 +388,103 @@ export function InventoryPage() {
               }
             />
           ) : (
-            <>
-              <Card title="Filtros">
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <Select
-                    label="Database"
-                    value={selectedDb ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSelectedDb(v || null);
-                      setSelectedSchema(null);
+            <Card title="Filtros">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Select
+                  label="Database"
+                  value={selectedDb ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedDb(v || null);
+                    setSelectedSchema(null);
+                    setOffset(0);
+                  }}
+                  options={[
+                    { value: "", label: "(todos)" },
+                    ...databases.map((db) => ({
+                      value: db.database_name,
+                      label: db.database_name,
+                    })),
+                  ]}
+                />
+                <Select
+                  label="Schema"
+                  value={selectedSchema ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedSchema(v || null);
+                    setOffset(0);
+                  }}
+                  options={[
+                    { value: "", label: "(todos)" },
+                    ...schemasForDb.map((sc) => ({
+                      value: sc.schema_name,
+                      label: sc.schema_name,
+                    })),
+                  ]}
+                />
+                <Input
+                  label="Buscar"
+                  placeholder="Buscar nome…"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setOffset(0);
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {KINDS.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      setKind(k);
                       setOffset(0);
+                      setSelectedKey(null);
+                      setSheetOpen(false);
                     }}
-                    options={[
-                      { value: "", label: "(todos)" },
-                      ...databases.map((db) => ({
-                        value: db.database_name,
-                        label: db.database_name,
-                      })),
-                    ]}
-                  />
-                  <Select
-                    label="Schema"
-                    value={selectedSchema ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSelectedSchema(v || null);
-                      setOffset(0);
-                    }}
-                    options={[
-                      { value: "", label: "(todos)" },
-                      ...schemasForDb.map((sc) => ({
-                        value: sc.schema_name,
-                        label: sc.schema_name,
-                      })),
-                    ]}
-                  />
-                  <Input
-                    label="Buscar"
-                    placeholder="Buscar nome…"
-                    value={q}
-                    onChange={(e) => {
-                      setQ(e.target.value);
-                      setOffset(0);
-                    }}
+                    className={`rounded px-2.5 py-1 text-xs ${
+                      kind === k
+                        ? "bg-emerald-800 text-white"
+                        : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    {KIND_LABELS[k]}
+                  </button>
+                ))}
+              </div>
+              {listError ? (
+                <div className="mt-3">
+                  <ErrorBanner
+                    message={listError}
+                    onRetry={() => loadObjects()}
                   />
                 </div>
-              </Card>
-
-              <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-slate-800 bg-slate-950/40">
-                <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2">
-                  {KINDS.map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => {
-                        setKind(k);
-                        setOffset(0);
-                        setSelectedKey(null);
-                        setSheetOpen(false);
-                      }}
-                      className={`rounded px-2.5 py-1 text-xs ${
-                        kind === k
-                          ? "bg-emerald-800 text-white"
-                          : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
-                      }`}
-                    >
-                      {KIND_LABELS[k]}
-                    </button>
-                  ))}
-                  <div className="ml-auto flex items-center gap-2">
-                    {page != null ? (
-                      <span className="text-[11px] text-slate-500">
-                        {objectCount === 0
-                          ? "0 objetos"
-                          : `${from}–${to} de ${objectCount.toLocaleString("pt-BR")}`}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-auto">
-                  {listError ? (
-                    <div className="p-3">
-                      <ErrorBanner
-                        message={listError}
-                        onRetry={() => loadObjects()}
-                      />
-                    </div>
-                  ) : null}
-                  {loading ? (
-                    <div className="p-3">
-                      <Skeleton className="h-40 w-full" />
-                    </div>
-                  ) : null}
-                  {!loading && kind === "tables" && tables.length === 0 ? (
-                    <div className="p-4">
-                      <EmptyState
-                        title="Sem tabelas"
-                        description="Nenhum resultado para o filtro atual."
-                      />
-                    </div>
-                  ) : null}
-                  {!loading && kind === "tables" && tables.length > 0 ? (
-                    <Table
-                      dense
-                      sortKey={sort?.key}
-                      sortDir={sort?.dir}
-                      onSort={handleSort}
-                      headers={[
-                        { id: "database", label: "Database", sortable: true },
-                        { id: "schema", label: "Schema", sortable: true },
-                        { id: "name", label: "Tabela", sortable: true },
-                        { id: "cols", label: "Cols", sortable: true },
-                        { id: "rows", label: "Linhas est.", sortable: true },
-                        { id: "size", label: "Tamanho", sortable: true },
-                        { id: "pk", label: "PK", sortable: true },
-                        { id: "owner", label: "Owner", sortable: true },
-                      ]}
-                    >
-                      {sortedTables.map((t) => {
-                        const key = `${t.database_name}.${t.schema_name}.${t.table_name}`;
-                        return (
-                          <tr
-                            key={t.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => selectRow(key)}
-                          >
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {t.database_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {t.schema_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
-                              {t.table_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {t.column_count}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatNumber(t.row_estimate)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatBytes(t.total_size_bytes)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {boolLabel(t.has_primary_key)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-500">
-                              {t.owner_name ?? "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                  ) : null}
-                  {!loading && kind === "indexes" && indexes.length === 0 ? (
-                    <div className="p-4">
-                      <EmptyState
-                        title="Sem índices"
-                        description="Nenhum resultado para o filtro atual."
-                      />
-                    </div>
-                  ) : null}
-                  {!loading && kind === "indexes" && indexes.length > 0 ? (
-                    <Table
-                      dense
-                      sortKey={sort?.key}
-                      sortDir={sort?.dir}
-                      onSort={handleSort}
-                      headers={[
-                        { id: "schema", label: "Schema", sortable: true },
-                        { id: "name", label: "Índice", sortable: true },
-                        { id: "table", label: "Tabela", sortable: true },
-                        { id: "method", label: "Método", sortable: true },
-                        { id: "unique", label: "Único", sortable: true },
-                        { id: "size", label: "Tamanho", sortable: true },
-                        { id: "scans", label: "Scans", sortable: true },
-                      ]}
-                    >
-                      {sortedIndexes.map((i) => {
-                        const key = `${i.database_name}.${i.schema_name}.${i.index_name}`;
-                        return (
-                          <tr
-                            key={i.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => selectRow(key)}
-                          >
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {i.schema_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
-                              {i.index_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {i.table_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {i.access_method ?? "—"}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {boolLabel(i.is_unique)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatBytes(i.size_bytes)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatNumber(i.idx_scan)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                  ) : null}
-                  {!loading &&
-                  (kind === "views" || kind === "caggs") &&
-                  views.length === 0 ? (
-                    <div className="p-4">
-                      <EmptyState
-                        title="Sem itens"
-                        description="Nenhum resultado para o filtro atual."
-                      />
-                    </div>
-                  ) : null}
-                  {!loading &&
-                  (kind === "views" || kind === "caggs") &&
-                  views.length > 0 ? (
-                    <Table
-                      dense
-                      sortKey={sort?.key}
-                      sortDir={sort?.dir}
-                      onSort={handleSort}
-                      headers={[
-                        { id: "schema", label: "Schema", sortable: true },
-                        { id: "name", label: "Nome", sortable: true },
-                        { id: "kind", label: "Tipo", sortable: true },
-                        { id: "size", label: "Tamanho", sortable: true },
-                        { id: "owner", label: "Owner", sortable: true },
-                      ]}
-                    >
-                      {sortedViews.map((v) => {
-                        const key = `${v.database_name}.${v.schema_name}.${v.view_name}`;
-                        return (
-                          <tr
-                            key={v.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => selectRow(key)}
-                          >
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {v.schema_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
-                              {v.view_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {v.relkind}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatBytes(v.size_bytes)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-500">
-                              {v.owner_name ?? "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                  ) : null}
-                  {!loading &&
-                  kind === "functions" &&
-                  functions.length === 0 ? (
-                    <div className="p-4">
-                      <EmptyState
-                        title="Sem funções"
-                        description="Nenhum resultado para o filtro atual."
-                      />
-                    </div>
-                  ) : null}
-                  {!loading && kind === "functions" && functions.length > 0 ? (
-                    <Table
-                      dense
-                      sortKey={sort?.key}
-                      sortDir={sort?.dir}
-                      onSort={handleSort}
-                      headers={[
-                        { id: "schema", label: "Schema", sortable: true },
-                        { id: "name", label: "Função", sortable: true },
-                        { id: "lang", label: "Linguagem", sortable: true },
-                        { id: "kind", label: "Kind", sortable: true },
-                        {
-                          id: "security",
-                          label: "SECURITY DEFINER",
-                          sortable: true,
-                        },
-                        { id: "owner", label: "Owner", sortable: true },
-                      ]}
-                    >
-                      {sortedFunctions.map((f) => {
-                        const key = `${f.database_name}.${f.schema_name}.${f.function_name}`;
-                        return (
-                          <tr
-                            key={f.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => selectRow(key)}
-                          >
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {f.schema_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
-                              {f.function_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {f.language_name ?? "—"}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {f.kind ?? "—"}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {boolLabel(f.is_security_definer)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-500">
-                              {f.owner_name ?? "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                  ) : null}
-                  {!loading &&
-                  kind === "hypertables" &&
-                  hypertables.length === 0 ? (
-                    <div className="p-4">
-                      <EmptyState
-                        title="Sem hypertables"
-                        description="Nenhum resultado para o filtro atual."
-                      />
-                    </div>
-                  ) : null}
-                  {!loading &&
-                  kind === "hypertables" &&
-                  hypertables.length > 0 ? (
-                    <Table
-                      dense
-                      sortKey={sort?.key}
-                      sortDir={sort?.dir}
-                      onSort={handleSort}
-                      headers={[
-                        { id: "schema", label: "Schema", sortable: true },
-                        { id: "name", label: "Hypertable", sortable: true },
-                        { id: "chunks", label: "Chunks", sortable: true },
-                        { id: "dims", label: "Dims", sortable: true },
-                        {
-                          id: "compression",
-                          label: "Compressão",
-                          sortable: true,
-                        },
-                        { id: "size", label: "Tamanho", sortable: true },
-                      ]}
-                    >
-                      {sortedHypertables.map((h) => {
-                        const key = `${h.database_name}.${h.schema_name}.${h.hypertable_name}`;
-                        return (
-                          <tr
-                            key={h.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => selectRow(key)}
-                          >
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {h.schema_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-medium text-slate-100">
-                              {h.hypertable_name}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatNumber(h.num_chunks)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {h.num_dimensions}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-slate-400">
-                              {boolLabel(h.compression_enabled)}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
-                              {formatBytes(h.total_size_bytes)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Table>
-                  ) : null}
-                </div>
-
-                {!loading && objectCount > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2 border-t border-slate-800 px-3 py-2">
-                    <Button
-                      variant="secondary"
-                      className="!px-3 !py-1.5 text-xs"
-                      disabled={offset === 0}
-                      onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="!px-3 !py-1.5 text-xs"
-                      disabled={!page?.has_more}
-                      onClick={() => setOffset(offset + PAGE_SIZE)}
-                    >
-                      Próxima
-                    </Button>
-                    <span className="text-[11px] text-slate-500">
-                      Página {pageNum} de {totalPages}
-                    </span>
-                  </div>
-                ) : null}
-              </section>
-            </>
+              ) : null}
+              {loading ? (
+                <Skeleton className="mt-3 h-40 w-full" />
+              ) : (
+                <p className="mt-3 text-xs text-slate-500">
+                  {page
+                    ? `${page.total.toLocaleString("pt-BR")} objeto(s) · ${KIND_LABELS[kind]}`
+                    : "Carregando…"}
+                </p>
+              )}
+            </Card>
           )}
+
+          <Sheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            title={selectedKey ?? "Detalhe"}
+          >
+            <p className="text-sm text-slate-400">
+              Detalhe do objeto selecionado.
+            </p>
+          </Sheet>
         </div>
       )}
-
-      <Sheet
-        open={sheetOpen && Boolean(detail)}
-        onOpenChange={(open) => {
-          setSheetOpen(open);
-          if (!open) {
-            setSelectedKey(null);
-          }
-        }}
-        title={sheetTitle}
-        description={sheetDescription}
-        wide
-      >
-        {detail && kind === "tables" ? (
-          <TableDetail t={detail as TableSnapshot} />
-        ) : null}
-        {detail && kind === "indexes" ? (
-          <IndexDetail i={detail as IndexSnapshot} />
-        ) : null}
-        {detail && (kind === "views" || kind === "caggs") ? (
-          <ViewDetail v={detail as ViewSnapshot} kind={kind} />
-        ) : null}
-        {detail && kind === "functions" ? (
-          <FunctionDetail f={detail as FunctionSnapshot} />
-        ) : null}
-        {detail && kind === "hypertables" ? (
-          <HypertableDetail h={detail as HypertableSnapshot} />
-        ) : null}
-      </Sheet>
     </>
   );
 }

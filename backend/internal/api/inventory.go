@@ -12,6 +12,23 @@ func registerInventoryRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("GET /api/v1/environments/{id}/indexes", listIndexes(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/views", listViews(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/functions", listFunctions(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/snapshot-status", getSnapshotStatus(store))
+}
+
+func getSnapshotStatus(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O identificador do ambiente é obrigatório.")
+			return
+		}
+		status, err := store.GetSnapshotCompleteness(r.Context(), id, r.URL.Query().Get("audit_run_id"))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível obter o status do snapshot.")
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
 }
 
 func listTables(store InventoryStore) http.HandlerFunc {
@@ -24,6 +41,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListTableSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -56,6 +74,7 @@ func listColumns(store InventoryStore) http.HandlerFunc {
 		}
 		items, total, err := store.ListColumnSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -84,6 +103,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListIndexSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -112,6 +132,7 @@ func listViews(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListViewSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Q:             q.Q,
@@ -139,6 +160,7 @@ func listFunctions(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListFunctionSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Q:             q.Q,

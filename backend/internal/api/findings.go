@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
@@ -24,30 +23,19 @@ type updateFindingBody struct {
 }
 
 type analyzeBody struct {
-	EnvironmentID string                          `json:"environment_id"`
-	AuditRunID    string                          `json:"audit_run_id"`
-	Tables        []analyzer.TableFact            `json:"tables"`
-	Indexes       []analyzer.IndexFact            `json:"indexes"`
-	Hypertables   []analyzer.HypertableFact       `json:"hypertables"`
-	Chunks        []analyzer.ChunkFact            `json:"chunks"`
-	CAGGs         []analyzer.CAGGFact             `json:"caggs"`
-	Policies      []analyzer.PolicyFact           `json:"policies"`
-	Jobs          []analyzer.JobFact              `json:"jobs"`
-	Activity      []analyzer.ActivityFact         `json:"activity"`
-	Vacuum        []analyzer.VacuumFact           `json:"vacuum"`
-	Locks         []analyzer.LockFact             `json:"locks"`
-	Connections   []analyzer.ConnectionFact       `json:"connections"`
-	QueryStats    []analyzer.QueryStatFact        `json:"query_stats"`
-	Roles         []analyzer.RoleFact             `json:"roles"`
-	Grants        []analyzer.GrantFact            `json:"grants"`
-	Functions     []analyzer.FunctionSecurityFact `json:"functions"`
+	EnvironmentID string `json:"environment_id"`
+	AuditRunID    string `json:"audit_run_id"`
 }
 
-func registerFindingRoutes(mux *http.ServeMux, store FindingStore) {
+type AnalysisRunner interface {
+	AnalyzeRun(ctx context.Context, environmentID, auditRunID string) (produced, saved int, err error)
+}
+
+func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis AnalysisRunner) {
 	mux.HandleFunc("GET /api/v1/findings", listFindings(store))
 	mux.HandleFunc("GET /api/v1/findings/{id}", getFinding(store))
 	mux.HandleFunc("PATCH /api/v1/findings/{id}", patchFinding(store))
-	mux.HandleFunc("POST /api/v1/findings/analyze", analyzeFindings(store))
+	mux.HandleFunc("POST /api/v1/findings/analyze", analyzeFindings(analysis))
 }
 
 func listFindings(store FindingStore) http.HandlerFunc {
@@ -105,68 +93,29 @@ func patchFinding(store FindingStore) http.HandlerFunc {
 	}
 }
 
-func analyzeFindings(store FindingStore) http.HandlerFunc {
-	runner := analyzer.NewRunner(analyzer.DefaultRegistry())
+func analyzeFindings(runner AnalysisRunner) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body analyzeBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
 			return
 		}
-		if body.EnvironmentID == "" {
-			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "O campo environment_id é obrigatório.")
+		if body.EnvironmentID == "" || body.AuditRunID == "" {
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "Os campos environment_id e audit_run_id são obrigatórios.")
 			return
 		}
-		facts := analyzer.SnapshotFacts{
-			EnvironmentID: body.EnvironmentID,
-			AuditRunID:    body.AuditRunID,
-			Tables:        body.Tables,
-			Indexes:       body.Indexes,
-			Hypertables:   body.Hypertables,
-			Chunks:        body.Chunks,
-			CAGGs:         body.CAGGs,
-			Policies:      body.Policies,
-			Jobs:          body.Jobs,
-			Activity:      body.Activity,
-			Vacuum:        body.Vacuum,
-			Locks:         body.Locks,
-			Connections:   body.Connections,
-			QueryStats:    body.QueryStats,
-			Roles:         body.Roles,
-			Grants:        body.Grants,
-			Functions:     body.Functions,
+		if runner == nil {
+			writeError(w, http.StatusServiceUnavailable, CodeInternal, "Análise automática indisponível.")
+			return
 		}
-		produced, err := runner.Run(r.Context(), facts)
+		produced, saved, err := runner.AnalyzeRun(r.Context(), body.EnvironmentID, body.AuditRunID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao executar analyzers.")
 			return
 		}
-		saved := make([]repository.Finding, 0, len(produced))
-		for _, f := range produced {
-			row, err := store.UpsertFinding(r.Context(), repository.UpsertFindingParams{
-				EnvironmentID: f.EnvironmentID,
-				AuditRunID:    f.AuditRunID,
-				FindingType:   f.FindingType,
-				Severity:      string(f.Severity),
-				Title:         f.Title,
-				Summary:       f.Summary,
-				ObjectType:    f.ObjectType,
-				ObjectKey:     f.ObjectKey,
-				DatabaseName:  f.DatabaseName,
-				SchemaName:    f.SchemaName,
-				ObjectName:    f.ObjectName,
-				Evidence:      analyzer.EvidenceJSON(f.Evidence),
-				DedupKey:      f.DedupKey,
-			})
-			if err != nil {
-				continue
-			}
-			saved = append(saved, *row)
-		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"produced": len(produced),
-			"saved":    len(saved),
-			"items":    saved,
+			"produced": produced,
+			"saved":    saved,
 		})
 	}
 }

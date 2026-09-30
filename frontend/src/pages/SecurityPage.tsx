@@ -25,62 +25,6 @@ function severityTone(
   return "neutral";
 }
 
-const securityDemoFacts = {
-  environment_id: "00000000-0000-0000-0000-000000000001",
-  functions: [
-    {
-      database: "app",
-      schema: "public",
-      function_name: "admin_reset_password",
-      is_security_definer: true,
-      owner: "postgres",
-      language: "plpgsql",
-    },
-    {
-      database: "app",
-      schema: "public",
-      function_name: "safe_hash",
-      is_security_definer: false,
-    },
-  ],
-  roles: [
-    {
-      database: "app",
-      role_name: "legacy_super",
-      superuser: true,
-      login: true,
-      bypass_rls: false,
-      replication: false,
-    },
-    {
-      database: "app",
-      role_name: "app_ro",
-      superuser: false,
-      login: true,
-    },
-  ],
-  grants: [
-    {
-      database: "app",
-      schema: "public",
-      object_type: "table",
-      object_name: "customer_pii",
-      grantee: "PUBLIC",
-      privilege: "ALL",
-      grantable: false,
-    },
-    {
-      database: "app",
-      schema: "public",
-      object_type: "table",
-      object_name: "orders",
-      grantee: "app_ro",
-      privilege: "SELECT",
-      grantable: false,
-    },
-  ],
-};
-
 export function SecurityPage() {
   const [items, setItems] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -107,19 +51,6 @@ export function SecurityPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const runAnalyze = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.analyzeFindings(securityDemoFacts);
-      await load();
-    } catch (err: unknown) {
-      setError(formatError(err, "Falha no analyze"));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const summary = useMemo(() => {
     const by = (type: string) =>
@@ -156,9 +87,6 @@ export function SecurityPage() {
           <Button onClick={() => void load()} disabled={busy}>
             Atualizar
           </Button>
-          <Button onClick={() => void runAnalyze()} disabled={busy}>
-            {busy ? "Analisando…" : "Rodar analyzers (demo)"}
-          </Button>
         </div>
 
         {error ? (
@@ -169,7 +97,7 @@ export function SecurityPage() {
         {!busy && items.length === 0 ? (
           <EmptyState
             title="Sem findings de segurança"
-            description="Rode os analyzers demo para listar funções com privilégios elevados e permissões amplas."
+            description="Execute uma auditoria para analisar funções com privilégios elevados e permissões amplas."
           />
         ) : null}
 

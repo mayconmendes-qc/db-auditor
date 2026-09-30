@@ -1,7 +1,9 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
+  AnalysisRun,
   AnalyzeResult,
   AuditRun,
+  AuditRunCoverage,
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
@@ -27,6 +29,7 @@ import type {
   PagedResponse,
   PolicySnapshot,
   SchemaSnapshot,
+  SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
   TableSnapshot,
@@ -141,6 +144,12 @@ export const api = {
     getJSON<ItemsResponse<SchemaSnapshot>>(
       `/api/v1/environments/${environmentId}/schemas`,
     ),
+  snapshotStatus: (environmentId: string, auditRunId?: string) =>
+    getJSON<SnapshotCompleteness>(
+      `/api/v1/environments/${environmentId}/snapshot-status${qs({
+        audit_run_id: auditRunId,
+      })}`,
+    ),
   hypertables: (environmentId: string) =>
     getJSON<ItemsResponse<HypertableSnapshot>>(
       `/api/v1/environments/${environmentId}/hypertables`,
@@ -208,6 +217,12 @@ export const api = {
   auditRun: (id: string) => getJSON<AuditRun>(`/api/v1/audit-runs/${id}`),
   auditRunCollectors: (id: string) =>
     getJSON<ItemsResponse<CollectorRun>>(`/api/v1/audit-runs/${id}/collectors`),
+  auditRunCoverage: (id: string) =>
+    getJSON<ItemsResponse<AuditRunCoverage>>(
+      `/api/v1/audit-runs/${id}/coverage`,
+    ),
+  auditRunAnalysis: (id: string) =>
+    getJSON<AnalysisRun>(`/api/v1/audit-runs/${id}/analysis`),
   triggerAuditRun: (environmentId: string, profile = "manual") =>
     postJSON<{ audit_run_id: string; status: string }>("/api/v1/audit-runs", {
       environment_id: environmentId,
