@@ -1,0 +1,226 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"github.com/mayconmendes-qc/db-auditor/internal/observability"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+)
+
+type readinessChecker interface {
+	Ping(context.Context) error
+}
+
+type InventoryStore interface {
+	readinessChecker
+	ListEnvironmentsAPI(ctx context.Context) ([]repository.Environment, error)
+	ListDatabaseSnapshots(ctx context.Context, environmentID string) ([]repository.DatabaseSnapshot, error)
+	ListDatabaseSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.DatabaseSnapshot, error)
+	ListSchemaSnapshots(ctx context.Context, environmentID string) ([]repository.SchemaSnapshot, error)
+	ListSchemaSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.SchemaSnapshot, error)
+	ListHypertableSnapshots(ctx context.Context, environmentID string) ([]repository.HypertableSnapshotRow, error)
+	ListHypertableSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.HypertableSnapshotRow, error)
+	ListDimensionSnapshots(ctx context.Context, environmentID string) ([]repository.DimensionSnapshotRow, error)
+	ListDimensionSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.DimensionSnapshotRow, error)
+	ListChunkSnapshots(ctx context.Context, environmentID string) ([]repository.ChunkSnapshotRow, error)
+	ListChunkSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.ChunkSnapshotRow, error)
+	ListCAGGSnapshots(ctx context.Context, environmentID string) ([]repository.CAGGSnapshotRow, error)
+	ListCAGGSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.CAGGSnapshotRow, error)
+	ListJobSnapshots(ctx context.Context, environmentID string) ([]repository.JobSnapshotRow, error)
+	ListJobSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.JobSnapshotRow, error)
+	ListPolicySnapshots(ctx context.Context, environmentID string) ([]repository.PolicySnapshotRow, error)
+	ListPolicySnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.PolicySnapshotRow, error)
+	ListTableSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error)
+	ListColumnSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ColumnSnapshotRow, int, error)
+	ListIndexSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error)
+	ListViewSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ViewSnapshotRow, int, error)
+	ListFunctionSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.FunctionSnapshotRow, int, error)
+	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
+	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
+	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+	ListAuditRunCoverage(ctx context.Context, auditRunID string) ([]repository.AuditRunCoverage, error)
+	GetSnapshotCompleteness(ctx context.Context, environmentID, auditRunID string) (*repository.SnapshotCompleteness, error)
+	GetAnalysisRun(ctx context.Context, auditRunID string) (*repository.AnalysisRun, error)
+	ListObjectMappings(ctx context.Context, sourceEnv, targetEnv, status string) ([]repository.ObjectMapping, error)
+	CreateObjectMapping(ctx context.Context, p repository.CreateObjectMappingParams) (*repository.ObjectMapping, error)
+	UpdateObjectMappingStatus(ctx context.Context, id, status string, notes string) (*repository.ObjectMapping, error)
+	ListFindings(ctx context.Context, environmentID, findingType, severity, status string, limit int) ([]repository.Finding, error)
+	GetFinding(ctx context.Context, id string) (*repository.Finding, error)
+	UpdateFindingStatus(ctx context.Context, id, status, notes string) (*repository.Finding, error)
+	UpsertFinding(ctx context.Context, p repository.UpsertFindingParams) (*repository.Finding, error)
+}
+
+// HandlerOptions wires optional run trigger support and target DSNs.
+type HandlerOptions struct {
+	Runner   ManualRunner
+	Analysis AnalysisRunner
+	Targets  map[string]string
+}
+
+func NewHandler(store InventoryStore) http.Handler {
+	return NewHandlerWithOptions(store, HandlerOptions{})
+}
+
+func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /ready", ready(store))
+	mux.HandleFunc("GET /metrics", observability.DefaultMetrics.Handler())
+	mux.HandleFunc("GET /api/v1/environments", listEnvironments(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/databases", listDatabases(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/schemas", listSchemas(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/hypertables", listHypertables(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/dimensions", listDimensions(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/chunks", listChunks(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/caggs", listCAGGs(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/jobs", listJobs(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/policies", listPolicies(store))
+	registerInventoryRoutes(mux, store)
+	registerRunsRoutes(mux, store, opts)
+	registerMappingsRoutes(mux, store)
+	registerFindingsRoutes(mux, store)
+	registerCompareRoutes(mux, store)
+	registerAnalyticsRoutes(mux, store)
+	registerStatusRoutes(mux, store)
+	registerConnectionsRoutes(mux, opts.Targets)
+	return mux
+}
+
+func health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func ready(store readinessChecker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := store.Ping(ctx); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	}
+}
+
+func listEnvironments(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		items, err := store.ListEnvironmentsAPI(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os ambientes.")
+			return
+		}
+		if items == nil {
+			items = []repository.Environment{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	}
+}
+
+func listDatabases(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListDatabaseSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.DatabaseSnapshot{}
+		}
+		return items, err
+	}, "Não foi possível listar os databases.")
+}
+
+func listSchemas(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListSchemaSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.SchemaSnapshot{}
+		}
+		return items, err
+	}, "Não foi possível listar os schemas.")
+}
+
+func listHypertables(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListHypertableSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.HypertableSnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar as hypertables.")
+}
+
+func listDimensions(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListDimensionSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.DimensionSnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar as dimensions.")
+}
+
+func listChunks(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListChunkSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.ChunkSnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar os chunks.")
+}
+
+func listCAGGs(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListCAGGSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.CAGGSnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar continuous aggregates.")
+}
+
+func listJobs(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListJobSnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.JobSnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar os jobs.")
+}
+
+func listPolicies(store InventoryStore) http.HandlerFunc {
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListPolicySnapshotsForRun(ctx, id, runID)
+		if items == nil {
+			items = []repository.PolicySnapshotRow{}
+		}
+		return items, err
+	}, "Não foi possível listar as policies.")
+}
+
+func envItems(
+	_ InventoryStore,
+	load func(ctx context.Context, id, auditRunID string) (any, error),
+	errMsg string,
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if id == "" {
+			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "Identificador do ambiente é obrigatório.")
+			return
+		}
+		items, err := load(r.Context(), id, r.URL.Query().Get("audit_run_id"))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, errMsg)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
