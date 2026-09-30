@@ -1,7 +1,9 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
+  AnalysisRun,
   AnalyzeResult,
   AuditRun,
+  AuditRunCoverage,
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
@@ -208,6 +210,12 @@ export const api = {
   auditRun: (id: string) => getJSON<AuditRun>(`/api/v1/audit-runs/${id}`),
   auditRunCollectors: (id: string) =>
     getJSON<ItemsResponse<CollectorRun>>(`/api/v1/audit-runs/${id}/collectors`),
+  auditRunCoverage: (id: string) =>
+    getJSON<ItemsResponse<AuditRunCoverage>>(
+      `/api/v1/audit-runs/${id}/coverage`,
+    ),
+  auditRunAnalysis: (id: string) =>
+    getJSON<AnalysisRun>(`/api/v1/audit-runs/${id}/analysis`),
   triggerAuditRun: (environmentId: string, profile = "manual") =>
     postJSON<{ audit_run_id: string; status: string }>("/api/v1/audit-runs", {
       environment_id: environmentId,
@@ -282,23 +290,6 @@ export const api = {
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
   updateFindingStatus: (id: string, status: string, notes?: string) =>
     patchJSON<Finding>(`/api/v1/findings/${id}`, { status, notes }),
-  analyzeFindings: (body: {
-    environment_id: string;
-    audit_run_id?: string;
-    tables?: unknown[];
-    indexes?: unknown[];
-    hypertables?: unknown[];
-    chunks?: unknown[];
-    caggs?: unknown[];
-    policies?: unknown[];
-    jobs?: unknown[];
-    activity?: unknown[];
-    vacuum?: unknown[];
-    locks?: unknown[];
-    connections?: unknown[];
-    query_stats?: unknown[];
-    roles?: unknown[];
-    grants?: unknown[];
-    functions?: unknown[];
-  }) => postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
+  analyzeFindings: (body: { environment_id: string; audit_run_id: string }) =>
+    postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
 };
