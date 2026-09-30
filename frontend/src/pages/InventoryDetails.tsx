@@ -1,3 +1,5 @@
+import { DetailGrid, DetailSection } from "../components/ui/Sheet";
+import { formatBytes } from "../lib/format";
 import type {
   ColumnSnapshot,
   FunctionSnapshot,
@@ -6,8 +8,6 @@ import type {
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
-import { formatBytes } from "../lib/format";
-import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) {
