@@ -3,7 +3,12 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 )
+
+const minimumIndexObservation = 30 * 24 * time.Hour
 
 // IndexAnalyzer detects possibly unused indexes. It never recommends DROP.
 type IndexAnalyzer struct{}
@@ -17,6 +22,9 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 			continue
 		}
 		if idx.IdxScan > 0 {
+			continue
+		}
+		if idx.StatsReset == nil || idx.CollectedAt.IsZero() || idx.CollectedAt.Sub(*idx.StatsReset) < minimumIndexObservation {
 			continue
 		}
 		key := fmt.Sprintf("%s.%s.%s", idx.Database, idx.Schema, idx.IndexName)
@@ -35,22 +43,25 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 			SchemaName:    idx.Schema,
 			ObjectName:    idx.IndexName,
 			Evidence: map[string]any{
-				"table_name": idx.TableName,
-				"idx_scan":   idx.IdxScan,
-				"size_bytes": idx.SizeBytes,
-				"note":       "Never recommend DROP automatically",
+				"table_name":       idx.TableName,
+				"idx_scan":         idx.IdxScan,
+				"size_bytes":       idx.SizeBytes,
+				"observation_days": int(idx.CollectedAt.Sub(*idx.StatsReset).Hours() / 24),
+				"stats_reset":      idx.StatsReset.UTC().Format(time.RFC3339),
+				"note":             "Never recommend DROP automatically",
 			},
 			DedupKey: DedupKey("index.unused", key, title),
 		}
 		out = append(out, f)
 	}
-	// Overlapping / duplicate detection by identical definition text.
+	// Duplicate detection compares the indexed structure, excluding the index name.
 	byDef := map[string][]IndexFact{}
 	for _, idx := range facts.Indexes {
-		if idx.Definition == "" {
+		structure := indexStructure(idx)
+		if structure == "" {
 			continue
 		}
-		byDef[idx.Definition] = append(byDef[idx.Definition], idx)
+		byDef[structure] = append(byDef[structure], idx)
 	}
 	for def, group := range byDef {
 		if len(group) < 2 {
@@ -60,6 +71,7 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 		for _, g := range group {
 			names = append(names, g.IndexName)
 		}
+		sort.Strings(names)
 		key := fmt.Sprintf("%s.%s.dup:%s", group[0].Database, group[0].Schema, group[0].IndexName)
 		title := fmt.Sprintf("Possibly overlapping indexes on %s.%s", group[0].Schema, group[0].TableName)
 		f := Finding{
@@ -84,4 +96,15 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 		out = append(out, f)
 	}
 	return out, nil
+}
+
+func indexStructure(idx IndexFact) string {
+	definition := strings.ToLower(strings.Join(strings.Fields(idx.Definition), " "))
+	if definition == "" {
+		return ""
+	}
+	if pos := strings.Index(definition, " on "); pos >= 0 {
+		definition = definition[pos+4:]
+	}
+	return strings.Join([]string{idx.Database, idx.Schema, idx.TableName, definition}, "|")
 }

@@ -16,6 +16,8 @@ type RunService interface {
 	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
 	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
 	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+	ListAuditRunCoverage(ctx context.Context, auditRunID string) ([]repository.AuditRunCoverage, error)
+	GetAnalysisRun(ctx context.Context, auditRunID string) (*repository.AnalysisRun, error)
 }
 
 // ManualRunner triggers an audit run with overlap protection.
@@ -32,7 +34,31 @@ func registerRunRoutes(mux *http.ServeMux, runs RunService, runner ManualRunner)
 	mux.HandleFunc("GET /api/v1/audit-runs", listAuditRuns(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}", getAuditRun(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/collectors", listRunCollectors(runs))
+	mux.HandleFunc("GET /api/v1/audit-runs/{id}/coverage", listRunCoverage(runs))
+	mux.HandleFunc("GET /api/v1/audit-runs/{id}/analysis", getRunAnalysis(runs))
 	mux.HandleFunc("POST /api/v1/audit-runs", triggerAuditRun(runner))
+}
+
+func listRunCoverage(runs RunService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		items, err := runs.ListAuditRunCoverage(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar a cobertura da execução.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	}
+}
+
+func getRunAnalysis(runs RunService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		item, err := runs.GetAnalysisRun(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Análise da execução não encontrada.")
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+	}
 }
 
 func listAuditRuns(runs RunService) http.HandlerFunc {

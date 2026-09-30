@@ -51,12 +51,7 @@ type UpsertFindingParams struct {
 	DedupKey      string
 }
 
-// UpsertFinding inserts a new open finding or refreshes last_seen on match.
-func (s *Store) UpsertFinding(ctx context.Context, p UpsertFindingParams) (*Finding, error) {
-	if len(p.Evidence) == 0 {
-		p.Evidence = []byte("{}")
-	}
-	row := s.pool.QueryRow(ctx, `
+const upsertFindingSQL = `
 INSERT INTO finding (
   environment_id, audit_run_id, finding_type, severity, status,
   title, summary, object_type, object_key,
@@ -75,14 +70,22 @@ ON CONFLICT (environment_id, dedup_key) DO UPDATE SET
   title = EXCLUDED.title,
   summary = EXCLUDED.summary,
   evidence = EXCLUDED.evidence,
+  status = CASE WHEN finding.status = 'resolved' THEN 'open' ELSE finding.status END,
+  resolved_at = CASE WHEN finding.status = 'resolved' THEN NULL ELSE finding.resolved_at END,
   updated_at = now()
-WHERE finding.status IN ('open', 'acknowledged')
 RETURNING id::text, environment_id::text, audit_run_id::text,
   finding_type, severity, status, title, summary,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, first_seen_at, last_seen_at, resolved_at, notes,
   created_at, updated_at
-`, p.EnvironmentID, p.AuditRunID, p.FindingType, p.Severity,
+`
+
+// UpsertFinding inserts a new open finding or refreshes last_seen on match.
+func (s *Store) UpsertFinding(ctx context.Context, p UpsertFindingParams) (*Finding, error) {
+	if len(p.Evidence) == 0 {
+		p.Evidence = []byte("{}")
+	}
+	row := s.pool.QueryRow(ctx, upsertFindingSQL, p.EnvironmentID, p.AuditRunID, p.FindingType, p.Severity,
 		p.Title, p.Summary, p.ObjectType, p.ObjectKey,
 		p.DatabaseName, p.SchemaName, p.ObjectName,
 		p.Evidence, p.DedupKey,

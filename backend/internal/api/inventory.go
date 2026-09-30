@@ -24,6 +24,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListTableSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -56,6 +57,7 @@ func listColumns(store InventoryStore) http.HandlerFunc {
 		}
 		items, total, err := store.ListColumnSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -84,6 +86,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListIndexSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Table:         q.Table,
@@ -112,6 +115,7 @@ func listViews(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListViewSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Q:             q.Q,
@@ -139,6 +143,7 @@ func listFunctions(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListFunctionSnapshots(r.Context(), repository.InventoryFilter{
 			EnvironmentID: id,
+			AuditRunID:    q.AuditRunID,
 			Database:      q.Database,
 			Schema:        q.Schema,
 			Q:             q.Q,

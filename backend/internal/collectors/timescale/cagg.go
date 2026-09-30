@@ -19,6 +19,7 @@ type ContinuousAggregateFacts struct {
 	MaterializedOnly          bool   `json:"materialized_only"`
 	CompressionEnabled        bool   `json:"compression_enabled"`
 	Finalized                 *bool  `json:"finalized,omitempty"`
+	ViewDefinition            string `json:"view_definition"`
 }
 
 // CollectContinuousAggregates lists CAGGs and applies schema scope on view schema.
@@ -52,6 +53,7 @@ func CollectContinuousAggregates(ctx context.Context, conn *pgx.Conn, scope conf
 			&f.MaterializedOnly,
 			&f.CompressionEnabled,
 			&finalized,
+			&f.ViewDefinition,
 		); err != nil {
 			return nil, fmt.Errorf("cagg collector scan: %w", err)
 		}

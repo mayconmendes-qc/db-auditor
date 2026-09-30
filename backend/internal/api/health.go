@@ -18,13 +18,21 @@ type InventoryStore interface {
 	readinessChecker
 	ListEnvironmentsAPI(ctx context.Context) ([]repository.Environment, error)
 	ListDatabaseSnapshots(ctx context.Context, environmentID string) ([]repository.DatabaseSnapshot, error)
+	ListDatabaseSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.DatabaseSnapshot, error)
 	ListSchemaSnapshots(ctx context.Context, environmentID string) ([]repository.SchemaSnapshot, error)
+	ListSchemaSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.SchemaSnapshot, error)
 	ListHypertableSnapshots(ctx context.Context, environmentID string) ([]repository.HypertableSnapshotRow, error)
+	ListHypertableSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.HypertableSnapshotRow, error)
 	ListDimensionSnapshots(ctx context.Context, environmentID string) ([]repository.DimensionSnapshotRow, error)
+	ListDimensionSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.DimensionSnapshotRow, error)
 	ListChunkSnapshots(ctx context.Context, environmentID string) ([]repository.ChunkSnapshotRow, error)
+	ListChunkSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.ChunkSnapshotRow, error)
 	ListCAGGSnapshots(ctx context.Context, environmentID string) ([]repository.CAGGSnapshotRow, error)
+	ListCAGGSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.CAGGSnapshotRow, error)
 	ListJobSnapshots(ctx context.Context, environmentID string) ([]repository.JobSnapshotRow, error)
+	ListJobSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.JobSnapshotRow, error)
 	ListPolicySnapshots(ctx context.Context, environmentID string) ([]repository.PolicySnapshotRow, error)
+	ListPolicySnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]repository.PolicySnapshotRow, error)
 	ListTableSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error)
 	ListColumnSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ColumnSnapshotRow, int, error)
 	ListIndexSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error)
@@ -33,6 +41,8 @@ type InventoryStore interface {
 	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
 	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
 	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+	ListAuditRunCoverage(ctx context.Context, auditRunID string) ([]repository.AuditRunCoverage, error)
+	GetAnalysisRun(ctx context.Context, auditRunID string) (*repository.AnalysisRun, error)
 	ListObjectMappings(ctx context.Context, sourceEnv, targetEnv, status string) ([]repository.ObjectMapping, error)
 	CreateObjectMapping(ctx context.Context, p repository.CreateObjectMappingParams) (*repository.ObjectMapping, error)
 	UpdateObjectMappingStatus(ctx context.Context, id, status string, notes string) (*repository.ObjectMapping, error)
@@ -44,8 +54,9 @@ type InventoryStore interface {
 
 // HandlerOptions wires optional run trigger support and target DSNs.
 type HandlerOptions struct {
-	Runner  ManualRunner
-	Targets map[string]string
+	Runner   ManualRunner
+	Analysis AnalysisRunner
+	Targets  map[string]string
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -70,7 +81,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerRunRoutes(mux, store, opts.Runner)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
-	registerFindingRoutes(mux, store)
+	registerFindingRoutes(mux, store, opts.Analysis)
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)
 	registerConnectionRoutes(mux, store, opts.Targets)
@@ -108,8 +119,8 @@ func listEnvironments(store InventoryStore) http.HandlerFunc {
 }
 
 func listDatabases(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListDatabaseSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListDatabaseSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.DatabaseSnapshot{}
 		}
@@ -118,8 +129,8 @@ func listDatabases(store InventoryStore) http.HandlerFunc {
 }
 
 func listSchemas(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListSchemaSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListSchemaSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.SchemaSnapshot{}
 		}
@@ -128,8 +139,8 @@ func listSchemas(store InventoryStore) http.HandlerFunc {
 }
 
 func listHypertables(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListHypertableSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListHypertableSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.HypertableSnapshotRow{}
 		}
@@ -138,8 +149,8 @@ func listHypertables(store InventoryStore) http.HandlerFunc {
 }
 
 func listDimensions(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListDimensionSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListDimensionSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.DimensionSnapshotRow{}
 		}
@@ -148,8 +159,8 @@ func listDimensions(store InventoryStore) http.HandlerFunc {
 }
 
 func listChunks(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListChunkSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListChunkSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.ChunkSnapshotRow{}
 		}
@@ -158,8 +169,8 @@ func listChunks(store InventoryStore) http.HandlerFunc {
 }
 
 func listCAGGs(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListCAGGSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListCAGGSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.CAGGSnapshotRow{}
 		}
@@ -168,8 +179,8 @@ func listCAGGs(store InventoryStore) http.HandlerFunc {
 }
 
 func listJobs(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListJobSnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListJobSnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.JobSnapshotRow{}
 		}
@@ -178,8 +189,8 @@ func listJobs(store InventoryStore) http.HandlerFunc {
 }
 
 func listPolicies(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListPolicySnapshots(ctx, id)
+	return envItems(store, func(ctx context.Context, id, runID string) (any, error) {
+		items, err := store.ListPolicySnapshotsForRun(ctx, id, runID)
 		if items == nil {
 			items = []repository.PolicySnapshotRow{}
 		}
@@ -189,7 +200,7 @@ func listPolicies(store InventoryStore) http.HandlerFunc {
 
 func envItems(
 	_ InventoryStore,
-	load func(ctx context.Context, id string) (any, error),
+	load func(ctx context.Context, id, auditRunID string) (any, error),
 	errMsg string,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +209,7 @@ func envItems(
 			writeError(w, http.StatusBadRequest, CodeEnvironmentRequired, "Identificador do ambiente é obrigatório.")
 			return
 		}
-		items, err := load(r.Context(), id)
+		items, err := load(r.Context(), id, r.URL.Query().Get("audit_run_id"))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, errMsg)
 			return

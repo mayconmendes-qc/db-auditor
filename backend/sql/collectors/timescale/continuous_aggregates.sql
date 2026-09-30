@@ -8,6 +8,7 @@ SELECT
   ca.materialization_hypertable_name AS materialization_hypertable,
   COALESCE(ca.materialized_only, false) AS materialized_only,
   COALESCE(ca.compression_enabled, false) AS compression_enabled,
-  (to_jsonb(ca)->>'finalized')::boolean AS finalized
+  (to_jsonb(ca)->>'finalized')::boolean AS finalized,
+  pg_get_viewdef(format('%I.%I', ca.view_schema, ca.view_name)::regclass, true) AS view_definition
 FROM timescaledb_information.continuous_aggregates ca
 ORDER BY ca.view_schema, ca.view_name;

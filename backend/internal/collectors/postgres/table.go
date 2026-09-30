@@ -44,6 +44,7 @@ func CollectTables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]T
 			&lastAutoanalyze,
 			&f.ColumnCount,
 			&f.HasPrimaryKey,
+			&f.StatsReset,
 		); err != nil {
 			return nil, fmt.Errorf("table collector scan: %w", err)
 		}

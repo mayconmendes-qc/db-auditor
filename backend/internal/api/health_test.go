@@ -23,25 +23,49 @@ func (s *stubStore) ListEnvironmentsAPI(context.Context) ([]repository.Environme
 func (s *stubStore) ListDatabaseSnapshots(context.Context, string) ([]repository.DatabaseSnapshot, error) {
 	return []repository.DatabaseSnapshot{}, nil
 }
+func (s *stubStore) ListDatabaseSnapshotsForRun(context.Context, string, string) ([]repository.DatabaseSnapshot, error) {
+	return []repository.DatabaseSnapshot{}, nil
+}
 func (s *stubStore) ListSchemaSnapshots(context.Context, string) ([]repository.SchemaSnapshot, error) {
+	return []repository.SchemaSnapshot{}, nil
+}
+func (s *stubStore) ListSchemaSnapshotsForRun(context.Context, string, string) ([]repository.SchemaSnapshot, error) {
 	return []repository.SchemaSnapshot{}, nil
 }
 func (s *stubStore) ListHypertableSnapshots(context.Context, string) ([]repository.HypertableSnapshotRow, error) {
 	return []repository.HypertableSnapshotRow{}, nil
 }
+func (s *stubStore) ListHypertableSnapshotsForRun(context.Context, string, string) ([]repository.HypertableSnapshotRow, error) {
+	return []repository.HypertableSnapshotRow{}, nil
+}
 func (s *stubStore) ListDimensionSnapshots(context.Context, string) ([]repository.DimensionSnapshotRow, error) {
+	return []repository.DimensionSnapshotRow{}, nil
+}
+func (s *stubStore) ListDimensionSnapshotsForRun(context.Context, string, string) ([]repository.DimensionSnapshotRow, error) {
 	return []repository.DimensionSnapshotRow{}, nil
 }
 func (s *stubStore) ListChunkSnapshots(context.Context, string) ([]repository.ChunkSnapshotRow, error) {
 	return []repository.ChunkSnapshotRow{}, nil
 }
+func (s *stubStore) ListChunkSnapshotsForRun(context.Context, string, string) ([]repository.ChunkSnapshotRow, error) {
+	return []repository.ChunkSnapshotRow{}, nil
+}
 func (s *stubStore) ListCAGGSnapshots(context.Context, string) ([]repository.CAGGSnapshotRow, error) {
+	return []repository.CAGGSnapshotRow{}, nil
+}
+func (s *stubStore) ListCAGGSnapshotsForRun(context.Context, string, string) ([]repository.CAGGSnapshotRow, error) {
 	return []repository.CAGGSnapshotRow{}, nil
 }
 func (s *stubStore) ListJobSnapshots(context.Context, string) ([]repository.JobSnapshotRow, error) {
 	return []repository.JobSnapshotRow{}, nil
 }
+func (s *stubStore) ListJobSnapshotsForRun(context.Context, string, string) ([]repository.JobSnapshotRow, error) {
+	return []repository.JobSnapshotRow{}, nil
+}
 func (s *stubStore) ListPolicySnapshots(context.Context, string) ([]repository.PolicySnapshotRow, error) {
+	return []repository.PolicySnapshotRow{}, nil
+}
+func (s *stubStore) ListPolicySnapshotsForRun(context.Context, string, string) ([]repository.PolicySnapshotRow, error) {
 	return []repository.PolicySnapshotRow{}, nil
 }
 func (s *stubStore) ListTableSnapshots(context.Context, repository.InventoryFilter) ([]repository.TableSnapshotRow, int, error) {
@@ -67,6 +91,12 @@ func (s *stubStore) GetAuditRun(context.Context, string) (*repository.AuditRunRo
 }
 func (s *stubStore) ListCollectorRuns(context.Context, string) ([]repository.CollectorRunRow, error) {
 	return []repository.CollectorRunRow{}, nil
+}
+func (s *stubStore) ListAuditRunCoverage(context.Context, string) ([]repository.AuditRunCoverage, error) {
+	return []repository.AuditRunCoverage{}, nil
+}
+func (s *stubStore) GetAnalysisRun(context.Context, string) (*repository.AnalysisRun, error) {
+	return &repository.AnalysisRun{}, nil
 }
 func (s *stubStore) ListObjectMappings(context.Context, string, string, string) ([]repository.ObjectMapping, error) {
 	return []repository.ObjectMapping{}, nil

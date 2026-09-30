@@ -116,3 +116,15 @@ func TestRegistryProfileFilter(t *testing.T) {
 		t.Fatalf("daily list=%d", n)
 	}
 }
+
+func TestLiveCollectorProfilesAreDifferentiated(t *testing.T) {
+	if _, ok := liveCollectorProfiles("postgres.columns")[ProfileFast]; ok {
+		t.Fatal("fast profile must not collect columns")
+	}
+	if _, ok := liveCollectorProfiles("postgres.tables")[ProfileDaily]; !ok {
+		t.Fatal("daily profile must collect tables")
+	}
+	if _, ok := liveCollectorProfiles("timescale.chunks")[ProfileWeekly]; !ok {
+		t.Fatal("weekly profile must collect chunks")
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
 	"github.com/mayconmendes-qc/db-auditor/internal/api"
 	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
@@ -51,18 +52,21 @@ func main() {
 		Scope:   cfg.Scope,
 		Writer:  store,
 	})
+	analysisService := analyzer.NewService(store, store, "1.0.0")
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:   "0.12.0",
-		CollectorVersion: "1.0.0",
-		MaxWorkers:       4,
+		ServiceVersion:    "0.13.0",
+		CollectorVersion:  "1.0.0",
+		MaxWorkers:        4,
+		AnalysisProcessor: analysisService,
 	})
 	sch := scheduler.New(runner)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddress,
 		Handler: api.NewHandlerWithOptions(store, api.HandlerOptions{
-			Runner:  sch,
-			Targets: targets,
+			Runner:   sch,
+			Analysis: analysisService,
+			Targets:  targets,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
