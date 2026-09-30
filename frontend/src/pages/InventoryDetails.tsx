@@ -60,9 +60,9 @@ export function TableDetail({
               label: "Classe de relação",
               value: (
                 <span
-                  className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${
-                    relationClassBadgeClass(t.relation_class)
-                  }`}
+                  className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${relationClassBadgeClass(
+                    t.relation_class,
+                  )}`}
                 >
                   {classLabel}
                 </span>
@@ -180,46 +180,42 @@ export function IndexDetail({ i }: { i: IndexSnapshot }) {
 
 export function ViewDetail({ v }: { v: ViewSnapshot }) {
   return (
-    <>
-      <DetailSection title="Identificação">
-        <DetailGrid
-          items={[
-            { label: "Database", value: v.database_name },
-            { label: "Schema", value: v.schema_name },
-            { label: "View", value: v.view_name },
-            { label: "Owner", value: v.owner_name ?? "—" },
-            { label: "Relkind", value: v.relkind },
-            { label: "Tamanho", value: formatBytes(v.size_bytes) },
-            { label: "Coletado em", value: formatDate(v.collected_at) },
-          ]}
-        />
-      </DetailSection>
-    </>
+    <DetailSection title="Identificação">
+      <DetailGrid
+        items={[
+          { label: "Database", value: v.database_name },
+          { label: "Schema", value: v.schema_name },
+          { label: "View", value: v.view_name },
+          { label: "Owner", value: v.owner_name ?? "—" },
+          { label: "Relkind", value: v.relkind },
+          { label: "Tamanho", value: formatBytes(v.size_bytes) },
+          { label: "Coletado em", value: formatDate(v.collected_at) },
+        ]}
+      />
+    </DetailSection>
   );
 }
 
 export function FunctionDetail({ f }: { f: FunctionSnapshot }) {
   return (
-    <>
-      <DetailSection title="Identificação">
-        <DetailGrid
-          items={[
-            { label: "Database", value: f.database_name },
-            { label: "Schema", value: f.schema_name },
-            { label: "Função", value: f.function_name },
-            { label: "Argumentos", value: f.identity_arguments || "—" },
-            { label: "Owner", value: f.owner_name ?? "—" },
-            { label: "Linguagem", value: f.language_name ?? "—" },
-            { label: "Kind", value: f.kind ?? "—" },
-            {
-              label: "Security definer",
-              value: boolLabel(f.is_security_definer),
-            },
-            { label: "Coletado em", value: formatDate(f.collected_at) },
-          ]}
-        />
-      </DetailSection>
-    </>
+    <DetailSection title="Identificação">
+      <DetailGrid
+        items={[
+          { label: "Database", value: f.database_name },
+          { label: "Schema", value: f.schema_name },
+          { label: "Função", value: f.function_name },
+          { label: "Argumentos", value: f.identity_arguments || "—" },
+          { label: "Owner", value: f.owner_name ?? "—" },
+          { label: "Linguagem", value: f.language_name ?? "—" },
+          { label: "Kind", value: f.kind ?? "—" },
+          {
+            label: "Security definer",
+            value: boolLabel(f.is_security_definer),
+          },
+          { label: "Coletado em", value: formatDate(f.collected_at) },
+        ]}
+      />
+    </DetailSection>
   );
 }
 
