@@ -633,9 +633,9 @@ export function InventoryPage() {
                             </td>
                             <td className="px-3 py-2">
                               <span
-                                className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${
-                                  relationClassBadgeClass(t.relation_class)
-                                }`}
+                                className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${relationClassBadgeClass(
+                                  t.relation_class,
+                                )}`}
                               >
                                 {relationClassLabel(
                                   t.relation_class,
