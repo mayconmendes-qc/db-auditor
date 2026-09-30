@@ -21,14 +21,26 @@ func TestPipelineCollectToFindings(t *testing.T) {
 		},
 		Indexes: []IndexFact{
 			{
-				Database: "app", Schema: "public", TableName: "orders", IndexName: "idx_a",
-				Definition: "CREATE INDEX idx_a ON public.orders USING btree (customer_id)",
-				IdxScan: 0, SizeBytes: 1024, CollectedAt: now, StatsReset: &reset,
+				Database:    "app",
+				Schema:      "public",
+				TableName:   "orders",
+				IndexName:   "idx_a",
+				Definition:  "CREATE INDEX idx_a ON public.orders USING btree (customer_id)",
+				IdxScan:     0,
+				SizeBytes:   1024,
+				CollectedAt: now,
+				StatsReset:  &reset,
 			},
 			{
-				Database: "app", Schema: "public", TableName: "orders", IndexName: "idx_b",
-				Definition: "CREATE INDEX idx_b ON public.orders USING btree (customer_id)",
-				IdxScan: 0, SizeBytes: 1024, CollectedAt: now, StatsReset: &reset,
+				Database:    "app",
+				Schema:      "public",
+				TableName:   "orders",
+				IndexName:   "idx_b",
+				Definition:  "CREATE INDEX idx_b ON public.orders USING btree (customer_id)",
+				IdxScan:     0,
+				SizeBytes:   1024,
+				CollectedAt: now,
+				StatsReset:  &reset,
 			},
 		},
 	}
@@ -56,11 +68,17 @@ func TestIndexAnalyzerUnusedRequiresObservationWindow(t *testing.T) {
 	recent := now.Add(-24 * time.Hour)
 
 	facts := SnapshotFacts{
-		EnvironmentID: "env", AuditRunID: "run",
+		EnvironmentID: "env",
+		AuditRunID:    "run",
 		Indexes: []IndexFact{{
-			Database: "db", Schema: "public", TableName: "t", IndexName: "idx_new",
-			Definition: "CREATE INDEX idx_new ON public.t USING btree (id)",
-			IdxScan: 0, CollectedAt: now, StatsReset: &recent,
+			Database:    "db",
+			Schema:      "public",
+			TableName:   "t",
+			IndexName:   "idx_new",
+			Definition:  "CREATE INDEX idx_new ON public.t USING btree (id)",
+			IdxScan:     0,
+			CollectedAt: now,
+			StatsReset:  &recent,
 		}},
 	}
 	out, err := IndexAnalyzer{}.Analyze(context.Background(), facts)
