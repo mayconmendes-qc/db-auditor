@@ -204,7 +204,7 @@ export function InventoryPage() {
           }
         })
         .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar functions"),
+          fail(formatError(e, "Falha ao listar functions")),
         )
         .finally(ok);
     } else if (kind === "hypertables") {
