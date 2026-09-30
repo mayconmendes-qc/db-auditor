@@ -17,7 +17,6 @@ SELECT
 `
 
 // databasesSQL sizes only databases the role can CONNECT to.
-// pg_database_size() raises 42501 on DBs without privilege (e.g. tsadmin on Tiger Cloud).
 const databasesSQL = `
 SELECT
   d.datname AS database_name,
@@ -52,18 +51,18 @@ SELECT
     SELECT sum(pg_total_relation_size(cl.oid))
     FROM pg_class cl
     WHERE cl.relnamespace = n.oid
-      AND cl.relkind IN ('r', 'm', 'i', 'S', 't')
+      AND cl.relkind IN ('r', 'p', 'f', 'm', 'i', 'S', 't')
   ), 0) AS size_bytes
 FROM pg_namespace n
 LEFT JOIN LATERAL (
   SELECT
-    count(*) FILTER (WHERE c.relkind = 'r') AS table_count,
+    count(*) FILTER (WHERE c.relkind IN ('r', 'p', 'f')) AS table_count,
     count(*) FILTER (WHERE c.relkind = 'v') AS view_count,
     count(*) FILTER (WHERE c.relkind = 'm') AS matview_count,
     count(*) FILTER (WHERE c.relkind = 'S') AS sequence_count
   FROM pg_class c
   WHERE c.relnamespace = n.oid
-    AND c.relkind IN ('r', 'v', 'm', 'S')
+    AND c.relkind IN ('r', 'p', 'f', 'v', 'm', 'S')
 ) c ON true
 LEFT JOIN LATERAL (
   SELECT count(*) AS function_count
@@ -74,6 +73,7 @@ WHERE n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
 ORDER BY n.nspname
 `
 
+// tablesSQL covers ordinary tables (r), partitioned parents (p), partitions, and foreign tables (f).
 const tablesSQL = `
 SELECT
   current_database() AS database_name,
@@ -81,6 +81,15 @@ SELECT
   c.relname AS table_name,
   pg_catalog.pg_get_userbyid(c.relowner) AS owner_name,
   c.relkind::text AS relkind,
+  COALESCE(c.relispartition, false) AS is_partition,
+  pn.nspname AS parent_schema_name,
+  pc.relname AS parent_table_name,
+  pg_catalog.pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
+  ts.spcname AS tablespace_name,
+  c.relpersistence::text AS relpersistence,
+  COALESCE(c.relrowsecurity, false) AS relrowsecurity,
+  COALESCE(c.relforcerowsecurity, false) AS relforcerowsecurity,
+  obj_description(c.oid, 'pg_class') AS table_comment,
   COALESCE(pg_relation_size(c.oid), 0) AS data_size_bytes,
   COALESCE(pg_indexes_size(c.oid), 0) AS index_size_bytes,
   COALESCE(pg_total_relation_size(c.oid), 0) AS total_size_bytes,
@@ -111,9 +120,12 @@ SELECT
   (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-LEFT JOIN pg_stat_user_tables s
-  ON s.relid = c.oid
-WHERE c.relkind = 'r'
+LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+LEFT JOIN pg_inherits inh ON inh.inhrelid = c.oid
+LEFT JOIN pg_class pc ON pc.oid = inh.inhparent
+LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+LEFT JOIN pg_tablespace ts ON ts.oid = c.reltablespace
+WHERE c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, c.relname
@@ -143,7 +155,7 @@ LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
 LEFT JOIN pg_collation col ON col.oid = a.attcollation
 WHERE a.attnum > 0
   AND NOT a.attisdropped
-  AND c.relkind = 'r'
+  AND c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, c.relname, a.attnum
@@ -170,7 +182,7 @@ JOIN pg_class t ON t.oid = ix.indrelid
 JOIN pg_namespace n ON n.oid = t.relnamespace
 JOIN pg_am am ON am.oid = i.relam
 LEFT JOIN pg_stat_user_indexes st ON st.indexrelid = ix.indexrelid
-WHERE t.relkind = 'r'
+WHERE t.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, t.relname, i.relname
@@ -186,11 +198,47 @@ SELECT
   pg_catalog.pg_get_constraintdef(c.oid, true) AS constraint_definition,
   c.convalidated AS is_validated,
   c.condeferrable AS is_deferrable,
-  c.condeferred AS is_deferred
+  c.condeferred AS is_deferred,
+  COALESCE((
+    SELECT array_agg(a.attname::text ORDER BY u.ord)
+    FROM unnest(c.conkey) WITH ORDINALITY AS u(attnum, ord)
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = u.attnum
+  ), ARRAY[]::text[]) AS constrained_columns,
+  fn.nspname AS referenced_schema_name,
+  frel.relname AS referenced_table_name,
+  COALESCE((
+    SELECT array_agg(a.attname::text ORDER BY u.ord)
+    FROM unnest(c.confkey) WITH ORDINALITY AS u(attnum, ord)
+    JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = u.attnum
+  ), ARRAY[]::text[]) AS referenced_columns,
+  CASE c.confupdtype
+    WHEN 'a' THEN 'no action'
+    WHEN 'r' THEN 'restrict'
+    WHEN 'c' THEN 'cascade'
+    WHEN 'n' THEN 'set null'
+    WHEN 'd' THEN 'set default'
+    ELSE NULL
+  END AS fk_update_action,
+  CASE c.confdeltype
+    WHEN 'a' THEN 'no action'
+    WHEN 'r' THEN 'restrict'
+    WHEN 'c' THEN 'cascade'
+    WHEN 'n' THEN 'set null'
+    WHEN 'd' THEN 'set default'
+    ELSE NULL
+  END AS fk_delete_action,
+  CASE c.confmatchtype
+    WHEN 'f' THEN 'full'
+    WHEN 'p' THEN 'partial'
+    WHEN 's' THEN 'simple'
+    ELSE NULL
+  END AS fk_match_type
 FROM pg_constraint c
 JOIN pg_class rel ON rel.oid = c.conrelid
 JOIN pg_namespace n ON n.oid = rel.relnamespace
-WHERE rel.relkind = 'r'
+LEFT JOIN pg_class frel ON frel.oid = c.confrelid
+LEFT JOIN pg_namespace fn ON fn.oid = frel.relnamespace
+WHERE rel.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, rel.relname, c.conname
@@ -216,8 +264,6 @@ WHERE c.relkind IN ('v', 'm')
 ORDER BY n.nspname, c.relname
 `
 
-// functionsSQL still lists aggregates (prokind=a) for inventory/security,
-// but skips pg_get_functiondef which errors on aggregates (42809).
 const functionsSQL = `
 SELECT
   current_database() AS database_name,
