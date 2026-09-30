@@ -46,39 +46,39 @@ type SchemaFacts struct {
 
 // TableFacts is one row from the table collector (current database).
 type TableFacts struct {
-	DatabaseName       string     `json:"database_name"`
-	SchemaName         string     `json:"schema_name"`
-	TableName          string     `json:"table_name"`
-	Owner              string     `json:"owner_name"`
-	Relkind            string     `json:"relkind"`
-	RelationClass      string     `json:"relation_class"`
-	IsPartition        bool       `json:"is_partition"`
-	ParentSchemaName   *string    `json:"parent_schema_name,omitempty"`
-	ParentTableName    *string    `json:"parent_table_name,omitempty"`
-	PartitionBound      *string    `json:"partition_bound,omitempty"`
-	TablespaceName     *string    `json:"tablespace_name,omitempty"`
-	RelPersistence     string     `json:"relpersistence"`
-	RelRowSecurity     bool       `json:"relrowsecurity"`
-	RelForceRowSecurity bool      `json:"relforcerowsecurity"`
-	TableComment       *string    `json:"table_comment,omitempty"`
-	DataSizeBytes      int64      `json:"data_size_bytes"`
-	IndexSizeBytes     int64      `json:"index_size_bytes"`
-	TotalSizeBytes     int64      `json:"total_size_bytes"`
-	RowEstimate        int64      `json:"row_estimate"`
-	NLiveTup           int64      `json:"n_live_tup"`
-	NDeadTup           int64      `json:"n_dead_tup"`
-	NTupIns            int64      `json:"n_tup_ins"`
-	NTupUpd            int64      `json:"n_tup_upd"`
-	NTupDel            int64      `json:"n_tup_del"`
-	SeqScan            int64      `json:"seq_scan"`
-	IdxScan            int64      `json:"idx_scan"`
-	LastVacuum         *time.Time `json:"last_vacuum,omitempty"`
-	LastAutovacuum     *time.Time `json:"last_autovacuum,omitempty"`
-	LastAnalyze        *time.Time `json:"last_analyze,omitempty"`
-	LastAutoanalyze    *time.Time `json:"last_autoanalyze,omitempty"`
-	ColumnCount        int        `json:"column_count"`
-	HasPrimaryKey      bool       `json:"has_primary_key"`
-	StatsReset         *time.Time `json:"stats_reset,omitempty"`
+	DatabaseName        string     `json:"database_name"`
+	SchemaName          string     `json:"schema_name"`
+	TableName           string     `json:"table_name"`
+	Owner               string     `json:"owner_name"`
+	Relkind             string     `json:"relkind"`
+	RelationClass       string     `json:"relation_class"`
+	IsPartition         bool       `json:"is_partition"`
+	ParentSchemaName    *string    `json:"parent_schema_name,omitempty"`
+	ParentTableName     *string    `json:"parent_table_name,omitempty"`
+	PartitionBound       *string    `json:"partition_bound,omitempty"`
+	TablespaceName      *string    `json:"tablespace_name,omitempty"`
+	RelPersistence      string     `json:"relpersistence"`
+	RelRowSecurity      bool       `json:"relrowsecurity"`
+	RelForceRowSecurity bool       `json:"relforcerowsecurity"`
+	TableComment        *string    `json:"table_comment,omitempty"`
+	DataSizeBytes       int64      `json:"data_size_bytes"`
+	IndexSizeBytes      int64      `json:"index_size_bytes"`
+	TotalSizeBytes      int64      `json:"total_size_bytes"`
+	RowEstimate         int64      `json:"row_estimate"`
+	NLiveTup            int64      `json:"n_live_tup"`
+	NDeadTup            int64      `json:"n_dead_tup"`
+	NTupIns             int64      `json:"n_tup_ins"`
+	NTupUpd             int64      `json:"n_tup_upd"`
+	NTupDel             int64      `json:"n_tup_del"`
+	SeqScan             int64      `json:"seq_scan"`
+	IdxScan             int64      `json:"idx_scan"`
+	LastVacuum          *time.Time `json:"last_vacuum,omitempty"`
+	LastAutovacuum      *time.Time `json:"last_autovacuum,omitempty"`
+	LastAnalyze         *time.Time `json:"last_analyze,omitempty"`
+	LastAutoanalyze     *time.Time `json:"last_autoanalyze,omitempty"`
+	ColumnCount         int        `json:"column_count"`
+	HasPrimaryKey       bool       `json:"has_primary_key"`
+	StatsReset          *time.Time `json:"stats_reset,omitempty"`
 }
 
 // ColumnFacts is one row from the column collector (current database).
@@ -170,29 +170,29 @@ type ExtensionFacts struct {
 
 // SequenceFacts is one row from the sequence collector (US-052).
 type SequenceFacts struct {
-	DatabaseName   string  `json:"database_name"`
-	SchemaName     string  `json:"schema_name"`
-	SequenceName   string  `json:"sequence_name"`
-	DataType       *string `json:"data_type,omitempty"`
-	StartValue     *string `json:"start_value,omitempty"`
-	IncrementBy    *string `json:"increment_by,omitempty"`
-	MaxValue       *string `json:"max_value,omitempty"`
-	MinValue       *string `json:"min_value,omitempty"`
-	Cycle          bool    `json:"cycle"`
-	OwnedByTable   *string `json:"owned_by_table,omitempty"`
-	OwnedByColumn  *string `json:"owned_by_column,omitempty"`
+	DatabaseName  string  `json:"database_name"`
+	SchemaName    string  `json:"schema_name"`
+	SequenceName  string  `json:"sequence_name"`
+	DataType      *string `json:"data_type,omitempty"`
+	StartValue    *string `json:"start_value,omitempty"`
+	IncrementBy   *string `json:"increment_by,omitempty"`
+	MaxValue      *string `json:"max_value,omitempty"`
+	MinValue      *string `json:"min_value,omitempty"`
+	Cycle         bool    `json:"cycle"`
+	OwnedByTable  *string `json:"owned_by_table,omitempty"`
+	OwnedByColumn *string `json:"owned_by_column,omitempty"`
 }
 
 // TriggerFacts is one row from the trigger collector (US-052).
 type TriggerFacts struct {
-	DatabaseName       string  `json:"database_name"`
-	SchemaName         string  `json:"schema_name"`
-	TableName          string  `json:"table_name"`
-	TriggerName        string  `json:"trigger_name"`
-	Enabled            string  `json:"enabled"`
-	Timing             *string `json:"timing,omitempty"`
-	EventManipulation  *string `json:"event_manipulation,omitempty"`
-	ActionStatement    *string `json:"action_statement,omitempty"`
+	DatabaseName      string  `json:"database_name"`
+	SchemaName        string  `json:"schema_name"`
+	TableName         string  `json:"table_name"`
+	TriggerName       string  `json:"trigger_name"`
+	Enabled           string  `json:"enabled"`
+	Timing            *string `json:"timing,omitempty"`
+	EventManipulation *string `json:"event_manipulation,omitempty"`
+	ActionStatement   *string `json:"action_statement,omitempty"`
 }
 
 // PolicyFacts is one RLS policy row (US-053).
