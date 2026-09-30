@@ -55,7 +55,7 @@ type TableFacts struct {
 	IsPartition         bool       `json:"is_partition"`
 	ParentSchemaName    *string    `json:"parent_schema_name,omitempty"`
 	ParentTableName     *string    `json:"parent_table_name,omitempty"`
-	PartitionBound       *string    `json:"partition_bound,omitempty"`
+	PartitionBound      *string    `json:"partition_bound,omitempty"`
 	TablespaceName      *string    `json:"tablespace_name,omitempty"`
 	RelPersistence      string     `json:"relpersistence"`
 	RelRowSecurity      bool       `json:"relrowsecurity"`
