@@ -47,15 +47,17 @@ func main() {
 
 	store := repository.NewStore(pool)
 	runStore := &repository.AuditRunStore{Store: store}
-	registry := audit.NewLiveRegistry(audit.LiveRegistryOptions{
+	liveOpts := audit.LiveRegistryOptions{
 		Targets: targets,
 		Scope:   cfg.Scope,
 		Writer:  store,
-	})
+	}
+	registry := audit.NewLiveRegistry(liveOpts)
+	audit.AttachStructuralCollectors(registry, liveOpts)
 	analysisService := analyzer.NewService(store, store, "1.0.0")
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:    "0.13.0",
-		CollectorVersion:  "1.0.0",
+		ServiceVersion:    "0.14.0",
+		CollectorVersion:  "1.1.0",
 		MaxWorkers:        4,
 		AnalysisProcessor: analysisService,
 	})
