@@ -9,13 +9,15 @@ import {
   Select,
   Sheet,
   Skeleton,
+  Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
-import { matchesSearch } from "../lib/format";
-import type { SortState } from "../lib/sort";
+import { formatBytes, matchesSearch } from "../lib/format";
+import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
+  ColumnSnapshot,
   DatabaseSnapshot,
   FunctionSnapshot,
   HypertableSnapshot,
@@ -27,6 +29,13 @@ import type {
   TableSnapshot,
   ViewSnapshot,
 } from "../types";
+import {
+  FunctionDetail,
+  HypertableDetail,
+  IndexDetail,
+  TableDetail,
+  ViewDetail,
+} from "./InventoryDetails";
 
 const PAGE_SIZE = 50;
 
@@ -48,6 +57,22 @@ const KIND_LABELS: Record<InventoryObjectKind, string> = {
   caggs: "CAGGs",
 };
 
+function rowClass(selected: boolean): string {
+  return `cursor-pointer border-t border-slate-800/80 transition-colors ${
+    selected ? "bg-slate-800/70" : "hover:bg-slate-900/50"
+  }`;
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("pt-BR");
+}
+
+function boolLabel(v: boolean | null | undefined): string {
+  if (v == null) return "—";
+  return v ? "Sim" : "Não";
+}
+
 export function InventoryPage() {
   const { environmentId, environments, setSection } = useApp();
   const envId = environmentId;
@@ -63,16 +88,17 @@ export function InventoryPage() {
   const [page, setPage] = useState<PageMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-  const [_tables, setTables] = useState<TableSnapshot[]>([]);
-  const [_indexes, setIndexes] = useState<IndexSnapshot[]>([]);
-  const [_views, setViews] = useState<ViewSnapshot[]>([]);
-  const [_functions, setFunctions] = useState<FunctionSnapshot[]>([]);
-  const [_hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
+  const [tables, setTables] = useState<TableSnapshot[]>([]);
+  const [indexes, setIndexes] = useState<IndexSnapshot[]>([]);
+  const [views, setViews] = useState<ViewSnapshot[]>([]);
+  const [functions, setFunctions] = useState<FunctionSnapshot[]>([]);
+  const [hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [_sort, setSort] = useState<SortState | null>(null);
+  const [sort, setSort] = useState<SortState | null>(null);
   const [snapshotStatus, setSnapshotStatus] =
     useState<SnapshotCompleteness | null>(null);
+  const [detailColumns, setDetailColumns] = useState<ColumnSnapshot[]>([]);
 
   useEffect(() => {
     if (!envId) {
@@ -117,12 +143,8 @@ export function InventoryPage() {
   }, [envId]);
 
   const schemasForDb = useMemo(() => {
-    if (!schemas) {
-      return [];
-    }
-    if (!selectedDb) {
-      return schemas;
-    }
+    if (!schemas) return [];
+    if (!selectedDb) return schemas;
     return schemas.filter((s) => s.database_name === selectedDb);
   }, [schemas, selectedDb]);
 
@@ -142,6 +164,7 @@ export function InventoryPage() {
     setListError(null);
     setSelectedKey(null);
     setSheetOpen(false);
+    setDetailColumns([]);
     const params = {
       limit: PAGE_SIZE,
       offset,
@@ -156,9 +179,7 @@ export function InventoryPage() {
       }
     };
     const ok = () => {
-      if (!cancelled) {
-        setLoading(false);
-      }
+      if (!cancelled) setLoading(false);
     };
 
     if (kind === "tables") {
@@ -213,19 +234,16 @@ export function InventoryPage() {
         .then((res) => {
           if (!cancelled) {
             let items = res.items;
-            if (selectedDb) {
+            if (selectedDb)
               items = items.filter((h) => h.database_name === selectedDb);
-            }
-            if (selectedSchema) {
+            if (selectedSchema)
               items = items.filter((h) => h.schema_name === selectedSchema);
-            }
-            if (q) {
+            if (q)
               items = items.filter(
                 (h) =>
                   matchesSearch(h.hypertable_name, q) ||
                   matchesSearch(h.schema_name, q),
               );
-            }
             const total = items.length;
             setHypertables(items.slice(offset, offset + PAGE_SIZE));
             setPage({
@@ -246,15 +264,11 @@ export function InventoryPage() {
         .then((res) => {
           if (!cancelled) {
             let items = res.items;
-            if (selectedDb) {
+            if (selectedDb)
               items = items.filter((c) => c.database_name === selectedDb);
-            }
-            if (selectedSchema) {
+            if (selectedSchema)
               items = items.filter((c) => c.schema_name === selectedSchema);
-            }
-            if (q) {
-              items = items.filter((c) => matchesSearch(c.view_name, q));
-            }
+            if (q) items = items.filter((c) => matchesSearch(c.view_name, q));
             const total = items.length;
             setPage({
               limit: PAGE_SIZE,
@@ -284,17 +298,143 @@ export function InventoryPage() {
     };
   }, [envId, kind, offset, q, selectedDb, selectedSchema]);
 
-  useEffect(() => {
-    return loadObjects();
-  }, [loadObjects]);
+  useEffect(() => loadObjects(), [loadObjects]);
+  useEffect(() => setSort(null), [kind]);
 
-  useEffect(() => {
-    setSort(null);
-  }, [kind]);
+  const sortedTables = useMemo(
+    () =>
+      sortBy(tables, sort, {
+        database: (t) => t.database_name,
+        schema: (t) => t.schema_name,
+        name: (t) => t.table_name,
+        cols: (t) => t.column_count,
+        rows: (t) => t.row_estimate,
+        size: (t) => t.total_size_bytes,
+        owner: (t) => t.owner_name ?? "",
+        pk: (t) => t.has_primary_key,
+      }),
+    [tables, sort],
+  );
+  const sortedIndexes = useMemo(
+    () =>
+      sortBy(indexes, sort, {
+        schema: (i) => i.schema_name,
+        name: (i) => i.index_name,
+        table: (i) => i.table_name,
+        method: (i) => i.access_method ?? "",
+        size: (i) => i.size_bytes,
+        scans: (i) => i.idx_scan,
+        unique: (i) => i.is_unique,
+      }),
+    [indexes, sort],
+  );
+  const sortedViews = useMemo(
+    () =>
+      sortBy(views, sort, {
+        schema: (v) => v.schema_name,
+        name: (v) => v.view_name,
+        owner: (v) => v.owner_name ?? "",
+        size: (v) => v.size_bytes,
+        kind: (v) => v.relkind,
+      }),
+    [views, sort],
+  );
+  const sortedFunctions = useMemo(
+    () =>
+      sortBy(functions, sort, {
+        schema: (f) => f.schema_name,
+        name: (f) => f.function_name,
+        kind: (f) => f.kind,
+        lang: (f) => f.language_name ?? "",
+        secdef: (f) => f.is_security_definer,
+      }),
+    [functions, sort],
+  );
+  const sortedHypertables = useMemo(
+    () =>
+      sortBy(hypertables, sort, {
+        schema: (h) => h.schema_name,
+        name: (h) => h.hypertable_name,
+        size: (h) => h.total_size_bytes,
+        chunks: (h) => h.num_chunks,
+        compressed: (h) => h.compression_enabled,
+      }),
+    [hypertables, sort],
+  );
+
+  const openRow = (key: string) => {
+    setSelectedKey(key);
+    setSheetOpen(true);
+    setDetailColumns([]);
+  };
+
+  const openTable = (t: TableSnapshot) => {
+    const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
+    openRow(key);
+    if (!envId) return;
+    api
+      .columns(envId, {
+        database: t.database_name,
+        schema: t.schema_name,
+        table: t.table_name,
+        limit: 500,
+      })
+      .then((res) => setDetailColumns(res.items))
+      .catch(() => setDetailColumns([]));
+  };
+
+  const selectedTable = sortedTables.find(
+    (t) =>
+      `table:${t.database_name}.${t.schema_name}.${t.table_name}` ===
+      selectedKey,
+  );
+  const selectedIndex = sortedIndexes.find(
+    (i) =>
+      `index:${i.database_name}.${i.schema_name}.${i.index_name}` ===
+      selectedKey,
+  );
+  const selectedView = sortedViews.find(
+    (v) =>
+      `view:${v.database_name}.${v.schema_name}.${v.view_name}` === selectedKey,
+  );
+  const selectedFn = sortedFunctions.find(
+    (f) =>
+      `fn:${f.database_name}.${f.schema_name}.${f.function_name}` ===
+      selectedKey,
+  );
+  const selectedHt = sortedHypertables.find(
+    (h) =>
+      `ht:${h.database_name}.${h.schema_name}.${h.hypertable_name}` ===
+      selectedKey,
+  );
 
   const envName =
     environments.find((e) => e.id === envId)?.name ??
     (envId ? envId.slice(0, 8) : null);
+
+  const pagination = page ? (
+    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-400">
+      <span>
+        {page.total.toLocaleString("pt-BR")} objeto(s) · offset {page.offset}
+      </span>
+      <div className="flex gap-2">
+        <Button
+          variant="ghost"
+          disabled={offset <= 0}
+          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+        >
+          Anterior
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={!page.has_more}
+          onClick={() => setOffset(offset + PAGE_SIZE)}
+        >
+          Próxima
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -361,17 +501,6 @@ export function InventoryPage() {
                   ? ` · análise ${snapshotStatus.analysis_status}`
                   : ""}
               </div>
-              {snapshotStatus.failed_databases > 0 ||
-              snapshotStatus.failed_collectors > 0 ? (
-                <div className="mt-1 text-xs">
-                  {snapshotStatus.failed_databases > 0
-                    ? `${snapshotStatus.failed_databases} database(s) com falha na cobertura. `
-                    : ""}
-                  {snapshotStatus.failed_collectors > 0
-                    ? `${snapshotStatus.failed_collectors} collector(s) com falha.`
-                    : ""}
-                </div>
-              ) : null}
             </div>
           ) : null}
 
@@ -388,100 +517,319 @@ export function InventoryPage() {
               }
             />
           ) : (
-            <Card title="Filtros">
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Select
-                  label="Database"
-                  value={selectedDb ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedDb(v || null);
-                    setSelectedSchema(null);
-                    setOffset(0);
-                  }}
-                  options={[
-                    { value: "", label: "(todos)" },
-                    ...databases.map((db) => ({
-                      value: db.database_name,
-                      label: db.database_name,
-                    })),
-                  ]}
-                />
-                <Select
-                  label="Schema"
-                  value={selectedSchema ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedSchema(v || null);
-                    setOffset(0);
-                  }}
-                  options={[
-                    { value: "", label: "(todos)" },
-                    ...schemasForDb.map((sc) => ({
-                      value: sc.schema_name,
-                      label: sc.schema_name,
-                    })),
-                  ]}
-                />
-                <Input
-                  label="Buscar"
-                  placeholder="Buscar nome…"
-                  value={q}
-                  onChange={(e) => {
-                    setQ(e.target.value);
-                    setOffset(0);
-                  }}
-                />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {KINDS.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => {
-                      setKind(k);
+            <>
+              <Card title="Filtros">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Select
+                    label="Database"
+                    value={selectedDb ?? ""}
+                    onChange={(e) => {
+                      setSelectedDb(e.target.value || null);
+                      setSelectedSchema(null);
                       setOffset(0);
-                      setSelectedKey(null);
-                      setSheetOpen(false);
                     }}
-                    className={`rounded px-2.5 py-1 text-xs ${
-                      kind === k
-                        ? "bg-emerald-800 text-white"
-                        : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
-                    }`}
-                  >
-                    {KIND_LABELS[k]}
-                  </button>
-                ))}
-              </div>
-              {listError ? (
-                <div className="mt-3">
-                  <ErrorBanner
-                    message={listError}
-                    onRetry={() => loadObjects()}
+                    options={[
+                      { value: "", label: "(todos)" },
+                      ...databases.map((db) => ({
+                        value: db.database_name,
+                        label: db.database_name,
+                      })),
+                    ]}
+                  />
+                  <Select
+                    label="Schema"
+                    value={selectedSchema ?? ""}
+                    onChange={(e) => {
+                      setSelectedSchema(e.target.value || null);
+                      setOffset(0);
+                    }}
+                    options={[
+                      { value: "", label: "(todos)" },
+                      ...schemasForDb.map((sc) => ({
+                        value: sc.schema_name,
+                        label: sc.schema_name,
+                      })),
+                    ]}
+                  />
+                  <Input
+                    label="Buscar"
+                    placeholder="Buscar nome…"
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setOffset(0);
+                    }}
                   />
                 </div>
-              ) : null}
-              {loading ? (
-                <Skeleton className="mt-3 h-40 w-full" />
-              ) : (
-                <p className="mt-3 text-xs text-slate-500">
-                  {page
-                    ? `${page.total.toLocaleString("pt-BR")} objeto(s) · ${KIND_LABELS[kind]}`
-                    : "Carregando…"}
-                </p>
-              )}
-            </Card>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        setKind(k);
+                        setOffset(0);
+                        setSelectedKey(null);
+                        setSheetOpen(false);
+                      }}
+                      className={`rounded px-2.5 py-1 text-xs ${
+                        kind === k
+                          ? "bg-emerald-800 text-white"
+                          : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      {KIND_LABELS[k]}
+                    </button>
+                  ))}
+                </div>
+                {listError ? (
+                  <div className="mt-3">
+                    <ErrorBanner
+                      message={listError}
+                      onRetry={() => loadObjects()}
+                    />
+                  </div>
+                ) : null}
+              </Card>
+
+              <Card title={KIND_LABELS[kind]}>
+                {loading ? (
+                  <Skeleton className="mt-3 h-40 w-full" />
+                ) : kind === "tables" ? (
+                  <>
+                    <Table
+                      dense
+                      sortKey={sort?.key}
+                      sortDir={sort?.dir}
+                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      headers={[
+                        { id: "database", label: "Database", sortable: true },
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "name", label: "Tabela", sortable: true },
+                        { id: "cols", label: "Cols", sortable: true },
+                        { id: "rows", label: "Linhas", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                        { id: "pk", label: "PK", sortable: true },
+                      ]}
+                    >
+                      {sortedTables.map((t) => {
+                        const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
+                        return (
+                          <tr
+                            key={t.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => openTable(t)}
+                          >
+                            <td className="px-3 py-2">{t.database_name}</td>
+                            <td className="px-3 py-2">{t.schema_name}</td>
+                            <td className="px-3 py-2 font-medium text-slate-100">
+                              {t.table_name}
+                            </td>
+                            <td className="px-3 py-2">{fmtNum(t.column_count)}</td>
+                            <td className="px-3 py-2">{fmtNum(t.row_estimate)}</td>
+                            <td className="px-3 py-2">
+                              {formatBytes(t.total_size_bytes)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {boolLabel(t.has_primary_key)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {pagination}
+                  </>
+                ) : kind === "indexes" ? (
+                  <>
+                    <Table
+                      dense
+                      sortKey={sort?.key}
+                      sortDir={sort?.dir}
+                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      headers={[
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "name", label: "Índice", sortable: true },
+                        { id: "table", label: "Tabela", sortable: true },
+                        { id: "method", label: "Método", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                        { id: "scans", label: "Scans", sortable: true },
+                        { id: "unique", label: "Unique", sortable: true },
+                      ]}
+                    >
+                      {sortedIndexes.map((i) => {
+                        const key = `index:${i.database_name}.${i.schema_name}.${i.index_name}`;
+                        return (
+                          <tr
+                            key={i.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => openRow(key)}
+                          >
+                            <td className="px-3 py-2">{i.schema_name}</td>
+                            <td className="px-3 py-2 font-medium text-slate-100">
+                              {i.index_name}
+                            </td>
+                            <td className="px-3 py-2">{i.table_name}</td>
+                            <td className="px-3 py-2">
+                              {i.access_method ?? "—"}
+                            </td>
+                            <td className="px-3 py-2">
+                              {formatBytes(i.size_bytes)}
+                            </td>
+                            <td className="px-3 py-2">{fmtNum(i.idx_scan)}</td>
+                            <td className="px-3 py-2">
+                              {boolLabel(i.is_unique)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {pagination}
+                  </>
+                ) : kind === "views" || kind === "caggs" ? (
+                  <>
+                    <Table
+                      dense
+                      sortKey={sort?.key}
+                      sortDir={sort?.dir}
+                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      headers={[
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "name", label: "Nome", sortable: true },
+                        { id: "kind", label: "Tipo", sortable: true },
+                        { id: "owner", label: "Owner", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                      ]}
+                    >
+                      {sortedViews.map((v) => {
+                        const key = `view:${v.database_name}.${v.schema_name}.${v.view_name}`;
+                        return (
+                          <tr
+                            key={v.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => openRow(key)}
+                          >
+                            <td className="px-3 py-2">{v.schema_name}</td>
+                            <td className="px-3 py-2 font-medium text-slate-100">
+                              {v.view_name}
+                            </td>
+                            <td className="px-3 py-2">{v.relkind}</td>
+                            <td className="px-3 py-2">{v.owner_name ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              {formatBytes(v.size_bytes)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {pagination}
+                  </>
+                ) : kind === "functions" ? (
+                  <>
+                    <Table
+                      dense
+                      sortKey={sort?.key}
+                      sortDir={sort?.dir}
+                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      headers={[
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "name", label: "Função", sortable: true },
+                        { id: "kind", label: "Kind", sortable: true },
+                        { id: "lang", label: "Lang", sortable: true },
+                        { id: "secdef", label: "SecDef", sortable: true },
+                      ]}
+                    >
+                      {sortedFunctions.map((f) => {
+                        const key = `fn:${f.database_name}.${f.schema_name}.${f.function_name}`;
+                        return (
+                          <tr
+                            key={f.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => openRow(key)}
+                          >
+                            <td className="px-3 py-2">{f.schema_name}</td>
+                            <td className="px-3 py-2 font-medium text-slate-100">
+                              {f.function_name}
+                            </td>
+                            <td className="px-3 py-2">{f.kind}</td>
+                            <td className="px-3 py-2">{f.language_name ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              {boolLabel(f.is_security_definer)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {pagination}
+                  </>
+                ) : (
+                  <>
+                    <Table
+                      dense
+                      sortKey={sort?.key}
+                      sortDir={sort?.dir}
+                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      headers={[
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "name", label: "Hypertable", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                        { id: "chunks", label: "Chunks", sortable: true },
+                        {
+                          id: "compressed",
+                          label: "Compressão",
+                          sortable: true,
+                        },
+                      ]}
+                    >
+                      {sortedHypertables.map((h) => {
+                        const key = `ht:${h.database_name}.${h.schema_name}.${h.hypertable_name}`;
+                        return (
+                          <tr
+                            key={h.id}
+                            className={rowClass(selectedKey === key)}
+                            onClick={() => openRow(key)}
+                          >
+                            <td className="px-3 py-2">{h.schema_name}</td>
+                            <td className="px-3 py-2 font-medium text-slate-100">
+                              {h.hypertable_name}
+                            </td>
+                            <td className="px-3 py-2">
+                              {formatBytes(h.total_size_bytes)}
+                            </td>
+                            <td className="px-3 py-2">{fmtNum(h.num_chunks)}</td>
+                            <td className="px-3 py-2">
+                              {boolLabel(h.compression_enabled)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Table>
+                    {pagination}
+                  </>
+                )}
+              </Card>
+            </>
           )}
 
           <Sheet
             open={sheetOpen}
             onOpenChange={setSheetOpen}
             title={selectedKey ?? "Detalhe"}
+            wide
           >
-            <p className="text-sm text-slate-400">
-              Detalhe do objeto selecionado.
-            </p>
+            {selectedTable ? (
+              <TableDetail t={selectedTable} columns={detailColumns} />
+            ) : null}
+            {selectedIndex ? <IndexDetail i={selectedIndex} /> : null}
+            {selectedView ? <ViewDetail v={selectedView} /> : null}
+            {selectedFn ? <FunctionDetail f={selectedFn} /> : null}
+            {selectedHt ? <HypertableDetail h={selectedHt} /> : null}
+            {!selectedTable &&
+            !selectedIndex &&
+            !selectedView &&
+            !selectedFn &&
+            !selectedHt ? (
+              <p className="text-sm text-slate-400">Nenhum detalhe.</p>
+            ) : null}
           </Sheet>
         </div>
       )}
