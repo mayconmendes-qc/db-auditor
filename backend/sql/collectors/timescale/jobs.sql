@@ -18,6 +18,9 @@ SELECT
   j.hypertable_schema AS hypertable_schema,
   j.hypertable_name AS hypertable_name,
   j.check_schema AS check_schema,
-  j.check_name AS check_name
+  j.check_name AS check_name,
+  COALESCE(to_jsonb(js)->>'last_run_status', '') AS last_run_status,
+  COALESCE((to_jsonb(js)->>'total_failures')::bigint, 0) AS total_failures
 FROM timescaledb_information.jobs j
+LEFT JOIN timescaledb_information.job_stats js ON js.job_id = j.job_id
 ORDER BY j.job_id;

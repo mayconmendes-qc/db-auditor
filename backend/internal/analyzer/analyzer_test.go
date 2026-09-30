@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestStorageAnalyzerTopConsumers(t *testing.T) {
@@ -36,10 +37,12 @@ func TestStorageAnalyzerTopConsumers(t *testing.T) {
 }
 
 func TestIndexAnalyzerUnusedNoDrop(t *testing.T) {
+	collectedAt := time.Now().UTC()
+	statsReset := collectedAt.Add(-31 * 24 * time.Hour)
 	facts := SnapshotFacts{
 		EnvironmentID: "env-1",
 		Indexes: []IndexFact{
-			{Database: "db", Schema: "public", TableName: "t", IndexName: "idx_unused", IdxScan: 0},
+			{Database: "db", Schema: "public", TableName: "t", IndexName: "idx_unused", IdxScan: 0, CollectedAt: collectedAt, StatsReset: &statsReset},
 			{Database: "db", Schema: "public", TableName: "t", IndexName: "idx_used", IdxScan: 10},
 			{Database: "db", Schema: "public", TableName: "t", IndexName: "pk", IdxScan: 0, IsPrimary: true},
 		},
@@ -57,6 +60,32 @@ func TestIndexAnalyzerUnusedNoDrop(t *testing.T) {
 	note, _ := out[0].Evidence["note"].(string)
 	if note == "" {
 		t.Error("expected explicit no-DROP note in evidence")
+	}
+}
+
+func TestIndexAnalyzerNormalizesIndexNameForDuplicates(t *testing.T) {
+	facts := SnapshotFacts{EnvironmentID: "env", Indexes: []IndexFact{
+		{Database: "db", Schema: "public", TableName: "orders", IndexName: "idx_a", IdxScan: 1, Definition: "CREATE INDEX idx_a ON public.orders USING btree (customer_id)"},
+		{Database: "db", Schema: "public", TableName: "orders", IndexName: "idx_b", IdxScan: 1, Definition: "CREATE INDEX idx_b ON public.orders USING btree (customer_id)"},
+	}}
+	out, err := IndexAnalyzer{}.Analyze(context.Background(), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || out[0].FindingType != "index.overlap" {
+		t.Fatalf("findings = %#v", out)
+	}
+}
+
+func TestIndexAnalyzerRequiresObservationWindow(t *testing.T) {
+	collectedAt := time.Now().UTC()
+	statsReset := collectedAt.Add(-24 * time.Hour)
+	out, err := IndexAnalyzer{}.Analyze(context.Background(), SnapshotFacts{Indexes: []IndexFact{{IndexName: "idx", IdxScan: 0, CollectedAt: collectedAt, StatsReset: &statsReset}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 0 {
+		t.Fatalf("expected no findings for recent stats reset, got %d", len(out))
 	}
 }
 

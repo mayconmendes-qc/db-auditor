@@ -16,6 +16,10 @@ type MemoryRunStore struct {
 	CollectorRuns map[string]*memCollectorRun
 }
 
+func (m *MemoryRunStore) RecordCollectorCoverage(_ context.Context, _, _, _, _ string, _ int64, _, _ string) error {
+	return nil
+}
+
 type memAuditRun struct {
 	ID               string
 	EnvironmentID    string

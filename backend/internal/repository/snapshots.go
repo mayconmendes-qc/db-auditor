@@ -114,15 +114,24 @@ ON CONFLICT (audit_run_id, database_name, schema_name) DO NOTHING
 }
 
 func (s *Store) ListDatabaseSnapshots(ctx context.Context, environmentID string) ([]DatabaseSnapshot, error) {
+	return s.ListDatabaseSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListDatabaseSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]DatabaseSnapshot, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
-SELECT DISTINCT ON (database_name)
+SELECT
   id::text, audit_run_id::text, environment_id::text, database_name, owner_name, encoding,
   size_bytes, connection_count, allow_connections, is_template, collected_at
 FROM database_snapshot
 WHERE environment_id = $1::uuid
+  AND audit_run_id = $2::uuid
   AND COALESCE(is_template, false) = false
-ORDER BY database_name, collected_at DESC
-`, environmentID)
+ORDER BY database_name
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -142,14 +151,23 @@ ORDER BY database_name, collected_at DESC
 }
 
 func (s *Store) ListSchemaSnapshots(ctx context.Context, environmentID string) ([]SchemaSnapshot, error) {
+	return s.ListSchemaSnapshotsForRun(ctx, environmentID, "")
+}
+
+func (s *Store) ListSchemaSnapshotsForRun(ctx context.Context, environmentID, auditRunID string) ([]SchemaSnapshot, error) {
+	runID, err := s.ResolveAuditRunID(ctx, environmentID, auditRunID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.pool.Query(ctx, `
-SELECT DISTINCT ON (database_name, schema_name)
+SELECT
   id::text, audit_run_id::text, environment_id::text, database_name, schema_name, owner_name,
   table_count, view_count, materialized_view_count, sequence_count, function_count, size_bytes, collected_at
 FROM schema_snapshot
 WHERE environment_id = $1::uuid
-ORDER BY database_name, schema_name, collected_at DESC
-`, environmentID)
+  AND audit_run_id = $2::uuid
+ORDER BY database_name, schema_name
+`, environmentID, runID)
 	if err != nil {
 		return nil, err
 	}

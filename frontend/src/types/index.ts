@@ -344,6 +344,42 @@ export interface CollectorRun {
   error?: string | null;
 }
 
+export interface AuditRunCoverage {
+  collector_name: string;
+  database_name?: string;
+  status: string;
+  rows_collected: number;
+  warning?: string | null;
+  error?: string | null;
+  collected_at: string;
+}
+
+export interface AnalysisRun {
+  audit_run_id: string;
+  environment_id: string;
+  status: string;
+  analyzer_version: string;
+  findings_produced: number;
+  findings_saved: number;
+  error?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+}
+
+export interface SnapshotCompleteness {
+  audit_run_id: string;
+  run_status: string;
+  completeness: "complete" | "partial" | "empty" | "unknown";
+  failed_databases: number;
+  failed_collectors: number;
+  coverage_rows: number;
+  analysis_status?: string | null;
+  analysis_findings_produced: number;
+  analysis_findings_saved: number;
+  started_at?: string;
+  finished_at?: string | null;
+}
+
 export interface ObjectMapping {
   id: string;
   source_environment_id: string;

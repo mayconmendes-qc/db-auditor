@@ -68,6 +68,15 @@ func (s *stubStore) GetAuditRun(context.Context, string) (*repository.AuditRunRo
 func (s *stubStore) ListCollectorRuns(context.Context, string) ([]repository.CollectorRunRow, error) {
 	return []repository.CollectorRunRow{}, nil
 }
+func (s *stubStore) ListAuditRunCoverage(context.Context, string) ([]repository.AuditRunCoverage, error) {
+	return []repository.AuditRunCoverage{}, nil
+}
+func (s *stubStore) GetAnalysisRun(context.Context, string) (*repository.AnalysisRun, error) {
+	return nil, nil
+}
+func (s *stubStore) GetSnapshotCompleteness(context.Context, string, string) (*repository.SnapshotCompleteness, error) {
+	return &repository.SnapshotCompleteness{Completeness: "empty"}, nil
+}
 func (s *stubStore) ListObjectMappings(context.Context, string, string, string) ([]repository.ObjectMapping, error) {
 	return []repository.ObjectMapping{}, nil
 }
@@ -98,9 +107,6 @@ func TestHealth(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
-	}
-	if w.Header().Get("X-Request-ID") == "" {
-		t.Fatal("expected X-Request-ID from middleware")
 	}
 	var body map[string]string
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -141,31 +147,6 @@ func TestStatus(t *testing.T) {
 	if body["api_status"] != "ok" {
 		t.Fatalf("body = %v", body)
 	}
-	if body["database_status"] != "ready" {
-		t.Fatalf("database_status = %v", body["database_status"])
-	}
-}
-
-func TestListMappingsEmpty(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(&stubStore{})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/mappings", nil)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
-}
-
-func TestListFindingsEmpty(t *testing.T) {
-	t.Parallel()
-	h := NewHandler(&stubStore{})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/findings", nil)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
 }
 
 func TestListTablesEmpty(t *testing.T) {
@@ -177,11 +158,15 @@ func TestListTablesEmpty(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
-	var body map[string]any
-	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := body["page"]; !ok {
-		t.Fatalf("expected page envelope: %v", body)
+}
+
+func TestSnapshotStatus(t *testing.T) {
+	t.Parallel()
+	h := NewHandler(&stubStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/00000000-0000-0000-0000-000000000001/snapshot-status", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
 }

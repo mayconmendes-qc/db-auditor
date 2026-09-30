@@ -143,10 +143,9 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			res.Notes = append(res.Notes, "list audit runs failed")
 		} else {
 			for _, run := range runs {
-				switch run.Status {
-				case "FAILED":
+				if isFailedRunStatus(run.Status) {
 					res.FailedRunsRecent++
-				case "SUCCESS", "PARTIAL_SUCCESS":
+				} else if isSuccessfulRunStatus(run.Status) {
 					res.SuccessfulRunsRecent++
 				}
 			}

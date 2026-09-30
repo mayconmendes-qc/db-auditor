@@ -107,7 +107,8 @@ SELECT
     SELECT 1
     FROM pg_index i
     WHERE i.indrelid = c.oid AND i.indisprimary
-  ) AS has_primary_key
+  ) AS has_primary_key,
+  (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 LEFT JOIN pg_stat_user_tables s
@@ -161,7 +162,8 @@ SELECT
   COALESCE(pg_relation_size(i.oid), 0) AS size_bytes,
   COALESCE(st.idx_scan, 0)::bigint AS idx_scan,
   COALESCE(st.idx_tup_read, 0)::bigint AS idx_tup_read,
-  COALESCE(st.idx_tup_fetch, 0)::bigint AS idx_tup_fetch
+  COALESCE(st.idx_tup_fetch, 0)::bigint AS idx_tup_fetch,
+  (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
 FROM pg_index ix
 JOIN pg_class i ON i.oid = ix.indexrelid
 JOIN pg_class t ON t.oid = ix.indrelid

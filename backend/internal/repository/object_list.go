@@ -9,6 +9,7 @@ import (
 
 type InventoryFilter struct {
 	EnvironmentID string
+	AuditRunID    string
 	Database      string
 	Schema        string
 	Table         string
@@ -90,16 +91,20 @@ type FunctionSnapshotRow struct {
 	CollectedAt       time.Time `json:"collected_at"`
 }
 
-func inventoryWhereFor(table string, f InventoryFilter, startArg int) (string, []any, int) {
+func inventoryWhereFor(f InventoryFilter, startArg int) (string, []any, int) {
 	conds := []string{fmt.Sprintf("environment_id = $%d::uuid", startArg)}
 	args := []any{f.EnvironmentID}
 	n := startArg + 1
-	conds = append(conds, fmt.Sprintf(`audit_run_id = (
-  SELECT audit_run_id FROM %s
+	conds = append(conds, fmt.Sprintf(`audit_run_id = COALESCE(
+  NULLIF($%d, '')::uuid,
+  (SELECT id FROM audit_run
   WHERE environment_id = $%d::uuid
-  ORDER BY collected_at DESC
+    AND status IN ('success', 'partial_success')
+  ORDER BY started_at DESC
   LIMIT 1
-)`, table, startArg))
+)`, n, startArg))
+	args = append(args, f.AuditRunID)
+	n++
 	if f.Database != "" {
 		conds = append(conds, fmt.Sprintf("database_name = $%d", n))
 		args = append(args, f.Database)
@@ -119,7 +124,7 @@ func inventoryWhereFor(table string, f InventoryFilter, startArg int) (string, [
 }
 
 func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]TableSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor("table_snapshot", f, 1)
+	where, args, next := inventoryWhereFor(f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (table_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -164,7 +169,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListColumnSnapshots(ctx context.Context, f InventoryFilter) ([]ColumnSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor("column_snapshot", f, 1)
+	where, args, next := inventoryWhereFor(f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (column_name ILIKE $%d OR data_type ILIKE $%d)", next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -209,7 +214,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListIndexSnapshots(ctx context.Context, f InventoryFilter) ([]IndexSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor("index_snapshot", f, 1)
+	where, args, next := inventoryWhereFor(f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (index_name ILIKE $%d OR table_name ILIKE $%d OR schema_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -254,7 +259,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListViewSnapshots(ctx context.Context, f InventoryFilter) ([]ViewSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor("view_snapshot", f, 1)
+	where, args, next := inventoryWhereFor(f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (view_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")
@@ -297,7 +302,7 @@ LIMIT $%d OFFSET $%d
 }
 
 func (s *Store) ListFunctionSnapshots(ctx context.Context, f InventoryFilter) ([]FunctionSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor("function_snapshot", f, 1)
+	where, args, next := inventoryWhereFor(f, 1)
 	if f.Q != "" {
 		where += fmt.Sprintf(" AND (function_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
 		args = append(args, "%"+f.Q+"%")

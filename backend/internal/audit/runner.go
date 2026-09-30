@@ -14,16 +14,23 @@ type RunStore interface {
 	FinishAuditRun(ctx context.Context, auditRunID, status string, warnings, errs []string) error
 	StartCollectorRun(ctx context.Context, auditRunID, name, version string) (collectorRunID string, err error)
 	FinishCollectorRun(ctx context.Context, collectorRunID, status string, rows int64, warning, errMsg string) error
+	RecordCollectorCoverage(ctx context.Context, auditRunID, collectorName, databaseName, status string, rows int64, warning, errMsg string) error
+}
+
+// AnalysisProcessor turns the snapshots produced by a run into persisted findings.
+type AnalysisProcessor interface {
+	AnalyzeRun(ctx context.Context, environmentID, auditRunID string) (produced, saved int, err error)
 }
 
 // RunnerOptions configures timeouts, retries and concurrency.
 type RunnerOptions struct {
-	ServiceVersion   string
-	CollectorVersion string
-	CollectorTimeout time.Duration
-	MaxRetries       int
-	RetryBackoff     time.Duration
-	MaxWorkers       int
+	ServiceVersion    string
+	CollectorVersion  string
+	CollectorTimeout  time.Duration
+	MaxRetries        int
+	RetryBackoff      time.Duration
+	MaxWorkers        int
+	AnalysisProcessor AnalysisProcessor
 }
 
 func (o RunnerOptions) withDefaults() RunnerOptions {
@@ -65,6 +72,14 @@ type RunResult struct {
 	Collectors []CollectorOutcome `json:"collectors"`
 	Warnings   []string           `json:"warnings"`
 	Errors     []string           `json:"errors"`
+	Analysis   *AnalysisOutcome   `json:"analysis,omitempty"`
+}
+
+type AnalysisOutcome struct {
+	Status   string `json:"status"`
+	Produced int    `json:"produced"`
+	Saved    int    `json:"saved"`
+	Error    string `json:"error,omitempty"`
 }
 
 // Runner executes registered collectors for an environment and profile.
@@ -128,6 +143,7 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	if ctx.Err() != nil {
 		cancelled = true
 	}
+	finalCtx := context.WithoutCancel(ctx)
 
 	var success, failed, skipped int
 	warnings := make([]string, 0)
@@ -143,14 +159,30 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			}
 		case CollectorStatusSkipped:
 			skipped++
+			if err := r.store.RecordCollectorCoverage(finalCtx, auditRunID, o.Name, "", o.Status, o.Rows, o.Warning, o.Error); err != nil {
+				errs = append(errs, fmt.Sprintf("%s coverage: %s", o.Name, err))
+			}
 		}
 		if o.Warning != "" {
 			warnings = append(warnings, fmt.Sprintf("%s: %s", o.Name, o.Warning))
 		}
 	}
 	status := AggregateRunStatus(success, failed, skipped, cancelled)
-	if err := r.store.FinishAuditRun(ctx, auditRunID, status, warnings, errs); err != nil {
-		return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs},
+	var analysis *AnalysisOutcome
+	if !cancelled && success > 0 && r.opts.AnalysisProcessor != nil {
+		produced, saved, analysisErr := r.opts.AnalysisProcessor.AnalyzeRun(ctx, environmentID, auditRunID)
+		analysis = &AnalysisOutcome{Status: "success", Produced: produced, Saved: saved}
+		if analysisErr != nil {
+			analysis.Status = "failed"
+			analysis.Error = analysisErr.Error()
+			errs = append(errs, "analysis: "+analysisErr.Error())
+			if status == RunStatusSuccess {
+				status = RunStatusPartialSuccess
+			}
+		}
+	}
+	if err := r.store.FinishAuditRun(finalCtx, auditRunID, status, warnings, errs); err != nil {
+		return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis},
 			fmt.Errorf("finish audit run: %w", err)
 	}
 	return RunResult{
@@ -159,6 +191,7 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 		Collectors: outcomes,
 		Warnings:   warnings,
 		Errors:     errs,
+		Analysis:   analysis,
 	}, nil
 }
 
@@ -169,9 +202,10 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 	}
 
 	var (
-		rows    int64
-		runErr  error
-		warning string
+		rows     int64
+		runErr   error
+		warning  string
+		failures []CoverageFailure
 	)
 	attempts := r.opts.MaxRetries + 1
 	for attempt := 0; attempt < attempts; attempt++ {
@@ -190,6 +224,7 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 		if errors.As(runErr, &pw) {
 			rows = pw.Rows
 			warning = pw.Warning
+			failures = pw.Failures
 			runErr = nil
 			break
 		}
@@ -216,6 +251,13 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 	if ferr := r.store.FinishCollectorRun(ctx, collectorRunID, status, rows, warning, errMsg); ferr != nil && errMsg == "" {
 		errMsg = ferr.Error()
 		status = CollectorStatusFailed
+	}
+	if cerr := r.store.RecordCollectorCoverage(ctx, auditRunID, spec.Name, "", status, rows, warning, errMsg); cerr != nil && errMsg == "" {
+		errMsg = cerr.Error()
+		status = CollectorStatusFailed
+	}
+	for _, failure := range failures {
+		_ = r.store.RecordCollectorCoverage(context.WithoutCancel(ctx), auditRunID, spec.Name, failure.Database, CollectorStatusFailed, 0, "", failure.Error)
 	}
 	return CollectorOutcome{Name: spec.Name, Status: status, Rows: rows, Warning: warning, Error: errMsg}
 }
@@ -248,8 +290,14 @@ func (e *TransientError) Unwrap() error { return e.Err }
 // PartialWarning means the collector completed with data but some databases failed.
 // runOne treats it as success and records Warning on the collector_run.
 type PartialWarning struct {
-	Rows    int64
-	Warning string
+	Rows     int64
+	Warning  string
+	Failures []CoverageFailure
+}
+
+type CoverageFailure struct {
+	Database string
+	Error    string
 }
 
 func (e *PartialWarning) Error() string {

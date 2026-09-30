@@ -77,9 +77,14 @@ func finishMulti(rows int64, partial []postgres.PartialError, hard error) (int64
 		return rows, nil
 	}
 	msg := postgres.FormatPartialErrors(partial, 5)
+	failures := make([]CoverageFailure, 0, len(partial))
+	for _, item := range partial {
+		failures = append(failures, CoverageFailure{Database: item.Database, Error: item.Message})
+	}
 	return rows, &PartialWarning{
-		Rows:    rows,
-		Warning: fmt.Sprintf("%d database(s) com falha parcial: %s", len(partial), msg),
+		Rows:     rows,
+		Warning:  fmt.Sprintf("%d database(s) com falha parcial: %s", len(partial), msg),
+		Failures: failures,
 	}
 }
 
@@ -111,7 +116,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		_ = r.Register(CollectorSpec{
 			Name:     name,
 			Version:  "1.0.0",
-			Profiles: DefaultProfiles(),
+			Profiles: liveCollectorProfiles(name),
 			Run:      fn,
 		})
 	}
@@ -614,4 +619,31 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	})
 
 	return r
+}
+
+func liveCollectorProfiles(name string) map[string]struct{} {
+	profiles := map[string]struct{}{ProfileManual: {}, ProfileMonthly: {}}
+	weekly := map[string]struct{}{
+		"postgres.server": {}, "postgres.databases": {}, "postgres.schemas": {},
+		"postgres.tables": {}, "postgres.columns": {}, "postgres.indexes": {},
+		"postgres.constraints": {}, "postgres.views": {}, "postgres.functions": {},
+		"postgres.extensions": {}, "timescale.version": {}, "timescale.hypertables": {},
+		"timescale.dimensions": {}, "timescale.chunks": {}, "timescale.continuous_aggregates": {},
+		"timescale.jobs": {}, "timescale.policies": {},
+	}
+	daily := map[string]struct{}{
+		"postgres.server": {}, "postgres.databases": {}, "postgres.schemas": {},
+		"postgres.tables": {}, "postgres.indexes": {}, "timescale.version": {},
+		"timescale.hypertables": {}, "timescale.jobs": {}, "timescale.policies": {},
+	}
+	if _, ok := weekly[name]; ok {
+		profiles[ProfileWeekly] = struct{}{}
+	}
+	if _, ok := daily[name]; ok {
+		profiles[ProfileDaily] = struct{}{}
+	}
+	if name == "postgres.server" || name == "postgres.databases" {
+		profiles[ProfileFast] = struct{}{}
+	}
+	return profiles
 }
