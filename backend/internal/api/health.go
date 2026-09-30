@@ -71,7 +71,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	mux.HandleFunc("GET /api/v1/environments/{id}/jobs", listJobs(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/policies", listPolicies(store))
 	registerInventoryRoutes(mux, store)
-	registerRunRoutes(mux, store, opts.Runner)
+	registerRunRoutes(mux, store, opts.Runner, opts.Analysis)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
 	registerFindingRoutes(mux, store, opts.Analysis)
