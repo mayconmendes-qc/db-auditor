@@ -68,6 +68,12 @@ func (s *stubStore) GetAuditRun(context.Context, string) (*repository.AuditRunRo
 func (s *stubStore) ListCollectorRuns(context.Context, string) ([]repository.CollectorRunRow, error) {
 	return []repository.CollectorRunRow{}, nil
 }
+func (s *stubStore) ListAuditRunCoverage(context.Context, string) ([]repository.AuditRunCoverage, error) {
+	return []repository.AuditRunCoverage{}, nil
+}
+func (s *stubStore) GetAnalysisRun(context.Context, string) (*repository.AnalysisRun, error) {
+	return nil, nil
+}
 func (s *stubStore) GetSnapshotCompleteness(context.Context, string, string) (*repository.SnapshotCompleteness, error) {
 	return &repository.SnapshotCompleteness{Completeness: "empty"}, nil
 }

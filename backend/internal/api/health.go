@@ -33,6 +33,8 @@ type InventoryStore interface {
 	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
 	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
 	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)
+	ListAuditRunCoverage(ctx context.Context, auditRunID string) ([]repository.AuditRunCoverage, error)
+	GetAnalysisRun(ctx context.Context, auditRunID string) (*repository.AnalysisRun, error)
 	GetSnapshotCompleteness(ctx context.Context, environmentID, auditRunID string) (*repository.SnapshotCompleteness, error)
 	ListObjectMappings(ctx context.Context, sourceEnv, targetEnv, status string) ([]repository.ObjectMapping, error)
 	CreateObjectMapping(ctx context.Context, p repository.CreateObjectMappingParams) (*repository.ObjectMapping, error)
@@ -45,8 +47,9 @@ type InventoryStore interface {
 
 // HandlerOptions wires optional run trigger support and target DSNs.
 type HandlerOptions struct {
-	Runner  ManualRunner
-	Targets map[string]string
+	Runner   ManualRunner
+	Analysis AnalysisRunner
+	Targets  map[string]string
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -71,7 +74,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerRunRoutes(mux, store, opts.Runner)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
-	registerFindingRoutes(mux, store)
+	registerFindingRoutes(mux, store, opts.Analysis)
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)
 	registerConnectionRoutes(mux, store, opts.Targets)
@@ -175,7 +178,7 @@ func listJobs(store InventoryStore) http.HandlerFunc {
 			items = []repository.JobSnapshotRow{}
 		}
 		return items, err
-	}, "Não foi possível listar os jobs.")
+	}, "Não foi possível listar as policies.")
 }
 
 func listPolicies(store InventoryStore) http.HandlerFunc {
