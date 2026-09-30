@@ -1,5 +1,9 @@
 import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { formatBytes } from "../lib/format";
+import {
+  relationClassBadgeClass,
+  relationClassLabel,
+} from "../lib/relationClass";
 import type {
   ColumnSnapshot,
   FunctionSnapshot,
@@ -41,6 +45,7 @@ export function TableDetail({
   t: TableSnapshot;
   columns?: ColumnSnapshot[];
 }) {
+  const classLabel = relationClassLabel(t.relation_class, t.relkind);
   return (
     <>
       <DetailSection title="Identificação">
@@ -51,6 +56,19 @@ export function TableDetail({
             { label: "Tabela", value: t.table_name },
             { label: "Owner", value: t.owner_name ?? "—" },
             { label: "Relkind", value: t.relkind },
+            {
+              label: "Classe de relação",
+              value: (
+                <span
+                  className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${
+                    relationClassBadgeClass(t.relation_class)
+                  }`}
+                >
+                  {classLabel}
+                </span>
+              ),
+            },
+            { label: "Partição", value: boolLabel(t.is_partition) },
             { label: "Chave primária", value: boolLabel(t.has_primary_key) },
             {
               label: "Colunas (contagem)",

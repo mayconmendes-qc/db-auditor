@@ -20,7 +20,7 @@ func TestCollectorSQLIsReadOnly(t *testing.T) {
 	for i, q := range queries {
 		lower := strings.ToLower(q)
 		trimmed := strings.TrimSpace(lower)
-		if !(strings.HasPrefix(trimmed, "select") || strings.HasPrefix(trimmed, "with")) {
+		if !strings.HasPrefix(trimmed, "select") && !strings.HasPrefix(trimmed, "with") {
 			t.Fatalf("query %d does not start with SELECT/WITH", i)
 		}
 		for _, bad := range forbidden {
