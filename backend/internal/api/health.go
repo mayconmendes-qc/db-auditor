@@ -30,6 +30,7 @@ type InventoryStore interface {
 	ListIndexSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.IndexSnapshotRow, int, error)
 	ListViewSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ViewSnapshotRow, int, error)
 	ListFunctionSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.FunctionSnapshotRow, int, error)
+	ListConstraintSnapshots(ctx context.Context, f repository.InventoryFilter) ([]repository.ConstraintSnapshotRow, int, error)
 	ListAuditRuns(ctx context.Context, environmentID, profile, status string, limit int) ([]repository.AuditRunRow, error)
 	GetAuditRun(ctx context.Context, id string) (*repository.AuditRunRow, error)
 	ListCollectorRuns(ctx context.Context, auditRunID string) ([]repository.CollectorRunRow, error)

@@ -14,6 +14,10 @@ import {
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
+import {
+  relationClassBadgeClass,
+  relationClassLabel,
+} from "../lib/relationClass";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
@@ -307,6 +311,7 @@ export function InventoryPage() {
         database: (t) => t.database_name,
         schema: (t) => t.schema_name,
         name: (t) => t.table_name,
+        type: (t) => t.relation_class ?? t.relkind ?? "",
         cols: (t) => t.column_count,
         rows: (t) => t.row_estimate,
         size: (t) => t.total_size_bytes,
@@ -594,7 +599,7 @@ export function InventoryPage() {
 
               <Card title={KIND_LABELS[kind]}>
                 {loading ? (
-                  <Skeleton className="mt-3 h-40 w-full" />
+                  <Skeleton className="h-64 w-full" />
                 ) : kind === "tables" ? (
                   <>
                     <Table
@@ -606,6 +611,7 @@ export function InventoryPage() {
                         { id: "database", label: "Database", sortable: true },
                         { id: "schema", label: "Schema", sortable: true },
                         { id: "name", label: "Tabela", sortable: true },
+                        { id: "type", label: "Tipo", sortable: true },
                         { id: "cols", label: "Cols", sortable: true },
                         { id: "rows", label: "Linhas", sortable: true },
                         { id: "size", label: "Tamanho", sortable: true },
@@ -624,6 +630,18 @@ export function InventoryPage() {
                             <td className="px-3 py-2">{t.schema_name}</td>
                             <td className="px-3 py-2 font-medium text-slate-100">
                               {t.table_name}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-medium ${relationClassBadgeClass(
+                                  t.relation_class,
+                                )}`}
+                              >
+                                {relationClassLabel(
+                                  t.relation_class,
+                                  t.relkind,
+                                )}
+                              </span>
                             </td>
                             <td className="px-3 py-2">
                               {fmtNum(t.column_count)}
@@ -699,9 +717,9 @@ export function InventoryPage() {
                       headers={[
                         { id: "schema", label: "Schema", sortable: true },
                         { id: "name", label: "Nome", sortable: true },
-                        { id: "kind", label: "Tipo", sortable: true },
                         { id: "owner", label: "Owner", sortable: true },
                         { id: "size", label: "Tamanho", sortable: true },
+                        { id: "kind", label: "Kind", sortable: true },
                       ]}
                     >
                       {sortedViews.map((v) => {
@@ -716,11 +734,11 @@ export function InventoryPage() {
                             <td className="px-3 py-2 font-medium text-slate-100">
                               {v.view_name}
                             </td>
-                            <td className="px-3 py-2">{v.relkind}</td>
                             <td className="px-3 py-2">{v.owner_name ?? "—"}</td>
                             <td className="px-3 py-2">
                               {formatBytes(v.size_bytes)}
                             </td>
+                            <td className="px-3 py-2">{v.relkind}</td>
                           </tr>
                         );
                       })}
@@ -754,7 +772,7 @@ export function InventoryPage() {
                             <td className="px-3 py-2 font-medium text-slate-100">
                               {f.function_name}
                             </td>
-                            <td className="px-3 py-2">{f.kind}</td>
+                            <td className="px-3 py-2">{f.kind ?? "—"}</td>
                             <td className="px-3 py-2">
                               {f.language_name ?? "—"}
                             </td>

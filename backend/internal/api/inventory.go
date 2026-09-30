@@ -12,6 +12,7 @@ func registerInventoryRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("GET /api/v1/environments/{id}/indexes", listIndexes(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/views", listViews(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/functions", listFunctions(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/constraints", listConstraints(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/snapshot-status", getSnapshotStatus(store))
 }
 

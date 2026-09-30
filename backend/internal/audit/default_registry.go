@@ -6,11 +6,14 @@ import "github.com/mayconmendes-qc/db-auditor/internal/config"
 // Without AUDITOR_TARGET_DSN_<uuid>, collectors fail with a clear configuration error
 // instead of reporting success with 0 rows.
 func NewDefaultRegistry() *Registry {
-	return NewLiveRegistry(LiveRegistryOptions{
+	opts := LiveRegistryOptions{
 		Targets: config.LoadTargetDSNs(),
 		Scope: config.Scope{
 			DatabaseDenylist: []string{"template0", "template1", "postgres"},
 			SchemaDenylist:   []string{"pg_catalog", "information_schema"},
 		},
-	})
+	}
+	r := NewLiveRegistry(opts)
+	AttachStructuralCollectors(r, opts)
+	return r
 }
