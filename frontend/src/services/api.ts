@@ -223,6 +223,11 @@ export const api = {
     ),
   auditRunAnalysis: (id: string) =>
     getJSON<AnalysisRun>(`/api/v1/audit-runs/${id}/analysis`),
+  reprocessAuditRun: (id: string) =>
+    postJSON<{ audit_run_id: string; produced: number; saved: number }>(
+      `/api/v1/audit-runs/${id}/reprocess`,
+      {},
+    ),
   triggerAuditRun: (environmentId: string, profile = "manual") =>
     postJSON<{ audit_run_id: string; status: string }>("/api/v1/audit-runs", {
       environment_id: environmentId,

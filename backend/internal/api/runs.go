@@ -30,13 +30,40 @@ type triggerBody struct {
 	Profile       string `json:"profile"`
 }
 
-func registerRunRoutes(mux *http.ServeMux, runs RunService, runner ManualRunner) {
+func registerRunRoutes(mux *http.ServeMux, runs RunService, runner ManualRunner, analysis AnalysisRunner) {
 	mux.HandleFunc("GET /api/v1/audit-runs", listAuditRuns(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}", getAuditRun(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/collectors", listRunCollectors(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/coverage", listRunCoverage(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/analysis", getRunAnalysis(runs))
+	mux.HandleFunc("POST /api/v1/audit-runs/{id}/reprocess", reprocessAuditRun(runs, analysis))
 	mux.HandleFunc("POST /api/v1/audit-runs", triggerAuditRun(runner))
+}
+
+// reprocessAuditRun re-runs analyzers from persisted snapshots for an existing run (T-265).
+func reprocessAuditRun(runs RunService, analysis AnalysisRunner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		run, err := runs.GetAuditRun(r.Context(), id)
+		if err != nil || run == nil {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Execução de auditoria não encontrada.")
+			return
+		}
+		if analysis == nil {
+			writeError(w, http.StatusServiceUnavailable, CodeInternal, "Análise automática indisponível.")
+			return
+		}
+		produced, saved, err := analysis.AnalyzeRun(r.Context(), run.EnvironmentID, id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao reprocessar analyzers da execução.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"audit_run_id": id,
+			"produced":     produced,
+			"saved":        saved,
+		})
+	}
 }
 
 func listRunCoverage(runs RunService) http.HandlerFunc {

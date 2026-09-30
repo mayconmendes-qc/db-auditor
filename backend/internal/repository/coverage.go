@@ -100,13 +100,21 @@ SELECT status, started_at, finished_at FROM audit_run WHERE id=$1::uuid
 		out.AnalysisProduced = ar.FindingsProduced
 		out.AnalysisSaved = ar.FindingsSaved
 	}
-	switch {
-	case strings.EqualFold(runStatus, "partial_success") || len(failedDB) > 0 || failedCollectors > 0:
-		out.Completeness = "partial"
-	case strings.EqualFold(runStatus, "success"):
-		out.Completeness = "complete"
-	default:
-		out.Completeness = "unknown"
-	}
+	out.Completeness = ClassifySnapshotCompleteness(runStatus, len(failedDB), failedCollectors)
 	return out, nil
+}
+
+// ClassifySnapshotCompleteness derives a label from run status and coverage failures.
+// complete | partial | empty | unknown
+func ClassifySnapshotCompleteness(runStatus string, failedDatabases, failedCollectors int) string {
+	switch {
+	case strings.EqualFold(runStatus, "partial_success") || failedDatabases > 0 || failedCollectors > 0:
+		return "partial"
+	case strings.EqualFold(runStatus, "success"):
+		return "complete"
+	case strings.EqualFold(runStatus, "failed") && failedDatabases == 0 && failedCollectors == 0:
+		return "empty"
+	default:
+		return "unknown"
+	}
 }
