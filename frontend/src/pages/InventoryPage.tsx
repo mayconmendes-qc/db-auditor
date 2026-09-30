@@ -625,8 +625,12 @@ export function InventoryPage() {
                             <td className="px-3 py-2 font-medium text-slate-100">
                               {t.table_name}
                             </td>
-                            <td className="px-3 py-2">{fmtNum(t.column_count)}</td>
-                            <td className="px-3 py-2">{fmtNum(t.row_estimate)}</td>
+                            <td className="px-3 py-2">
+                              {fmtNum(t.column_count)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {fmtNum(t.row_estimate)}
+                            </td>
                             <td className="px-3 py-2">
                               {formatBytes(t.total_size_bytes)}
                             </td>
@@ -751,7 +755,9 @@ export function InventoryPage() {
                               {f.function_name}
                             </td>
                             <td className="px-3 py-2">{f.kind}</td>
-                            <td className="px-3 py-2">{f.language_name ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              {f.language_name ?? "—"}
+                            </td>
                             <td className="px-3 py-2">
                               {boolLabel(f.is_security_definer)}
                             </td>
@@ -795,7 +801,9 @@ export function InventoryPage() {
                             <td className="px-3 py-2">
                               {formatBytes(h.total_size_bytes)}
                             </td>
-                            <td className="px-3 py-2">{fmtNum(h.num_chunks)}</td>
+                            <td className="px-3 py-2">
+                              {fmtNum(h.num_chunks)}
+                            </td>
                             <td className="px-3 py-2">
                               {boolLabel(h.compression_enabled)}
                             </td>
