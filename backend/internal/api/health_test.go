@@ -59,6 +59,9 @@ func (s *stubStore) ListViewSnapshots(context.Context, repository.InventoryFilte
 func (s *stubStore) ListFunctionSnapshots(context.Context, repository.InventoryFilter) ([]repository.FunctionSnapshotRow, int, error) {
 	return []repository.FunctionSnapshotRow{}, 0, nil
 }
+func (s *stubStore) ListConstraintSnapshots(context.Context, repository.InventoryFilter) ([]repository.ConstraintSnapshotRow, int, error) {
+	return []repository.ConstraintSnapshotRow{}, 0, nil
+}
 func (s *stubStore) ListAuditRuns(context.Context, string, string, string, int) ([]repository.AuditRunRow, error) {
 	return []repository.AuditRunRow{}, nil
 }
