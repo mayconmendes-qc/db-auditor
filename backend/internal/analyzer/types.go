@@ -203,13 +203,17 @@ type ConnectionFact struct {
 
 // QueryStatFact holds sanitized query fingerprints only — never raw SQL with literals.
 type QueryStatFact struct {
-	Database         string  `json:"database"`
-	QueryFingerprint string  `json:"query_fingerprint"` // normalized, literals stripped
-	Calls            int64   `json:"calls"`
-	TotalExecTimeMs  float64 `json:"total_exec_time_ms"`
-	MeanExecTimeMs   float64 `json:"mean_exec_time_ms"`
-	Rows             int64   `json:"rows"`
-	PgStatStatements bool    `json:"pg_stat_statements"`
+	Database          string     `json:"database"`
+	QueryFingerprint  string     `json:"query_fingerprint"` // normalized, literals stripped
+	Calls             int64      `json:"calls"`
+	TotalExecTimeMs   float64    `json:"total_exec_time_ms"`
+	MeanExecTimeMs    float64    `json:"mean_exec_time_ms"`
+	Rows              int64      `json:"rows"`
+	PgStatStatements  bool       `json:"pg_stat_statements"`
+	ReferencedObjects []string   `json:"referenced_objects,omitempty"`
+	EvidenceQuality   string     `json:"evidence_quality,omitempty"`
+	StatsReset        *time.Time `json:"stats_reset,omitempty"`
+	CollectedAt       time.Time  `json:"collected_at,omitempty"`
 }
 
 // RoleFact describes a database role for privilege review.
