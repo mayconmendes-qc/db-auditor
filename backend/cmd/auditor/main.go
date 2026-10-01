@@ -46,6 +46,10 @@ func main() {
 	defer pool.Close()
 
 	store := repository.NewStore(pool)
+	if err := store.EnsureRuleCatalog(ctx); err != nil {
+		slog.Error("could not initialize rule catalog", "error", err)
+		os.Exit(1)
+	}
 	runStore := &repository.AuditRunStore{Store: store}
 	liveOpts := audit.LiveRegistryOptions{
 		Targets: targets,

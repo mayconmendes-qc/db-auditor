@@ -115,6 +115,8 @@ type ColumnStatFacts struct {
 // used transiently to derive a hash and object references, then discarded.
 type WorkloadFacts struct {
 	DatabaseName      string     `json:"database_name"`
+	ExtensionVersion  string     `json:"extension_version"`
+	QueryKind         string     `json:"query_kind"`
 	QueryFingerprint  string     `json:"query_fingerprint"`
 	QueryID           string     `json:"query_id"`
 	Calls             int64      `json:"calls"`
@@ -143,6 +145,10 @@ type IndexFacts struct {
 	IdxTupRead      int64      `json:"idx_tup_read"`
 	IdxTupFetch     int64      `json:"idx_tup_fetch"`
 	StatsReset      *time.Time `json:"stats_reset,omitempty"`
+	IsValid         bool       `json:"is_valid"`
+	IsReady         bool       `json:"is_ready"`
+	KeyColumns      []string   `json:"key_columns,omitempty"`
+	Predicate       string     `json:"predicate,omitempty"`
 }
 
 // ConstraintFacts is one row from the constraint collector.

@@ -38,3 +38,17 @@ func TestScopeAllowsSchema(t *testing.T) {
 		t.Fatal("public should be allowed by default")
 	}
 }
+
+func TestColumnStatsCollectionPolicy(t *testing.T) {
+	t.Setenv("AUDITOR_DATABASE_URL", "postgres://auditor:local@localhost:5432/auditor")
+	t.Setenv("AUDITOR_COLUMN_STATS_ENABLED", "false")
+	t.Setenv("AUDITOR_COLUMN_STATS_LIMIT", "42")
+	t.Setenv("AUDITOR_COLUMN_STATS_SCHEMA_ALLOWLIST", "public,analytics")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Collection.ColumnStatsEnabled || cfg.Collection.ColumnStatsLimit != 42 || len(cfg.Collection.ColumnStatsSchemas) != 2 || cfg.Collection.ColumnStatsSchemas[1] != "analytics" {
+		t.Fatalf("unexpected column stats policy: %#v", cfg.Collection)
+	}
+}

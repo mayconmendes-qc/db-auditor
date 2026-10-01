@@ -628,7 +628,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 			}
 			var all []postgres.ColumnStatFacts
 			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
-				items, err := postgres.CollectColumnStats(cctx, conn, scope)
+				items, err := postgres.CollectColumnStats(cctx, conn, scope, opts.Policy.ColumnStatsSchemas, opts.Policy.ColumnStatsLimit)
 				if err != nil {
 					return err
 				}
@@ -658,10 +658,15 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 				return 0, err
 			}
 			var all []postgres.WorkloadFacts
+			unavailable := 0
 			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
-				items, _, err := postgres.CollectWorkload(cctx, conn, opts.Policy.WorkloadLimit)
+				items, available, err := postgres.CollectWorkload(cctx, conn, opts.Policy.WorkloadLimit)
 				if err != nil {
 					return err
+				}
+				if !available {
+					unavailable++
+					return nil
 				}
 				all = append(all, items...)
 				return nil
@@ -678,7 +683,16 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 					return 0, fmt.Errorf("persistir workload: %w", err)
 				}
 			}
-			return finishMulti(int64(len(all)), partial, nil)
+			rows, err := finishMulti(int64(len(all)), partial, nil)
+			if unavailable > 0 {
+				note := fmt.Sprintf("pg_stat_statements indisponível em %d database(s)", unavailable)
+				if pw, ok := err.(*PartialWarning); ok {
+					pw.Warning += "; " + note
+					return rows, pw
+				}
+				return rows, &PartialWarning{Rows: rows, Warning: note}
+			}
+			return rows, err
 		})
 	}
 

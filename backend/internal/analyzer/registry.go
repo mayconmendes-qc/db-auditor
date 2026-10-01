@@ -27,6 +27,7 @@ func DefaultRegistry() *Registry {
 	r := NewRegistry()
 	r.Register(StorageAnalyzer{})
 	r.Register(IndexAnalyzer{})
+	r.Register(StructuralAnalyzer{})
 	r.Register(ChunkAnalyzer{})
 	r.Register(CAGGAnalyzer{})
 	r.Register(PolicyAnalyzer{})

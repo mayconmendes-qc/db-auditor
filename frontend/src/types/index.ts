@@ -216,10 +216,15 @@ export interface ColumnStatSnapshot {
 
 export interface WorkloadSnapshot {
   query_fingerprint: string;
+  query_kind: string;
+  extension_version: string;
   calls: number;
   total_exec_time_ms: number;
   mean_exec_time_ms: number;
   rows_total: number;
+  shared_blocks_read: number;
+  shared_blocks_hit: number;
+  stats_reset?: string;
   referenced_objects: string[];
   evidence_quality: string;
   collected_at: string;
@@ -513,6 +518,16 @@ export interface Finding {
   environment_id: string;
   audit_run_id?: string | null;
   finding_type: string;
+  rule_id?: string;
+  rule_version?: string;
+  category?: string;
+  confidence?: number;
+  impact?: string;
+  risk?: string;
+  recommendation?: string;
+  validation?: string;
+  references?: string[];
+  rule_parameters?: Record<string, unknown>;
   severity: string;
   status: string;
   title: string;

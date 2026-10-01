@@ -57,6 +57,9 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 	// Duplicate detection compares the indexed structure, excluding the index name.
 	byDef := map[string][]IndexFact{}
 	for _, idx := range facts.Indexes {
+		if idx.HasValidity && (!idx.IsValid || !idx.IsReady) {
+			continue
+		}
 		structure := indexStructure(idx)
 		if structure == "" {
 			continue
@@ -72,7 +75,7 @@ func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding,
 			names = append(names, g.IndexName)
 		}
 		sort.Strings(names)
-		key := fmt.Sprintf("%s.%s.dup:%s", group[0].Database, group[0].Schema, group[0].IndexName)
+		key := fmt.Sprintf("%s.%s.dup:%s", group[0].Database, group[0].Schema, names[0])
 		title := fmt.Sprintf("Possibly overlapping indexes on %s.%s", group[0].Schema, group[0].TableName)
 		f := Finding{
 			EnvironmentID: facts.EnvironmentID,
@@ -106,5 +109,5 @@ func indexStructure(idx IndexFact) string {
 	if pos := strings.Index(definition, " on "); pos >= 0 {
 		definition = definition[pos+4:]
 	}
-	return strings.Join([]string{idx.Database, idx.Schema, idx.TableName, definition}, "|")
+	return fmt.Sprintf("%s|%s|%s|unique=%t|primary=%t|%s", idx.Database, idx.Schema, idx.TableName, idx.IsUnique, idx.IsPrimary, definition)
 }
