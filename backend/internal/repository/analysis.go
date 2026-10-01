@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -63,10 +64,13 @@ func (s *Store) SaveAnalysisFindings(ctx context.Context, findings []analyzer.Fi
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	for i, f := range findings {
+		refs, _ := json.Marshal(f.References)
+		params, _ := json.Marshal(f.RuleParameters)
 		cmd, err := tx.Exec(ctx, upsertFindingSQL,
 			f.EnvironmentID, f.AuditRunID, f.FindingType, string(f.Severity),
 			f.Title, f.Summary, f.ObjectType, f.ObjectKey,
-			f.DatabaseName, f.SchemaName, f.ObjectName, analyzer.EvidenceJSON(f.Evidence), f.DedupKey)
+			f.DatabaseName, f.SchemaName, f.ObjectName, analyzer.EvidenceJSON(f.Evidence), f.DedupKey,
+			f.RuleID, f.RuleVersion, f.Category, f.Confidence, f.Impact, f.Risk, f.Recommendation, f.Validation, refs, params)
 		if err != nil {
 			return 0, fmt.Errorf("finding %d (%s): %w", i+1, f.FindingType, err)
 		}

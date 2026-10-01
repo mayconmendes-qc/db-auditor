@@ -31,5 +31,5 @@ func (r *Runner) Run(ctx context.Context, facts SnapshotFacts) ([]Finding, error
 		}
 		all = append(all, items...)
 	}
-	return all, nil
+	return EnrichFindings(facts, all), nil
 }

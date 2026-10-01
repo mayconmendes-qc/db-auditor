@@ -34,6 +34,8 @@ type Config struct {
 // CollectionPolicy limits optional, potentially expensive collectors.
 type CollectionPolicy struct {
 	ColumnStatsEnabled bool
+	ColumnStatsLimit   int
+	ColumnStatsSchemas []string
 	WorkloadEnabled    bool
 	WorkloadLimit      int
 }
@@ -63,6 +65,8 @@ func Load() (Config, error) {
 		},
 		Collection: CollectionPolicy{
 			ColumnStatsEnabled: boolFromEnv("AUDITOR_COLUMN_STATS_ENABLED", true),
+			ColumnStatsLimit:   intFromEnv("AUDITOR_COLUMN_STATS_LIMIT", 5000),
+			ColumnStatsSchemas: splitCSV(env("AUDITOR_COLUMN_STATS_SCHEMA_ALLOWLIST", "")),
 			WorkloadEnabled:    boolFromEnv("AUDITOR_WORKLOAD_ENABLED", true),
 			WorkloadLimit:      intFromEnv("AUDITOR_WORKLOAD_LIMIT", 500),
 		},

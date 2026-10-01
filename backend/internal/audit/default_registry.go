@@ -12,7 +12,7 @@ func NewDefaultRegistry() *Registry {
 			DatabaseDenylist: []string{"template0", "template1", "postgres"},
 			SchemaDenylist:   []string{"pg_catalog", "information_schema"},
 		},
-		Policy: config.CollectionPolicy{ColumnStatsEnabled: true, WorkloadEnabled: true, WorkloadLimit: 500},
+		Policy: config.CollectionPolicy{ColumnStatsEnabled: true, ColumnStatsLimit: 5000, WorkloadEnabled: true, WorkloadLimit: 500},
 	}
 	r := NewLiveRegistry(opts)
 	AttachStructuralCollectors(r, opts)

@@ -31,11 +31,11 @@ ON CONFLICT (audit_run_id,database_name,schema_name,table_name,column_name) DO N
 	}
 	for _, item := range workload {
 		_, err = tx.Exec(ctx, `INSERT INTO workload_snapshot (
-audit_run_id,environment_id,database_name,query_fingerprint,query_id,calls,total_exec_time_ms,
+audit_run_id,environment_id,database_name,query_fingerprint,query_id,extension_version,query_kind,calls,total_exec_time_ms,
 mean_exec_time_ms,rows_total,shared_blocks_read,shared_blocks_hit,referenced_objects,stats_reset,evidence_quality,collected_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
 ON CONFLICT (audit_run_id,database_name,query_fingerprint) DO NOTHING`,
-			auditRunID, environmentID, item.DatabaseName, item.QueryFingerprint, item.QueryID, item.Calls,
+			auditRunID, environmentID, item.DatabaseName, item.QueryFingerprint, item.QueryID, item.ExtensionVersion, item.QueryKind, item.Calls,
 			item.TotalExecTimeMS, item.MeanExecTimeMS, item.RowsTotal, item.SharedBlocksRead,
 			item.SharedBlocksHit, item.ReferencedObjects, item.StatsReset, item.EvidenceQuality)
 		if err != nil {
@@ -235,20 +235,25 @@ AND database_name=$2 AND schema_name=$3 AND table_name=$4 ORDER BY column_name`,
 }
 
 type WorkloadRow struct {
-	QueryFingerprint  string    `json:"query_fingerprint"`
-	Calls             int64     `json:"calls"`
-	TotalExecTimeMS   float64   `json:"total_exec_time_ms"`
-	MeanExecTimeMS    float64   `json:"mean_exec_time_ms"`
-	RowsTotal         int64     `json:"rows_total"`
-	ReferencedObjects []string  `json:"referenced_objects"`
-	EvidenceQuality   string    `json:"evidence_quality"`
-	CollectedAt       time.Time `json:"collected_at"`
+	QueryFingerprint  string     `json:"query_fingerprint"`
+	QueryKind         string     `json:"query_kind"`
+	ExtensionVersion  string     `json:"extension_version"`
+	Calls             int64      `json:"calls"`
+	TotalExecTimeMS   float64    `json:"total_exec_time_ms"`
+	MeanExecTimeMS    float64    `json:"mean_exec_time_ms"`
+	RowsTotal         int64      `json:"rows_total"`
+	SharedBlocksRead  int64      `json:"shared_blocks_read"`
+	SharedBlocksHit   int64      `json:"shared_blocks_hit"`
+	StatsReset        *time.Time `json:"stats_reset,omitempty"`
+	ReferencedObjects []string   `json:"referenced_objects"`
+	EvidenceQuality   string     `json:"evidence_quality"`
+	CollectedAt       time.Time  `json:"collected_at"`
 }
 
 func (s *Store) ListTableWorkload(ctx context.Context, f HistoryFilter) ([]WorkloadRow, error) {
 	qualified := f.SchemaName + "." + f.TableName
-	rows, err := s.pool.Query(ctx, `SELECT query_fingerprint,calls,total_exec_time_ms,mean_exec_time_ms,rows_total,
-referenced_objects,evidence_quality,collected_at FROM workload_snapshot
+	rows, err := s.pool.Query(ctx, `SELECT query_fingerprint,query_kind,extension_version,calls,total_exec_time_ms,mean_exec_time_ms,rows_total,
+shared_blocks_read,shared_blocks_hit,stats_reset,referenced_objects,evidence_quality,collected_at FROM workload_snapshot
 WHERE environment_id=$1::uuid AND database_name=$2 AND $3=ANY(referenced_objects)
 AND collected_at BETWEEN $4 AND $5
 ORDER BY collected_at DESC,total_exec_time_ms DESC LIMIT 200`, f.EnvironmentID, f.DatabaseName, qualified, f.From, f.To)
@@ -259,7 +264,7 @@ ORDER BY collected_at DESC,total_exec_time_ms DESC LIMIT 200`, f.EnvironmentID, 
 	out := []WorkloadRow{}
 	for rows.Next() {
 		var v WorkloadRow
-		if err := rows.Scan(&v.QueryFingerprint, &v.Calls, &v.TotalExecTimeMS, &v.MeanExecTimeMS, &v.RowsTotal, &v.ReferencedObjects, &v.EvidenceQuality, &v.CollectedAt); err != nil {
+		if err := rows.Scan(&v.QueryFingerprint, &v.QueryKind, &v.ExtensionVersion, &v.Calls, &v.TotalExecTimeMS, &v.MeanExecTimeMS, &v.RowsTotal, &v.SharedBlocksRead, &v.SharedBlocksHit, &v.StatsReset, &v.ReferencedObjects, &v.EvidenceQuality, &v.CollectedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
