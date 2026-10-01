@@ -21,17 +21,19 @@ SELECT current_database(), schemaname, tablename, attname,
 FROM pg_stats
 WHERE schemaname NOT LIKE 'pg\_%' ESCAPE '\'
   AND schemaname <> 'information_schema'
+  AND (COALESCE(cardinality($1::text[]), 0) = 0 OR schemaname = ANY($1::text[]))
+  AND NOT COALESCE(schemaname = ANY($2::text[]), false)
 ORDER BY schemaname, tablename, attname
+LIMIT $3
 `
 
 const workloadAvailableSQL = `
-SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements')
+SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'pg_stat_statements'), '')
 `
 
 const workloadSQL = `
 SELECT current_database(), queryid::text, query, calls, total_exec_time,
-       mean_exec_time, rows, shared_blks_read, shared_blks_hit,
-       (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database())
+       mean_exec_time, rows, shared_blks_read, shared_blks_hit
 FROM pg_stat_statements
 WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
 ORDER BY total_exec_time DESC
@@ -64,6 +66,21 @@ func queryFingerprint(normalized string) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
+// QueryKind is a coarse, privacy-safe operation class. Complex/unknown SQL
+// remains "other"; no raw query text is persisted.
+func QueryKind(normalized string) string {
+	fields := strings.Fields(normalized)
+	if len(fields) == 0 {
+		return "other"
+	}
+	switch fields[0] {
+	case "select", "insert", "update", "delete":
+		return fields[0]
+	default:
+		return "other"
+	}
+}
+
 func referencedObjects(normalized string) []string {
 	seen := map[string]struct{}{}
 	for _, match := range objectPattern.FindAllStringSubmatch(normalized, -1) {
@@ -81,8 +98,30 @@ func referencedObjects(normalized string) []string {
 	return out
 }
 
-func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]ColumnStatFacts, error) {
-	rows, err := conn.Query(ctx, columnStatsSQL)
+func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope, schemas []string, limit int) ([]ColumnStatFacts, error) {
+	if limit <= 0 || limit > 50000 {
+		limit = 5000
+	}
+	allowed := schemas
+	if len(scope.SchemaAllowlist) > 0 {
+		allowed = make([]string, 0, len(scope.SchemaAllowlist))
+		for _, global := range scope.SchemaAllowlist {
+			if len(schemas) == 0 {
+				allowed = append(allowed, global)
+				continue
+			}
+			for _, specific := range schemas {
+				if global == specific {
+					allowed = append(allowed, global)
+					break
+				}
+			}
+		}
+		if len(allowed) == 0 {
+			return []ColumnStatFacts{}, nil
+		}
+	}
+	rows, err := conn.Query(ctx, columnStatsSQL, allowed, scope.SchemaDenylist, limit)
 	if err != nil {
 		return nil, fmt.Errorf("column stats collector: %w", err)
 	}
@@ -105,16 +144,20 @@ func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope)
 }
 
 func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]WorkloadFacts, bool, error) {
-	var available bool
-	if err := conn.QueryRow(ctx, workloadAvailableSQL).Scan(&available); err != nil {
+	var version string
+	if err := conn.QueryRow(ctx, workloadAvailableSQL).Scan(&version); err != nil {
 		return nil, false, fmt.Errorf("detect pg_stat_statements: %w", err)
 	}
-	if !available {
+	if version == "" {
 		return nil, false, nil
 	}
 	if limit <= 0 || limit > 5000 {
 		limit = 500
 	}
+	// pg_stat_database has an independent reset clock. If the extension's
+	// own clock cannot be read, retain an unknown observation start.
+	var reset *time.Time
+	_ = conn.QueryRow(ctx, `SELECT stats_reset FROM pg_stat_statements_info`).Scan(&reset)
 	rows, err := conn.Query(ctx, workloadSQL, limit)
 	if err != nil {
 		return nil, true, fmt.Errorf("workload collector: %w", err)
@@ -123,17 +166,22 @@ func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]Workload
 	out := make([]WorkloadFacts, 0)
 	for rows.Next() {
 		var fact WorkloadFacts
-		var query string
-		var reset *time.Time
-		if err := rows.Scan(&fact.DatabaseName, &fact.QueryID, &query, &fact.Calls,
+		var query, queryID *string
+		if err := rows.Scan(&fact.DatabaseName, &queryID, &query, &fact.Calls,
 			&fact.TotalExecTimeMS, &fact.MeanExecTimeMS, &fact.RowsTotal,
-			&fact.SharedBlocksRead, &fact.SharedBlocksHit, &reset); err != nil {
+			&fact.SharedBlocksRead, &fact.SharedBlocksHit); err != nil {
 			return nil, true, fmt.Errorf("workload collector scan: %w", err)
 		}
-		normalized := NormalizeQuery(query)
+		if query == nil || queryID == nil || *query == "" {
+			continue
+		}
+		fact.QueryID = *queryID
+		normalized := NormalizeQuery(*query)
 		fact.QueryFingerprint = queryFingerprint(normalized)
 		fact.ReferencedObjects = referencedObjects(normalized)
 		fact.StatsReset = reset
+		fact.ExtensionVersion = version
+		fact.QueryKind = QueryKind(normalized)
 		fact.EvidenceQuality = "aggregate"
 		if len(fact.ReferencedObjects) > 0 {
 			fact.EvidenceQuality = "object_reference"

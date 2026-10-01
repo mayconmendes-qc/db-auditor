@@ -13,7 +13,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 	f := analyzer.SnapshotFacts{EnvironmentID: environmentID, AuditRunID: auditRunID}
 	queries := []func() error{
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,total_size_bytes,collected_at,n_live_tup,n_dead_tup,COALESCE(last_vacuum::text,''),COALESCE(last_autovacuum::text,''),n_tup_ins,n_tup_upd,n_tup_del,stats_reset FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,total_size_bytes,collected_at,n_live_tup,n_dead_tup,COALESCE(last_vacuum::text,''),COALESCE(last_autovacuum::text,''),n_tup_ins,n_tup_upd,n_tup_del,stats_reset,row_estimate,column_count,has_primary_key,COALESCE(table_comment,''),seq_scan,last_analyze,is_partition,COALESCE(relation_class,'') FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
@@ -23,9 +23,10 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 				var v analyzer.VacuumFact
 				var a analyzer.ActivityFact
 				var statsReset *time.Time
-				if err := rows.Scan(&t.Database, &t.Schema, &t.Name, &t.SizeBytes, &t.CollectedAt, &v.NLiveTup, &v.NDeadTup, &v.LastVacuum, &v.LastAutovacuum, &a.NTupIns, &a.NTupUpd, &a.NTupDel, &statsReset); err != nil {
+				if err := rows.Scan(&t.Database, &t.Schema, &t.Name, &t.SizeBytes, &t.CollectedAt, &v.NLiveTup, &v.NDeadTup, &v.LastVacuum, &v.LastAutovacuum, &a.NTupIns, &a.NTupUpd, &a.NTupDel, &statsReset, &t.RowEstimate, &t.ColumnCount, &t.HasPrimaryKey, &t.Comment, &t.SeqScan, &t.LastAnalyze, &t.IsPartition, &t.RelationClass); err != nil {
 					return err
 				}
+				t.StatsReset, t.NTupIns, t.NTupUpd, t.NTupDel = statsReset, a.NTupIns, a.NTupUpd, a.NTupDel
 				v.Database, v.Schema, v.Name = t.Database, t.Schema, t.Name
 				a.Database, a.Schema, a.Name, a.ObjectType, a.NLiveTup = t.Database, t.Schema, t.Name, "table", v.NLiveTup
 				if statsReset != nil && a.NTupIns == 0 && a.NTupUpd == 0 && a.NTupDel == 0 {
@@ -38,17 +39,63 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,index_name,idx_scan,size_bytes,is_primary,is_unique,index_definition,collected_at,stats_reset FROM index_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,index_name,idx_scan,size_bytes,is_primary,is_unique,index_definition,collected_at,stats_reset,is_valid,is_ready,key_columns,predicate FROM index_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.IndexFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.TableName, &x.IndexName, &x.IdxScan, &x.SizeBytes, &x.IsPrimary, &x.IsUnique, &x.Definition, &x.CollectedAt, &x.StatsReset); err != nil {
+				if err := rows.Scan(&x.Database, &x.Schema, &x.TableName, &x.IndexName, &x.IdxScan, &x.SizeBytes, &x.IsPrimary, &x.IsUnique, &x.Definition, &x.CollectedAt, &x.StatsReset, &x.IsValid, &x.IsReady, &x.KeyColumns, &x.Predicate); err != nil {
 					return err
 				}
+				x.HasValidity = true
 				f.Indexes = append(f.Indexes, x)
+			}
+			return rows.Err()
+		},
+		func() error {
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,column_name,data_type,is_nullable,COALESCE(column_default,'') FROM column_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var x analyzer.ColumnFact
+				if err := rows.Scan(&x.Database, &x.Schema, &x.TableName, &x.Name, &x.DataType, &x.Nullable, &x.Default); err != nil {
+					return err
+				}
+				f.Columns = append(f.Columns, x)
+			}
+			return rows.Err()
+		},
+		func() error {
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,constraint_name,constraint_type,is_validated,COALESCE(constrained_columns,'{}'::text[]),COALESCE(referenced_schema_name,''),COALESCE(referenced_table_name,''),COALESCE(referenced_columns,'{}'::text[]) FROM constraint_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var x analyzer.ConstraintFact
+				if err := rows.Scan(&x.Database, &x.Schema, &x.TableName, &x.Name, &x.Type, &x.Validated, &x.Columns, &x.ReferencedSchema, &x.ReferencedTable, &x.ReferencedColumns); err != nil {
+					return err
+				}
+				f.Constraints = append(f.Constraints, x)
+			}
+			return rows.Err()
+		},
+		func() error {
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,sequence_name,COALESCE(owned_by_table,''),COALESCE(owned_by_column,'') FROM sequence_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var x analyzer.SequenceFact
+				if err := rows.Scan(&x.Database, &x.Schema, &x.Name, &x.OwnedByTable, &x.OwnedByColumn); err != nil {
+					return err
+				}
+				f.Sequences = append(f.Sequences, x)
 			}
 			return rows.Err()
 		},
@@ -129,7 +176,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 		},
 		func() error {
 			rows, err := s.pool.Query(ctx, `SELECT database_name,query_fingerprint,calls,total_exec_time_ms,
-mean_exec_time_ms,rows_total,referenced_objects,evidence_quality,stats_reset,collected_at
+mean_exec_time_ms,rows_total,shared_blocks_read,shared_blocks_hit,query_kind,extension_version,referenced_objects,evidence_quality,stats_reset,collected_at
 FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
@@ -138,7 +185,7 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 			for rows.Next() {
 				var x analyzer.QueryStatFact
 				if err := rows.Scan(&x.Database, &x.QueryFingerprint, &x.Calls, &x.TotalExecTimeMs,
-					&x.MeanExecTimeMs, &x.Rows, &x.ReferencedObjects, &x.EvidenceQuality, &x.StatsReset, &x.CollectedAt); err != nil {
+					&x.MeanExecTimeMs, &x.Rows, &x.SharedBlocksRead, &x.SharedBlocksHit, &x.QueryKind, &x.ExtensionVersion, &x.ReferencedObjects, &x.EvidenceQuality, &x.StatsReset, &x.CollectedAt); err != nil {
 					return err
 				}
 				x.PgStatStatements = true
@@ -167,5 +214,10 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 			return f, fmt.Errorf("snapshot fact query %d: %w", i+1, err)
 		}
 	}
+	policies, err := s.ListRulePolicies(ctx, environmentID)
+	if err != nil {
+		return f, fmt.Errorf("load rule policies: %w", err)
+	}
+	f.RulePolicies = policies
 	return f, nil
 }

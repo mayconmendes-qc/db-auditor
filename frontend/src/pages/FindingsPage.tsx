@@ -496,7 +496,46 @@ export function FindingsPage() {
               <li>Status: {labels.findingStatus(selected.status)}</li>
               <li>Objeto: {selected.object_key || "—"}</li>
               <li>Resumo: {selected.summary}</li>
+              <li>
+                Regra: {selected.rule_id || selected.finding_type}{" "}
+                {selected.rule_version ? `(v${selected.rule_version})` : ""}
+              </li>
+              <li>Categoria: {selected.category || "—"}</li>
+              <li>
+                Confiança:{" "}
+                {selected.confidence != null
+                  ? `${Math.round(selected.confidence * 100)}%`
+                  : "não informada"}
+              </li>
+              <li>Impacto: {selected.impact || "—"}</li>
+              <li>
+                Risco/ressalva: {selected.risk || "revisão humana necessária"}
+              </li>
+              <li>
+                Recomendação:{" "}
+                {selected.recommendation || "Investigar evidências"}
+              </li>
+              <li>
+                Validação:{" "}
+                {selected.validation || "Confirmar em ambiente controlado"}
+              </li>
             </ul>
+            {selected.references?.length ? (
+              <div className="mt-3 text-xs text-slate-400">
+                Referências:{" "}
+                {selected.references.map((url) => (
+                  <a
+                    key={url}
+                    className="mr-2 underline"
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    PostgreSQL
+                  </a>
+                ))}
+              </div>
+            ) : null}
             {selected.finding_type.startsWith("inactivity.") ? (
               <p className="mt-3 text-xs text-amber-300">
                 Classificação POSSIBLY_INACTIVE — o auditor nunca recomenda

@@ -37,3 +37,37 @@ func TestReferencedObjectsRejectsAmbiguousUnqualifiedNames(t *testing.T) {
 		t.Fatalf("unexpected qualified references: %#v", got)
 	}
 }
+
+func TestQueryKindAndCollectionLimits(t *testing.T) {
+	for raw, want := range map[string]string{"SELECT * FROM public.orders WHERE id=42": "select", "INSERT INTO public.orders VALUES ('private')": "insert", "UPDATE public.orders SET x=2": "update", "DELETE FROM public.orders": "delete", "WITH x AS (SELECT 1) SELECT * FROM x": "other"} {
+		if got := QueryKind(NormalizeQuery(raw)); got != want {
+			t.Errorf("%q: got %s want %s", raw, got, want)
+		}
+	}
+	if !strings.Contains(columnStatsSQL, "LIMIT $3") || !strings.Contains(columnStatsSQL, "schemaname = ANY") {
+		t.Fatal("column-stat collection must enforce SQL-side limits and schema policy")
+	}
+	if !strings.Contains(workloadAvailableSQL, "extversion") {
+		t.Fatal("workload extension version not detected")
+	}
+	if strings.Contains(workloadSQL, "pg_stat_database") {
+		t.Fatal("workload window must not use the database statistics reset clock")
+	}
+}
+
+func TestQueryFingerprintNeverContainsLiteralOrComment(t *testing.T) {
+	queries := []string{
+		"SELECT * FROM public.customer WHERE email='secret@example.org' /* private */",
+		"UPDATE public.customer SET token=$tag$do-not-store$tag$ WHERE id=987654",
+		"SELECT E'private\\nvalue' FROM public.customer -- confidential",
+	}
+	for _, raw := range queries {
+		normalized := NormalizeQuery(raw)
+		fp := queryFingerprint(normalized)
+		for _, secret := range []string{"secret@example.org", "private", "do-not-store", "987654", "confidential"} {
+			if strings.Contains(normalized, secret) || strings.Contains(fp, secret) {
+				t.Fatalf("literal leaked from %q", raw)
+			}
+		}
+	}
+}

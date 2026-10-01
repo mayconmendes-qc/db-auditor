@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // PerformanceAnalyzer surfaces lock waits, connection pressure and slow query fingerprints.
@@ -102,6 +103,42 @@ func (PerformanceAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Fi
 
 	// Slow query fingerprints (sanitized only)
 	for _, q := range facts.QueryStats {
+		if len(q.ReferencedObjects) == 1 && q.EvidenceQuality == "object_reference" && q.Calls >= 10 {
+			object := q.ReferencedObjects[0]
+			parts := strings.SplitN(object, ".", 2)
+			if len(parts) == 2 {
+				patterns := []struct {
+					kind, summary string
+					match         bool
+				}{
+					{"scan", "High shared-block reads may merit plan and index review.", q.QueryKind == "select" && q.Calls >= 100 && q.SharedBlocksRead >= 1000 && q.SharedBlocksRead > q.SharedBlocksHit},
+					{"write", "Frequent writes may increase index and vacuum maintenance cost.", (q.QueryKind == "insert" || q.QueryKind == "update" || q.QueryKind == "delete") && q.Calls >= 1000},
+					{"cost", "High cumulative execution time merits plan review.", q.TotalExecTimeMs >= 60000},
+				}
+				for _, p := range patterns {
+					if !p.match {
+						continue
+					}
+					key := fmt.Sprintf("%s.%s.%s:%s:%s", q.Database, parts[0], parts[1], p.kind, q.QueryFingerprint)
+					window := "unknown"
+					if q.StatsReset != nil {
+						window = q.StatsReset.UTC().Format("2006-01-02T15:04:05Z07:00")
+					}
+					out = append(out, Finding{
+						EnvironmentID: facts.EnvironmentID, AuditRunID: facts.AuditRunID,
+						FindingType: "performance.workload_" + p.kind, Severity: SeverityLow, Status: StatusOpen,
+						Title: fmt.Sprintf("Workload %s pattern on %s", p.kind, object), Summary: p.summary,
+						ObjectType: "table", ObjectKey: key, DatabaseName: q.Database, SchemaName: parts[0], ObjectName: parts[1],
+						Evidence: map[string]any{"query_fingerprint": q.QueryFingerprint, "query_kind": q.QueryKind, "calls": q.Calls,
+							"shared_blocks_read": q.SharedBlocksRead, "shared_blocks_hit": q.SharedBlocksHit,
+							"total_exec_time_ms": q.TotalExecTimeMs, "observation_window_start": window,
+							"observation_window_end": q.CollectedAt, "evidence_quality": q.EvidenceQuality,
+							"pg_stat_statements_version": q.ExtensionVersion},
+						DedupKey: DedupKey("performance.workload_"+p.kind, key, ""),
+					})
+				}
+			}
+		}
 		if q.MeanExecTimeMs < slowQueryMeanMsThreshold || q.Calls < slowQueryMinCalls {
 			continue
 		}
@@ -113,11 +150,15 @@ func (PerformanceAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Fi
 		title := fmt.Sprintf("Slow query fingerprint on %s", q.Database)
 		objectType := "query"
 		objectName := fp
+		schemaName := ""
 		if len(q.ReferencedObjects) == 1 && q.EvidenceQuality == "object_reference" {
-			objectType = "table"
-			objectName = q.ReferencedObjects[0]
-			key = fmt.Sprintf("%s.table:%s.query:%s", q.Database, objectName, fp)
-			title = fmt.Sprintf("Slow workload pattern on %s", objectName)
+			parts := strings.SplitN(q.ReferencedObjects[0], ".", 2)
+			if len(parts) == 2 {
+				objectType = "table"
+				schemaName, objectName = parts[0], parts[1]
+				key = fmt.Sprintf("%s.table:%s.query:%s", q.Database, q.ReferencedObjects[0], fp)
+				title = fmt.Sprintf("Slow workload pattern on %s", q.ReferencedObjects[0])
+			}
 		}
 		windowStart := "unknown"
 		if q.StatsReset != nil {
@@ -137,6 +178,7 @@ func (PerformanceAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Fi
 			ObjectType:   objectType,
 			ObjectKey:    key,
 			DatabaseName: q.Database,
+			SchemaName:   schemaName,
 			ObjectName:   objectName,
 			Evidence: map[string]any{
 				"query_fingerprint":        fp,

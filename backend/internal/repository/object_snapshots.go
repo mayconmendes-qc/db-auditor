@@ -79,16 +79,16 @@ ON CONFLICT (audit_run_id, database_name, schema_name, table_name, column_name) 
 INSERT INTO index_snapshot (
   audit_run_id, environment_id, database_name, schema_name, table_name, index_name,
   index_definition, access_method, is_unique, is_primary, size_bytes,
-  idx_scan, idx_tup_read, idx_tup_fetch, stats_reset, collected_at
+  idx_scan, idx_tup_read, idx_tup_fetch, stats_reset, is_valid, is_ready, key_columns, predicate, collected_at
 ) VALUES (
   $1,$2,$3,$4,$5,$6,
   $7,$8,$9,$10,$11,
-  $12,$13,$14,$15, now()
+  $12,$13,$14,$15,$16,$17,$18,$19, now()
 )
 ON CONFLICT (audit_run_id, database_name, schema_name, index_name) DO NOTHING
 `, auditRunID, environmentID, idx.DatabaseName, idx.SchemaName, idx.TableName, idx.IndexName,
 			idx.IndexDefinition, nullString(idx.AccessMethod), idx.IsUnique, idx.IsPrimary, idx.SizeBytes,
-			idx.IdxScan, idx.IdxTupRead, idx.IdxTupFetch, idx.StatsReset)
+			idx.IdxScan, idx.IdxTupRead, idx.IdxTupFetch, idx.StatsReset, idx.IsValid, idx.IsReady, idx.KeyColumns, idx.Predicate)
 		if err != nil {
 			return fmt.Errorf("insert index_snapshot %s.%s.%s: %w", idx.DatabaseName, idx.SchemaName, idx.IndexName, err)
 		}

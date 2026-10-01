@@ -12,14 +12,21 @@ SELECT
   COALESCE(st.idx_scan, 0)::bigint AS idx_scan,
   COALESCE(st.idx_tup_read, 0)::bigint AS idx_tup_read,
   COALESCE(st.idx_tup_fetch, 0)::bigint AS idx_tup_fetch,
-  (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
+  (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset,
+  ix.indisvalid AS is_valid,
+  ix.indisready AS is_ready,
+  COALESCE((SELECT array_agg(COALESCE(a.attname, '<expression>') ORDER BY k.ord)
+    FROM unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord)
+    LEFT JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = k.attnum
+    WHERE k.ord <= ix.indnkeyatts), ARRAY[]::text[]) AS key_columns,
+  COALESCE(pg_catalog.pg_get_expr(ix.indpred, ix.indrelid), '') AS predicate
 FROM pg_index ix
 JOIN pg_class i ON i.oid = ix.indexrelid
 JOIN pg_class t ON t.oid = ix.indrelid
 JOIN pg_namespace n ON n.oid = t.relnamespace
 JOIN pg_am am ON am.oid = i.relam
 LEFT JOIN pg_stat_user_indexes st ON st.indexrelid = ix.indexrelid
-WHERE t.relkind = 'r'
+WHERE t.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, t.relname, i.relname;

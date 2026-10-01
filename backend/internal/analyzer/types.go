@@ -33,32 +33,46 @@ const (
 
 // Finding is a diagnostic produced by an analyzer.
 type Finding struct {
-	ID            string         `json:"id,omitempty"`
-	EnvironmentID string         `json:"environment_id"`
-	AuditRunID    string         `json:"audit_run_id,omitempty"`
-	FindingType   string         `json:"finding_type"`
-	Severity      Severity       `json:"severity"`
-	Status        Status         `json:"status"`
-	Title         string         `json:"title"`
-	Summary       string         `json:"summary"`
-	ObjectType    string         `json:"object_type,omitempty"`
-	ObjectKey     string         `json:"object_key,omitempty"`
-	DatabaseName  string         `json:"database_name,omitempty"`
-	SchemaName    string         `json:"schema_name,omitempty"`
-	ObjectName    string         `json:"object_name,omitempty"`
-	Evidence      map[string]any `json:"evidence,omitempty"`
-	DedupKey      string         `json:"dedup_key"`
-	FirstSeenAt   time.Time      `json:"first_seen_at,omitempty"`
-	LastSeenAt    time.Time      `json:"last_seen_at,omitempty"`
-	ResolvedAt    *time.Time     `json:"resolved_at,omitempty"`
-	Notes         string         `json:"notes,omitempty"`
+	ID             string         `json:"id,omitempty"`
+	EnvironmentID  string         `json:"environment_id"`
+	AuditRunID     string         `json:"audit_run_id,omitempty"`
+	FindingType    string         `json:"finding_type"`
+	RuleID         string         `json:"rule_id"`
+	RuleVersion    string         `json:"rule_version"`
+	Category       string         `json:"category"`
+	Confidence     float64        `json:"confidence"`
+	Impact         string         `json:"impact"`
+	Risk           string         `json:"risk"`
+	Recommendation string         `json:"recommendation"`
+	Validation     string         `json:"validation"`
+	References     []string       `json:"references"`
+	RuleParameters map[string]any `json:"rule_parameters"`
+	Severity       Severity       `json:"severity"`
+	Status         Status         `json:"status"`
+	Title          string         `json:"title"`
+	Summary        string         `json:"summary"`
+	ObjectType     string         `json:"object_type,omitempty"`
+	ObjectKey      string         `json:"object_key,omitempty"`
+	DatabaseName   string         `json:"database_name,omitempty"`
+	SchemaName     string         `json:"schema_name,omitempty"`
+	ObjectName     string         `json:"object_name,omitempty"`
+	Evidence       map[string]any `json:"evidence,omitempty"`
+	DedupKey       string         `json:"dedup_key"`
+	FirstSeenAt    time.Time      `json:"first_seen_at,omitempty"`
+	LastSeenAt     time.Time      `json:"last_seen_at,omitempty"`
+	ResolvedAt     *time.Time     `json:"resolved_at,omitempty"`
+	Notes          string         `json:"notes,omitempty"`
 }
 
 // SnapshotFacts is the read-only input analyzers consume.
 type SnapshotFacts struct {
 	EnvironmentID string
 	AuditRunID    string
+	RulePolicies  []RulePolicy
 	Tables        []TableFact
+	Columns       []ColumnFact
+	Constraints   []ConstraintFact
+	Sequences     []SequenceFact
 	Indexes       []IndexFact
 	Hypertables   []HypertableFact
 	Chunks        []ChunkFact
@@ -78,11 +92,55 @@ type SnapshotFacts struct {
 
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {
-	Database    string    `json:"database"`
-	Schema      string    `json:"schema"`
-	Name        string    `json:"name"`
-	SizeBytes   int64     `json:"size_bytes"`
-	CollectedAt time.Time `json:"collected_at,omitempty"`
+	Database      string     `json:"database"`
+	Schema        string     `json:"schema"`
+	Name          string     `json:"name"`
+	SizeBytes     int64      `json:"size_bytes"`
+	RowEstimate   int64      `json:"row_estimate"`
+	ColumnCount   int        `json:"column_count"`
+	HasPrimaryKey bool       `json:"has_primary_key"`
+	IsPartition   bool       `json:"is_partition"`
+	RelationClass string     `json:"relation_class"`
+	Comment       string     `json:"comment,omitempty"`
+	SeqScan       int64      `json:"seq_scan"`
+	NTupIns       int64      `json:"n_tup_ins"`
+	NTupUpd       int64      `json:"n_tup_upd"`
+	NTupDel       int64      `json:"n_tup_del"`
+	LastAnalyze   *time.Time `json:"last_analyze,omitempty"`
+	StatsReset    *time.Time `json:"stats_reset,omitempty"`
+	CollectedAt   time.Time  `json:"collected_at,omitempty"`
+}
+
+type ColumnFact struct {
+	Database  string `json:"database"`
+	Schema    string `json:"schema"`
+	TableName string `json:"table_name"`
+	Name      string `json:"name"`
+	DataType  string `json:"data_type"`
+	Nullable  bool   `json:"nullable"`
+	Default   string `json:"default,omitempty"`
+	Comment   string `json:"comment,omitempty"`
+}
+
+type ConstraintFact struct {
+	Database          string   `json:"database"`
+	Schema            string   `json:"schema"`
+	TableName         string   `json:"table_name"`
+	Name              string   `json:"name"`
+	Type              string   `json:"type"`
+	Validated         bool     `json:"validated"`
+	Columns           []string `json:"columns,omitempty"`
+	ReferencedSchema  string   `json:"referenced_schema,omitempty"`
+	ReferencedTable   string   `json:"referenced_table,omitempty"`
+	ReferencedColumns []string `json:"referenced_columns,omitempty"`
+}
+
+type SequenceFact struct {
+	Database      string `json:"database"`
+	Schema        string `json:"schema"`
+	Name          string `json:"name"`
+	OwnedByTable  string `json:"owned_by_table,omitempty"`
+	OwnedByColumn string `json:"owned_by_column,omitempty"`
 }
 
 // IndexFact carries scan counters when available.
@@ -96,6 +154,11 @@ type IndexFact struct {
 	IsPrimary   bool       `json:"is_primary"`
 	IsUnique    bool       `json:"is_unique"`
 	Definition  string     `json:"definition"`
+	KeyColumns  []string   `json:"key_columns,omitempty"`
+	Predicate   string     `json:"predicate,omitempty"`
+	IsValid     bool       `json:"is_valid"`
+	IsReady     bool       `json:"is_ready"`
+	HasValidity bool       `json:"has_validity"`
 	CollectedAt time.Time  `json:"collected_at,omitempty"`
 	StatsReset  *time.Time `json:"stats_reset,omitempty"`
 }
@@ -204,6 +267,10 @@ type ConnectionFact struct {
 // QueryStatFact holds sanitized query fingerprints only — never raw SQL with literals.
 type QueryStatFact struct {
 	Database          string     `json:"database"`
+	QueryKind         string     `json:"query_kind"`
+	ExtensionVersion  string     `json:"extension_version"`
+	SharedBlocksRead  int64      `json:"shared_blocks_read"`
+	SharedBlocksHit   int64      `json:"shared_blocks_hit"`
 	QueryFingerprint  string     `json:"query_fingerprint"` // normalized, literals stripped
 	Calls             int64      `json:"calls"`
 	TotalExecTimeMs   float64    `json:"total_exec_time_ms"`

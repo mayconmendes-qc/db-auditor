@@ -277,6 +277,15 @@ export function TableDetail({
                   {w.total_exec_time_ms.toFixed(1)} ms total · evidência{" "}
                   {w.evidence_quality}
                 </div>
+                <div className="mt-1 text-slate-500">
+                  {(w.query_kind || "other").toUpperCase()} · pg_stat_statements{" "}
+                  {w.extension_version || "versão desconhecida"} · leituras{" "}
+                  {formatNumber(w.shared_blocks_read || 0)} blocos · janela
+                  desde{" "}
+                  {w.stats_reset
+                    ? new Date(w.stats_reset).toLocaleString()
+                    : "início desconhecido"}
+                </div>
               </div>
             ))}
           </div>
