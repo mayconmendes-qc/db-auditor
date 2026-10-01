@@ -111,6 +111,18 @@ func (PerformanceAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Fi
 		}
 		key := fmt.Sprintf("%s.query:%s", q.Database, fp)
 		title := fmt.Sprintf("Slow query fingerprint on %s", q.Database)
+		objectType := "query"
+		objectName := fp
+		if len(q.ReferencedObjects) == 1 && q.EvidenceQuality == "object_reference" {
+			objectType = "table"
+			objectName = q.ReferencedObjects[0]
+			key = fmt.Sprintf("%s.table:%s.query:%s", q.Database, objectName, fp)
+			title = fmt.Sprintf("Slow workload pattern on %s", objectName)
+		}
+		windowStart := "unknown"
+		if q.StatsReset != nil {
+			windowStart = q.StatsReset.UTC().Format("2006-01-02T15:04:05Z07:00")
+		}
 		f := Finding{
 			EnvironmentID: facts.EnvironmentID,
 			AuditRunID:    facts.AuditRunID,
@@ -122,18 +134,21 @@ func (PerformanceAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Fi
 				"Query fingerprint mean exec time %.1f ms over %d calls. Review plan; SQL literals are never exposed.",
 				q.MeanExecTimeMs, q.Calls,
 			),
-			ObjectType:   "query",
+			ObjectType:   objectType,
 			ObjectKey:    key,
 			DatabaseName: q.Database,
-			ObjectName:   fp,
+			ObjectName:   objectName,
 			Evidence: map[string]any{
-				"query_fingerprint":  fp,
-				"calls":              q.Calls,
-				"mean_exec_time_ms":  q.MeanExecTimeMs,
-				"total_exec_time_ms": q.TotalExecTimeMs,
-				"rows":               q.Rows,
-				"pg_stat_statements": q.PgStatStatements,
-				"sanitization_note":  "Only normalized fingerprint stored; no literals or secrets",
+				"query_fingerprint":        fp,
+				"calls":                    q.Calls,
+				"mean_exec_time_ms":        q.MeanExecTimeMs,
+				"total_exec_time_ms":       q.TotalExecTimeMs,
+				"rows":                     q.Rows,
+				"pg_stat_statements":       q.PgStatStatements,
+				"referenced_objects":       q.ReferencedObjects,
+				"evidence_quality":         q.EvidenceQuality,
+				"observation_window_start": windowStart,
+				"sanitization_note":        "Only normalized fingerprint stored; no literals or secrets",
 			},
 			DedupKey: DedupKey("performance.slow_query", key, title),
 		}

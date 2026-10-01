@@ -19,12 +19,14 @@ type InventoryWriter interface {
 	SaveExtendedObjectInventory(ctx context.Context, environmentID, auditRunID pgtype.UUID, constraints []postgres.ConstraintFacts, views []postgres.ViewFacts, functions []postgres.FunctionFacts, extensions []postgres.ExtensionFacts) error
 	SaveTimescaleCoreInventory(ctx context.Context, environmentID, auditRunID pgtype.UUID, result timescale.InventoryResult) error
 	SaveTimescalePolicyInventory(ctx context.Context, environmentID, auditRunID pgtype.UUID, result timescale.PolicyInventoryResult) error
+	SaveOperationalInventory(ctx context.Context, environmentID, auditRunID pgtype.UUID, columnStats []postgres.ColumnStatFacts, workload []postgres.WorkloadFacts) error
 }
 
 // LiveRegistryOptions configures collectors that hit audited databases.
 type LiveRegistryOptions struct {
 	Targets map[string]string
 	Scope   config.Scope
+	Policy  config.CollectionPolicy
 	Writer  InventoryWriter
 }
 
@@ -618,6 +620,68 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		return finishMulti(int64(len(all)), partial, nil)
 	})
 
+	if opts.Policy.ColumnStatsEnabled {
+		must("postgres.column_stats", func(ctx context.Context) (int64, error) {
+			dsn, err := dsnFromContext(ctx, targets)
+			if err != nil {
+				return 0, err
+			}
+			var all []postgres.ColumnStatFacts
+			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+				items, err := postgres.CollectColumnStats(cctx, conn, scope)
+				if err != nil {
+					return err
+				}
+				all = append(all, items...)
+				return nil
+			})
+			if hard != nil {
+				return 0, hard
+			}
+			if writer != nil && len(all) > 0 {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return 0, err
+				}
+				if err := writer.SaveOperationalInventory(ctx, envID, runID, all, nil); err != nil {
+					return 0, fmt.Errorf("persistir estatísticas de colunas: %w", err)
+				}
+			}
+			return finishMulti(int64(len(all)), partial, nil)
+		})
+	}
+
+	if opts.Policy.WorkloadEnabled {
+		must("postgres.workload", func(ctx context.Context) (int64, error) {
+			dsn, err := dsnFromContext(ctx, targets)
+			if err != nil {
+				return 0, err
+			}
+			var all []postgres.WorkloadFacts
+			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+				items, _, err := postgres.CollectWorkload(cctx, conn, opts.Policy.WorkloadLimit)
+				if err != nil {
+					return err
+				}
+				all = append(all, items...)
+				return nil
+			})
+			if hard != nil {
+				return 0, hard
+			}
+			if writer != nil && len(all) > 0 {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return 0, err
+				}
+				if err := writer.SaveOperationalInventory(ctx, envID, runID, nil, all); err != nil {
+					return 0, fmt.Errorf("persistir workload: %w", err)
+				}
+			}
+			return finishMulti(int64(len(all)), partial, nil)
+		})
+	}
+
 	return r
 }
 
@@ -630,11 +694,13 @@ func liveCollectorProfiles(name string) map[string]struct{} {
 		"postgres.extensions": {}, "timescale.version": {}, "timescale.hypertables": {},
 		"timescale.dimensions": {}, "timescale.chunks": {}, "timescale.continuous_aggregates": {},
 		"timescale.jobs": {}, "timescale.policies": {},
+		"postgres.column_stats": {}, "postgres.workload": {},
 	}
 	daily := map[string]struct{}{
 		"postgres.server": {}, "postgres.databases": {}, "postgres.schemas": {},
 		"postgres.tables": {}, "postgres.indexes": {}, "timescale.version": {},
 		"timescale.hypertables": {}, "timescale.jobs": {}, "timescale.policies": {},
+		"postgres.workload": {},
 	}
 	if _, ok := weekly[name]; ok {
 		profiles[ProfileWeekly] = struct{}{}

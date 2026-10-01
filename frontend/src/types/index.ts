@@ -179,6 +179,52 @@ export interface TableSnapshot {
   collected_at: string;
 }
 
+export interface TableHistoryPoint {
+  bucket: string;
+  audit_run_id: string;
+  run_status: string;
+  total_size_bytes: number;
+  row_estimate: number;
+  size_delta_bytes?: number;
+  row_delta?: number;
+  seq_scan_delta?: number;
+  idx_scan_delta?: number;
+  dml_delta?: number;
+  stats_reset?: string | null;
+  counters_reset: boolean;
+  complete: boolean;
+}
+
+export interface ScopeHistoryPoint {
+  bucket: string;
+  scope: "environment" | "database" | "schema" | "table";
+  label: string;
+  total_size_bytes: number;
+  row_estimate: number;
+}
+
+export interface ColumnStatSnapshot {
+  column_name: string;
+  null_fraction: number;
+  distinct_estimate: number;
+  average_width: number;
+  correlation?: number | null;
+  source: string;
+  quality: string;
+  collected_at: string;
+}
+
+export interface WorkloadSnapshot {
+  query_fingerprint: string;
+  calls: number;
+  total_exec_time_ms: number;
+  mean_exec_time_ms: number;
+  rows_total: number;
+  referenced_objects: string[];
+  evidence_quality: string;
+  collected_at: string;
+}
+
 export interface ColumnSnapshot {
   id: string;
   database_name: string;

@@ -128,6 +128,25 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
+			rows, err := s.pool.Query(ctx, `SELECT database_name,query_fingerprint,calls,total_exec_time_ms,
+mean_exec_time_ms,rows_total,referenced_objects,evidence_quality,stats_reset,collected_at
+FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var x analyzer.QueryStatFact
+				if err := rows.Scan(&x.Database, &x.QueryFingerprint, &x.Calls, &x.TotalExecTimeMs,
+					&x.MeanExecTimeMs, &x.Rows, &x.ReferencedObjects, &x.EvidenceQuality, &x.StatsReset, &x.CollectedAt); err != nil {
+					return err
+				}
+				x.PgStatStatements = true
+				f.QueryStats = append(f.QueryStats, x)
+			}
+			return rows.Err()
+		},
+		func() error {
 			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,function_name,identity_arguments,is_security_definer,COALESCE(owner_name,''),COALESCE(language_name,'') FROM function_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err

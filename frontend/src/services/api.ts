@@ -8,6 +8,7 @@ import type {
   ChunkSnapshot,
   CollectorRun,
   ColumnSnapshot,
+  ColumnStatSnapshot,
   CompareObjectItem,
   CompareResult,
   ConnectionStatus,
@@ -29,11 +30,14 @@ import type {
   PagedResponse,
   PolicySnapshot,
   SchemaSnapshot,
+  ScopeHistoryPoint,
   SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
+  TableHistoryPoint,
   TableSnapshot,
   ViewSnapshot,
+  WorkloadSnapshot,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
@@ -112,6 +116,15 @@ export type AnalyticsParams = {
   environment_id?: string;
 };
 
+export type TableScopeParams = {
+  database: string;
+  schema: string;
+  table: string;
+  from?: string;
+  to?: string;
+  granularity?: "hour" | "day" | "week" | "month";
+};
+
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   health: () => getJSON<HealthResponse>("/health"),
@@ -177,6 +190,27 @@ export const api = {
   tables: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<TableSnapshot>>(
       `/api/v1/environments/${environmentId}/tables${qs(params)}`,
+    ),
+  tableHistory: (environmentId: string, params: TableScopeParams) =>
+    getJSON<ItemsResponse<TableHistoryPoint>>(
+      `/api/v1/environments/${environmentId}/tables/history${qs(params)}`,
+    ),
+  storageHistory: (
+    environmentId: string,
+    params: Partial<TableScopeParams> & {
+      scope: "environment" | "database" | "schema" | "table";
+    },
+  ) =>
+    getJSON<ItemsResponse<ScopeHistoryPoint>>(
+      `/api/v1/environments/${environmentId}/history${qs(params)}`,
+    ),
+  tableColumnStats: (environmentId: string, params: TableScopeParams) =>
+    getJSON<ItemsResponse<ColumnStatSnapshot>>(
+      `/api/v1/environments/${environmentId}/tables/column-stats${qs(params)}`,
+    ),
+  tableWorkload: (environmentId: string, params: TableScopeParams) =>
+    getJSON<ItemsResponse<WorkloadSnapshot>>(
+      `/api/v1/environments/${environmentId}/tables/workload${qs(params)}`,
     ),
   columns: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<ColumnSnapshot>>(
