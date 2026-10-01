@@ -96,6 +96,38 @@ type ColumnFacts struct {
 	CollationName      *string `json:"collation_name,omitempty"`
 }
 
+// ColumnStatFacts contains only aggregate planner estimates. Raw values and
+// most_common_vals are deliberately never queried or persisted.
+type ColumnStatFacts struct {
+	DatabaseName     string   `json:"database_name"`
+	SchemaName       string   `json:"schema_name"`
+	TableName        string   `json:"table_name"`
+	ColumnName       string   `json:"column_name"`
+	NullFraction     float64  `json:"null_fraction"`
+	DistinctEstimate float64  `json:"distinct_estimate"`
+	AverageWidth     int      `json:"average_width"`
+	Correlation      *float64 `json:"correlation,omitempty"`
+	Source           string   `json:"source"`
+	Quality          string   `json:"quality"`
+}
+
+// WorkloadFacts is a privacy-safe pg_stat_statements aggregate. Query text is
+// used transiently to derive a hash and object references, then discarded.
+type WorkloadFacts struct {
+	DatabaseName      string     `json:"database_name"`
+	QueryFingerprint  string     `json:"query_fingerprint"`
+	QueryID           string     `json:"query_id"`
+	Calls             int64      `json:"calls"`
+	TotalExecTimeMS   float64    `json:"total_exec_time_ms"`
+	MeanExecTimeMS    float64    `json:"mean_exec_time_ms"`
+	RowsTotal         int64      `json:"rows_total"`
+	SharedBlocksRead  int64      `json:"shared_blocks_read"`
+	SharedBlocksHit   int64      `json:"shared_blocks_hit"`
+	ReferencedObjects []string   `json:"referenced_objects"`
+	StatsReset        *time.Time `json:"stats_reset,omitempty"`
+	EvidenceQuality   string     `json:"evidence_quality"`
+}
+
 // IndexFacts is one row from the index collector (current database).
 type IndexFacts struct {
 	DatabaseName    string     `json:"database_name"`

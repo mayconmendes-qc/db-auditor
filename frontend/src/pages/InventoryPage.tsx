@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import {
   Button,
@@ -22,6 +22,7 @@ import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
   ColumnSnapshot,
+  ColumnStatSnapshot,
   DatabaseSnapshot,
   FunctionSnapshot,
   HypertableSnapshot,
@@ -30,8 +31,10 @@ import type {
   PageMeta,
   SchemaSnapshot,
   SnapshotCompleteness,
+  TableHistoryPoint,
   TableSnapshot,
   ViewSnapshot,
+  WorkloadSnapshot,
 } from "../types";
 import {
   FunctionDetail,
@@ -103,6 +106,10 @@ export function InventoryPage() {
   const [snapshotStatus, setSnapshotStatus] =
     useState<SnapshotCompleteness | null>(null);
   const [detailColumns, setDetailColumns] = useState<ColumnSnapshot[]>([]);
+  const [detailHistory, setDetailHistory] = useState<TableHistoryPoint[]>([]);
+  const [detailStats, setDetailStats] = useState<ColumnStatSnapshot[]>([]);
+  const [detailWorkload, setDetailWorkload] = useState<WorkloadSnapshot[]>([]);
+  const selectedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!envId) {
@@ -368,24 +375,42 @@ export function InventoryPage() {
   );
 
   const openRow = (key: string) => {
+    selectedKeyRef.current = key;
     setSelectedKey(key);
     setSheetOpen(true);
     setDetailColumns([]);
+    setDetailHistory([]);
+    setDetailStats([]);
+    setDetailWorkload([]);
   };
 
   const openTable = (t: TableSnapshot) => {
     const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
     openRow(key);
     if (!envId) return;
-    api
-      .columns(envId, {
-        database: t.database_name,
-        schema: t.schema_name,
-        table: t.table_name,
-        limit: 500,
-      })
-      .then((res) => setDetailColumns(res.items))
-      .catch(() => setDetailColumns([]));
+    const scope = {
+      database: t.database_name,
+      schema: t.schema_name,
+      table: t.table_name,
+    };
+    Promise.allSettled([
+      api.columns(envId, { ...scope, limit: 500 }),
+      api.tableHistory(envId, { ...scope, granularity: "day" }),
+      api.tableColumnStats(envId, scope),
+      api.tableWorkload(envId, scope),
+    ]).then(([columns, history, stats, workload]) => {
+      if (selectedKeyRef.current !== key) return;
+      setDetailColumns(
+        columns.status === "fulfilled" ? columns.value.items : [],
+      );
+      setDetailHistory(
+        history.status === "fulfilled" ? history.value.items : [],
+      );
+      setDetailStats(stats.status === "fulfilled" ? stats.value.items : []);
+      setDetailWorkload(
+        workload.status === "fulfilled" ? workload.value.items : [],
+      );
+    });
   };
 
   const selectedTable = sortedTables.find(
@@ -843,7 +868,13 @@ export function InventoryPage() {
             wide
           >
             {selectedTable ? (
-              <TableDetail t={selectedTable} columns={detailColumns} />
+              <TableDetail
+                t={selectedTable}
+                columns={detailColumns}
+                history={detailHistory}
+                columnStats={detailStats}
+                workload={detailWorkload}
+              />
             ) : null}
             {selectedIndex ? <IndexDetail i={selectedIndex} /> : null}
             {selectedView ? <ViewDetail v={selectedView} /> : null}

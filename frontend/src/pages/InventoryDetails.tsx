@@ -1,3 +1,12 @@
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { formatBytes } from "../lib/format";
 import {
@@ -6,11 +15,14 @@ import {
 } from "../lib/relationClass";
 import type {
   ColumnSnapshot,
+  ColumnStatSnapshot,
   FunctionSnapshot,
   HypertableSnapshot,
   IndexSnapshot,
+  TableHistoryPoint,
   TableSnapshot,
   ViewSnapshot,
+  WorkloadSnapshot,
 } from "../types";
 
 function formatDate(iso: string | null | undefined): string {
@@ -41,9 +53,15 @@ function boolLabel(v: boolean | null | undefined): string {
 export function TableDetail({
   t,
   columns = [],
+  history = [],
+  columnStats = [],
+  workload = [],
 }: {
   t: TableSnapshot;
   columns?: ColumnSnapshot[];
+  history?: TableHistoryPoint[];
+  columnStats?: ColumnStatSnapshot[];
+  workload?: WorkloadSnapshot[];
 }) {
   const classLabel = relationClassLabel(t.relation_class, t.relkind);
   return (
@@ -130,6 +148,143 @@ export function TableDetail({
             </table>
           </div>
         )}
+      </DetailSection>
+      <DetailSection title="Histórico (últimos 30 dias)">
+        {history.length < 2 ? (
+          <p className="text-sm text-slate-400">
+            Ainda não há snapshots compatíveis suficientes para calcular
+            tendência.
+          </p>
+        ) : (
+          <div
+            className="h-56 w-full"
+            role="img"
+            aria-label="Gráfico temporal de tamanho e linhas"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={history}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis
+                  dataKey="bucket"
+                  tickFormatter={(v) =>
+                    new Date(String(v)).toLocaleDateString("pt-BR")
+                  }
+                  stroke="#94a3b8"
+                />
+                <YAxis
+                  yAxisId="bytes"
+                  tickFormatter={(v) => formatBytes(Number(v))}
+                  stroke="#94a3b8"
+                  width={72}
+                />
+                <YAxis
+                  yAxisId="rows"
+                  orientation="right"
+                  stroke="#94a3b8"
+                  width={52}
+                />
+                <Tooltip
+                  labelFormatter={(v) => formatDate(String(v))}
+                  formatter={(value, name) =>
+                    name === "Storage"
+                      ? formatBytes(Number(value))
+                      : formatNumber(Number(value))
+                  }
+                />
+                <Line
+                  yAxisId="bytes"
+                  type="monotone"
+                  dataKey="total_size_bytes"
+                  name="Storage"
+                  stroke="#38bdf8"
+                  dot={false}
+                />
+                <Line
+                  yAxisId="rows"
+                  type="monotone"
+                  dataKey="row_estimate"
+                  name="Linhas"
+                  stroke="#a78bfa"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {history.some((p) => p.counters_reset || !p.complete) ? (
+          <p className="mt-2 text-xs text-amber-300">
+            Deltas de atividade são omitidos em resets de estatísticas e runs
+            parciais permanecem sinalizados.
+          </p>
+        ) : null}
+      </DetailSection>
+      <DetailSection title="Estatísticas agregadas de colunas">
+        {columnStats.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            Sem estatísticas agregadas. Nenhum valor bruto é coletado.
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-md border border-slate-700">
+            <table className="min-w-full text-left text-xs text-slate-200">
+              <thead className="bg-slate-900/80 text-slate-400">
+                <tr>
+                  <th className="px-2 py-1.5">Coluna</th>
+                  <th className="px-2 py-1.5">Nulos</th>
+                  <th className="px-2 py-1.5">Distintos (est.)</th>
+                  <th className="px-2 py-1.5">Largura média</th>
+                  <th className="px-2 py-1.5">Qualidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {columnStats.map((s) => (
+                  <tr key={s.column_name} className="border-t border-slate-800">
+                    <td className="px-2 py-1.5 font-medium">{s.column_name}</td>
+                    <td className="px-2 py-1.5">
+                      {(s.null_fraction * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {formatNumber(s.distinct_estimate)}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {formatNumber(s.average_width)} B
+                    </td>
+                    <td className="px-2 py-1.5">{s.quality}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DetailSection>
+      <DetailSection title="Workload correlacionado">
+        {workload.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            Sem evidência confiável de workload para esta tabela na janela
+            observada.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {workload.slice(0, 10).map((w) => (
+              <div
+                key={`${w.query_fingerprint}-${w.collected_at}`}
+                className="rounded border border-slate-700 p-2 text-xs"
+              >
+                <div className="font-mono text-slate-300">
+                  {w.query_fingerprint.slice(0, 24)}…
+                </div>
+                <div className="mt-1 text-slate-400">
+                  {formatNumber(w.calls)} chamadas ·{" "}
+                  {w.total_exec_time_ms.toFixed(1)} ms total · evidência{" "}
+                  {w.evidence_quality}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-500">
+          Somente fingerprints normalizados e métricas agregadas são
+          persistidos; textos e literais das queries não são armazenados.
+        </p>
       </DetailSection>
       <DetailSection title="Referência">
         <DetailGrid

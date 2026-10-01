@@ -50,6 +50,7 @@ func main() {
 	liveOpts := audit.LiveRegistryOptions{
 		Targets: targets,
 		Scope:   cfg.Scope,
+		Policy:  cfg.Collection,
 		Writer:  store,
 	}
 	registry := audit.NewLiveRegistry(liveOpts)
