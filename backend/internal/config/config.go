@@ -28,6 +28,14 @@ type Config struct {
 	HTTPAddress string
 	Database    Database
 	Scope       Scope
+	Collection  CollectionPolicy
+}
+
+// CollectionPolicy limits optional, potentially expensive collectors.
+type CollectionPolicy struct {
+	ColumnStatsEnabled bool
+	WorkloadEnabled    bool
+	WorkloadLimit      int
 }
 
 func Load() (Config, error) {
@@ -53,6 +61,11 @@ func Load() (Config, error) {
 			SchemaAllowlist:   splitCSV(env("AUDITOR_SCHEMA_ALLOWLIST", "")),
 			SchemaDenylist:    splitCSV(env("AUDITOR_SCHEMA_DENYLIST", "pg_catalog,information_schema")),
 		},
+		Collection: CollectionPolicy{
+			ColumnStatsEnabled: boolFromEnv("AUDITOR_COLUMN_STATS_ENABLED", true),
+			WorkloadEnabled:    boolFromEnv("AUDITOR_WORKLOAD_ENABLED", true),
+			WorkloadLimit:      intFromEnv("AUDITOR_WORKLOAD_LIMIT", 500),
+		},
 	}
 	if cfg.Database.URL == "" {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is required")
@@ -61,6 +74,29 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is invalid: %w", err)
 	}
 	return cfg, nil
+}
+
+func boolFromEnv(key string, fallback bool) bool {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if raw == "" {
+		return fallback
+	}
+	return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
+}
+
+func intFromEnv(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	var value int
+	if _, err := fmt.Sscanf(raw, "%d", &value); err != nil || value <= 0 {
+		return fallback
+	}
+	if value > 5000 {
+		return 5000
+	}
+	return value
 }
 
 // AllowsDatabase reports whether a database name may be collected.
