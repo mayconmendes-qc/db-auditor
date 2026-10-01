@@ -17,7 +17,7 @@ FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_sequence s ON s.seqrelid = c.oid
 LEFT JOIN pg_depend d
-  ON d.objid = c.oid AND d.deptype = 'a' AND d.classid = 'pg_class'::regclass
+  ON d.objid = c.oid AND d.deptype IN ('a', 'i') AND d.classid = 'pg_class'::regclass
 LEFT JOIN pg_class t ON t.oid = d.refobjid
 LEFT JOIN pg_namespace tn ON tn.oid = t.relnamespace
 LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
