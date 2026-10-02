@@ -53,11 +53,14 @@ func assessmentURL(table string) string {
 }
 
 func TestTableAssessmentContractAndPartialRun(t *testing.T) {
+	score, confidence := 80.0, 0.75
 	store := &assessmentStub{stubStore: &stubStore{}, item: &repository.TableAssessment{
 		Version: 1,
 		Run:     repository.AssessmentRun{ID: assessmentRun, Status: "partial_success", Partial: true, StartedAt: time.Now()},
 		Table:   repository.AssessmentTable{TableSnapshotRow: repository.TableSnapshotRow{DatabaseName: "db", SchemaName: "public", TableName: "orders", AuditRunID: assessmentRun}},
-		Links:   map[string]string{"columns": "/api/v1/environments/" + assessmentEnv + "/columns?audit_run_id=" + assessmentRun},
+		Summary: repository.AssessmentSummary{Score: &score, ScoreStatus: "available", ScoreVersion: "structural-v1", ScoreConfidence: &confidence,
+			ScoreFactors: []repository.AssessmentScoreFactor{{Code: "missing_primary_key", Description: "Tabela sem chave primária", Penalty: 20}}},
+		Links: map[string]string{"columns": "/api/v1/environments/" + assessmentEnv + "/columns?audit_run_id=" + assessmentRun},
 	}}
 	w := httptest.NewRecorder()
 	NewHandler(store).ServeHTTP(w, httptest.NewRequest(http.MethodGet, assessmentURL("orders")+"/assessment", nil))
@@ -68,7 +71,8 @@ func TestTableAssessmentContractAndPartialRun(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Version != 1 || !got.Run.Partial || got.Table.AuditRunID != assessmentRun || !strings.Contains(got.Links["columns"], assessmentRun) {
+	if got.Version != 1 || !got.Run.Partial || got.Table.AuditRunID != assessmentRun || !strings.Contains(got.Links["columns"], assessmentRun) ||
+		got.Summary.Score == nil || *got.Summary.Score != 80 || got.Summary.ScoreVersion != "structural-v1" || len(got.Summary.ScoreFactors) != 1 {
 		t.Fatalf("bad run-scoped response: %#v", got)
 	}
 }
