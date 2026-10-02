@@ -10,6 +10,7 @@ import {
   InventoryPage,
   MappingsPage,
   PerformancePage,
+  ReportsPage,
   SchemaDriftPage,
   SecurityPage,
   StatusPage,
@@ -29,6 +30,8 @@ function AppRoutes() {
     content = <InventoryPage />;
   } else if (section === "Execuções") {
     content = <AuditRunsPage />;
+  } else if (section === "Relatórios") {
+    content = <ReportsPage />;
   } else if (section === "Mapeamentos") {
     content = <MappingsPage />;
   } else if (section === "Desvio de schema") {

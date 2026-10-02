@@ -12,6 +12,10 @@ function triggerDownload(filename: string, blob: Blob): void {
   URL.revokeObjectURL(url);
 }
 
+export function downloadBlob(filename: string, blob: Blob): void {
+  triggerDownload(filename, blob);
+}
+
 export function downloadJSON(filename: string, data: unknown): void {
   const body = `${JSON.stringify(data, null, 2)}\n`;
   triggerDownload(

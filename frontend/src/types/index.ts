@@ -3,6 +3,7 @@ export type NavigationSection =
   | "Documentação"
   | "Ambientes"
   | "Execuções"
+  | "Relatórios"
   | "Inventário"
   | "Mapeamentos"
   | "Desvio de schema"
@@ -508,6 +509,78 @@ export interface AuditRunCoverage {
   collected_at: string;
 }
 
+export interface AuditBaseline {
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  audit_run_id: string;
+  selected_by: string;
+  selected_at: string;
+}
+
+export interface BaselineComparison {
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  baseline_run_id: string;
+  audit_run_id: string;
+  status: "complete" | "partial" | "incompatible";
+  added_tables: number;
+  removed_tables: number;
+  changed_tables: number;
+}
+
+export interface ScopeScore {
+  version: string;
+  status: string;
+  score: number | null;
+  confidence: number;
+  categories: Array<{
+    category: string;
+    score: number;
+    penalty: number;
+    findings: number;
+  }>;
+  missing_collectors: string[];
+}
+
+export interface ReportFilters {
+  database?: string;
+  schema?: string;
+  table?: string;
+  severity?: string;
+}
+
+export interface ReportJob {
+  id: string;
+  environment_id: string;
+  audit_run_id: string;
+  report_type: "executive" | "technical" | "table";
+  filters: ReportFilters;
+  requested_by: string;
+  rule_version: string;
+  status: "queued" | "running" | "success" | "failed" | "cancelled";
+  attempts: number;
+  error?: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+  expires_at: string;
+  sha256?: string;
+  size_bytes?: number;
+}
+
+export interface FindingEvent {
+  id: string;
+  finding_id: string;
+  audit_run_id?: string;
+  event_type: string;
+  reason: string;
+  recorded_at: string;
+}
+
 export interface AnalysisRun {
   audit_run_id: string;
   environment_id: string;
@@ -642,6 +715,10 @@ export interface Finding {
   first_seen_at: string;
   last_seen_at: string;
   resolved_at?: string | null;
+  recurrence_count?: number;
+  suppression_reason?: string | null;
+  suppressed_until?: string | null;
+  superseded_by?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;

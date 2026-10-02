@@ -12,7 +12,7 @@ type SnapshotLoader interface {
 
 // FindingSink records analysis lifecycle and persists a complete result atomically.
 type FindingSink interface {
-	StartAnalysisRun(ctx context.Context, environmentID, auditRunID, version string) error
+	StartAnalysisRun(ctx context.Context, environmentID, auditRunID, version, ruleManifestHash string) error
 	SaveAnalysisFindings(ctx context.Context, findings []Finding) (int, error)
 	FinishAnalysisRun(ctx context.Context, auditRunID, status string, produced, saved int, errMsg string) error
 }
@@ -36,7 +36,7 @@ func (s *Service) AnalyzeRun(ctx context.Context, environmentID, auditRunID stri
 	if environmentID == "" || auditRunID == "" {
 		return 0, 0, fmt.Errorf("environment id and audit run id are required")
 	}
-	if err := s.sink.StartAnalysisRun(ctx, environmentID, auditRunID, s.version); err != nil {
+	if err := s.sink.StartAnalysisRun(ctx, environmentID, auditRunID, s.version, RuleManifestHash()); err != nil {
 		return 0, 0, fmt.Errorf("start analysis: %w", err)
 	}
 	defer func() {

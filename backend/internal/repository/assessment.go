@@ -181,27 +181,27 @@ WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3
 }
 
 // ListTableFindings is intentionally scoped to the finding's recorded run.
-// The current deduplicated finding store does not retain historical versions;
-// older runs therefore return only findings still associated with that run.
+// Historical findings are reconstructed from immutable observations, never
+// from the mutable current status or the finding's most recent run pointer.
 func (s *Store) ListTableFindings(ctx context.Context, env, run, database, schema, table string, limit, offset int) ([]Finding, int, error) {
 	var total int
-	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM finding
-WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3
-  AND schema_name=$4 AND (object_name=$5 OR evidence->>'table'=$5 OR evidence->>'table_name'=$5)`, env, run, database, schema, table).Scan(&total)
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM finding_event e JOIN finding f ON f.id=e.finding_id
+WHERE f.environment_id=$1::uuid AND e.audit_run_id=$2::uuid AND e.event_type='observed' AND e.database_name=$3
+  AND e.schema_name=$4 AND (e.object_name=$5 OR e.evidence->>'table'=$5 OR e.evidence->>'table_name'=$5)`, env, run, database, schema, table).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 	rows, err := s.pool.Query(ctx, `
-SELECT id::text, environment_id::text, audit_run_id::text,
-  finding_type, severity, status, title, summary,
-  object_type, object_key, database_name, schema_name, object_name,
-  evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
-  recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at
-FROM finding
-WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3
-  AND schema_name=$4 AND (object_name=$5 OR evidence->>'table'=$5 OR evidence->>'table_name'=$5)
-ORDER BY severity, id LIMIT $6 OFFSET $7`, env, run, database, schema, table, limit, offset)
+SELECT f.id::text, f.environment_id::text, e.audit_run_id::text,
+  f.finding_type, e.severity, e.finding_status, e.title, e.summary,
+  f.object_type, f.object_key, e.database_name, e.schema_name, e.object_name,
+  e.evidence, f.dedup_key, f.rule_id, e.rule_version, e.category, e.confidence, e.impact, e.risk,
+  e.recommendation, e.validation, e.reference_urls, e.rule_parameters, f.first_seen_at, e.recorded_at, NULL::timestamptz, NULL::text,
+  f.created_at, e.recorded_at, 0, NULL::text, NULL::timestamptz, NULL::text
+FROM finding_event e JOIN finding f ON f.id=e.finding_id
+WHERE f.environment_id=$1::uuid AND e.audit_run_id=$2::uuid AND e.event_type='observed' AND e.database_name=$3
+  AND e.schema_name=$4 AND (e.object_name=$5 OR e.evidence->>'table'=$5 OR e.evidence->>'table_name'=$5)
+ORDER BY e.severity, f.id LIMIT $6 OFFSET $7`, env, run, database, schema, table, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
