@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, ErrorBanner } from "../components/ui";
+import { Card, ErrorBanner, Table } from "../components/ui";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
@@ -114,37 +114,35 @@ export function StatusPage() {
                 Nenhum run registrado.
               </p>
             ) : (
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[40rem] text-left text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="pb-2 pr-3 font-medium">ID</th>
-                      <th className="pb-2 pr-3 font-medium">Ambiente</th>
-                      <th className="pb-2 pr-3 font-medium">Profile</th>
-                      <th className="pb-2 pr-3 font-medium">Status</th>
-                      <th className="pb-2 font-medium">Início (UTC)</th>
+              <div className="mt-3">
+                <Table
+                  dense
+                  headers={[
+                    "ID",
+                    "Ambiente",
+                    "Profile",
+                    "Status",
+                    "Início (UTC)",
+                  ]}
+                >
+                  {data.recent_runs.map((run) => (
+                    <tr key={run.id}>
+                      <td className="py-2 pr-3 font-mono text-xs">
+                        {run.id.slice(0, 8)}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs">
+                        {run.environment_id.slice(0, 8)}
+                      </td>
+                      <td className="py-2 pr-3">{run.profile}</td>
+                      <td className={`py-2 pr-3 ${tone(run.status)}`}>
+                        {labels.runStatus(run.status)}
+                      </td>
+                      <td className="py-2 text-xs text-slate-400">
+                        {run.started_at}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-300">
-                    {data.recent_runs.map((run) => (
-                      <tr key={run.id}>
-                        <td className="py-2 pr-3 font-mono text-xs">
-                          {run.id.slice(0, 8)}
-                        </td>
-                        <td className="py-2 pr-3 font-mono text-xs">
-                          {run.environment_id.slice(0, 8)}
-                        </td>
-                        <td className="py-2 pr-3">{run.profile}</td>
-                        <td className={`py-2 pr-3 ${tone(run.status)}`}>
-                          {labels.runStatus(run.status)}
-                        </td>
-                        <td className="py-2 text-xs text-slate-400">
-                          {run.started_at}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </Table>
               </div>
             )}
           </div>

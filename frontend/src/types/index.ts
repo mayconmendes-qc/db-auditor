@@ -57,6 +57,10 @@ export interface DashboardKPIs {
   failed_runs_recent: number;
   successful_runs_recent: number;
   total_storage_bytes: number;
+  databases: number | null;
+  schemas: number | null;
+  tables: number | null;
+  inventory_status: "complete" | "partial" | "empty";
   hypertables: number;
   jobs_scheduled: number;
   policies: number;

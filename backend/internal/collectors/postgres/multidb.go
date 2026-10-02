@@ -13,6 +13,18 @@ import (
 // Returning an error records a PartialError for that database and continues.
 type DatabaseVisitor func(ctx context.Context, conn *pgx.Conn, databaseName string) error
 
+type databaseHooksKey struct{}
+type DatabaseHooks struct {
+	Semaphore  chan struct{}
+	Progress   func(databaseName, status, message string)
+	ShouldSkip func(databaseName string) bool
+	OnStart    func(databaseName string, cancel context.CancelFunc) func()
+}
+
+func WithDatabaseHooks(ctx context.Context, hooks DatabaseHooks) context.Context {
+	return context.WithValue(ctx, databaseHooksKey{}, hooks)
+}
+
 // ForEachUserDatabase lists databases from baseURL, then connects to each
 // non-template, connectable database in scope. Failures on individual databases
 // are accumulated as PartialError and do not abort the loop.
@@ -53,28 +65,72 @@ func ForEachUserDatabase(
 		if db.IsTemplate || !db.AllowConnections {
 			continue
 		}
-		dbURL, err := rewriteDatabase(baseURL, db.Name)
-		if err != nil {
-			partial = append(partial, PartialError{
-				Database: db.Name, Op: "rewrite_url", Message: config.SanitizeError(err),
-			})
+		hooks, _ := ctx.Value(databaseHooksKey{}).(DatabaseHooks)
+		if hooks.ShouldSkip != nil && hooks.ShouldSkip(db.Name) {
+			message := "database cancelled by operator"
+			if hooks.Progress != nil {
+				hooks.Progress(db.Name, "failed", message)
+			}
+			partial = append(partial, PartialError{Database: db.Name, Op: "cancelled", Message: message})
 			continue
 		}
-		dbConn, err := pgx.Connect(ctx, dbURL)
-		if err != nil {
-			partial = append(partial, PartialError{
-				Database: db.Name, Op: "connect", Message: config.SanitizeError(err),
-			})
-			continue
+		if hooks.Semaphore != nil {
+			select {
+			case hooks.Semaphore <- struct{}{}:
+			case <-ctx.Done():
+				return partial, ctx.Err()
+			}
 		}
-		visitErr := visit(ctx, dbConn, db.Name)
-		_ = dbConn.Close(ctx)
-		if visitErr != nil {
-			partial = append(partial, PartialError{
-				Database: db.Name, Op: "collect", Message: config.SanitizeError(visitErr),
-			})
-			continue
-		}
+		func() {
+			dbCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			if hooks.OnStart != nil {
+				unregister := hooks.OnStart(db.Name, cancel)
+				if unregister != nil {
+					defer unregister()
+				}
+			}
+			if hooks.Semaphore != nil {
+				defer func() { <-hooks.Semaphore }()
+			}
+			if hooks.Progress != nil {
+				hooks.Progress(db.Name, "attempted", "")
+			}
+			dbURL, err := rewriteDatabase(baseURL, db.Name)
+			if err != nil {
+				if hooks.Progress != nil {
+					hooks.Progress(db.Name, "failed", config.SanitizeError(err))
+				}
+				partial = append(partial, PartialError{
+					Database: db.Name, Op: "rewrite_url", Message: config.SanitizeError(err),
+				})
+				return
+			}
+			dbConn, err := pgx.Connect(dbCtx, dbURL)
+			if err != nil {
+				if hooks.Progress != nil {
+					hooks.Progress(db.Name, "failed", config.SanitizeError(err))
+				}
+				partial = append(partial, PartialError{
+					Database: db.Name, Op: "connect", Message: config.SanitizeError(err),
+				})
+				return
+			}
+			visitErr := visit(dbCtx, dbConn, db.Name)
+			_ = dbConn.Close(context.WithoutCancel(ctx))
+			if visitErr != nil {
+				if hooks.Progress != nil {
+					hooks.Progress(db.Name, "failed", config.SanitizeError(visitErr))
+				}
+				partial = append(partial, PartialError{
+					Database: db.Name, Op: "collect", Message: config.SanitizeError(visitErr),
+				})
+				return
+			}
+			if hooks.Progress != nil {
+				hooks.Progress(db.Name, "success", "")
+			}
+		}()
 	}
 	return partial, nil
 }

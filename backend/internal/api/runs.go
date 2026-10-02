@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
@@ -37,7 +37,51 @@ func registerRunRoutes(mux *http.ServeMux, runs RunService, runner ManualRunner,
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/coverage", listRunCoverage(runs))
 	mux.HandleFunc("GET /api/v1/audit-runs/{id}/analysis", getRunAnalysis(runs))
 	mux.HandleFunc("POST /api/v1/audit-runs/{id}/reprocess", reprocessAuditRun(runs, analysis))
+	mux.HandleFunc("POST /api/v1/audit-runs/{id}/cancel", cancelAuditRun(runs, runner))
+	mux.HandleFunc("POST /api/v1/audit-runs/{id}/databases/{database}/cancel", cancelAuditDatabase(runs, runner))
 	mux.HandleFunc("POST /api/v1/audit-runs", triggerAuditRun(runner))
+}
+
+func cancelAuditDatabase(runs RunService, runner ManualRunner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, database := r.PathValue("id"), r.PathValue("database")
+		if !uuidPattern.MatchString(id) || database == "" || len(database) > 128 || strings.ContainsAny(database, "\x00\n\r/") {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Escopo inválido.")
+			return
+		}
+		run, err := runs.GetAuditRun(r.Context(), id)
+		if err != nil || run == nil {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Execução não encontrada.")
+			return
+		}
+		controller, ok := runner.(interface{ CancelDatabase(string, string) bool })
+		if !ok || run.Status != "running" || !controller.CancelDatabase(run.EnvironmentID, database) {
+			writeError(w, http.StatusConflict, CodeConflict, "Database não está ativo nesta execução.")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "cancelling", "database": database})
+	}
+}
+
+func cancelAuditRun(runs RunService, runner ManualRunner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Execução inválida.")
+			return
+		}
+		run, err := runs.GetAuditRun(r.Context(), id)
+		if err != nil || run == nil {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Execução não encontrada.")
+			return
+		}
+		canceller, ok := runner.(interface{ CancelEnvironment(string) bool })
+		if !ok || run.Status != "running" || !canceller.CancelEnvironment(run.EnvironmentID) {
+			writeError(w, http.StatusConflict, CodeConflict, "A execução não está ativa neste processo.")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]string{"status": "cancelling", "audit_run_id": id})
+	}
 }
 
 // reprocessAuditRun re-runs analyzers from persisted snapshots for an existing run (T-265).
@@ -91,7 +135,22 @@ func getRunAnalysis(runs RunService) http.HandlerFunc {
 func listAuditRuns(runs RunService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
+		limit, offset, valid := parseListPage(r, 50)
+		if !valid {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Paginação inválida.")
+			return
+		}
+		if backend, ok := runs.(interface {
+			ListAuditRunsPage(context.Context, string, string, string, int, int) ([]repository.AuditRunRow, int, error)
+		}); ok {
+			items, total, err := backend.ListAuditRunsPage(r.Context(), q.Get("environment_id"), q.Get("profile"), q.Get("status"), limit, offset)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as execuções de auditoria.")
+				return
+			}
+			writePage(w, items, limit, offset, total)
+			return
+		}
 		items, err := runs.ListAuditRuns(r.Context(), q.Get("environment_id"), q.Get("profile"), q.Get("status"), limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as execuções de auditoria.")

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -40,6 +41,23 @@ func (s *Store) ListAuditRuns(ctx context.Context, environmentID, profile, statu
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	return s.listAuditRuns(ctx, environmentID, profile, status, limit, 0)
+}
+
+func (s *Store) ListAuditRunsPage(ctx context.Context, environmentID, profile, status string, limit, offset int) ([]AuditRunRow, int, error) {
+	if limit < 1 || limit > 500 || offset < 0 {
+		return nil, 0, fmt.Errorf("invalid pagination")
+	}
+	var total int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM audit_run WHERE ($1='' OR environment_id=$1::uuid) AND ($2='' OR profile=$2) AND ($3='' OR status=$3)`, environmentID, profile, status).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err := s.listAuditRuns(ctx, environmentID, profile, status, limit, offset)
+	return items, total, err
+}
+
+func (s *Store) listAuditRuns(ctx context.Context, environmentID, profile, status string, limit, offset int) ([]AuditRunRow, error) {
 	rows, err := s.pool.Query(ctx, `
 SELECT ar.id::text, ar.environment_id::text, COALESCE(e.name, ''), ar.profile, ar.status,
   ar.service_version, ar.collector_version, ar.started_at, ar.finished_at, ar.warnings, ar.errors
@@ -48,9 +66,9 @@ LEFT JOIN audit_environment e ON e.id = ar.environment_id
 WHERE ($1 = '' OR ar.environment_id = $1::uuid)
   AND ($2 = '' OR ar.profile = $2)
   AND ($3 = '' OR ar.status = $3)
-ORDER BY ar.started_at DESC
-LIMIT $4
-`, environmentID, profile, status, limit)
+ORDER BY ar.started_at DESC,ar.id DESC
+LIMIT $4 OFFSET $5
+`, environmentID, profile, status, limit, offset)
 	if err != nil {
 		return nil, err
 	}

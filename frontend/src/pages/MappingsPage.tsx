@@ -117,7 +117,7 @@ export function MappingsPage() {
       setSuggestMsg(
         res.items.length === 0
           ? "Nenhuma sugestão com confidence suficiente. Confira se ambos os ambientes têm inventário."
-          : `${res.items.length} sugestão(ões) encontrada(s). Aceite as desejadas abaixo.`,
+          : `${res.items.length} sugestão(ões) encontrada(s). Aceite as desejadas abaixo.${srcTables.page.has_more || tgtTables.page.has_more ? " Esta sugestão analisou somente as primeiras 200 tabelas de cada ambiente; refine o inventário antes de avaliar ambientes grandes." : ""}`,
       );
     } catch (err: unknown) {
       setSuggestMsg(formatError(err, "Falha ao sugerir mapeamentos"));

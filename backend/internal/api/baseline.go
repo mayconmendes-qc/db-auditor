@@ -66,7 +66,9 @@ func registerBaselineRoutes(mux *http.ServeMux, store InventoryStore) {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Confirme a seleção e informe uma execução válida.")
 			return
 		}
-		item, err := backend.SelectAuditBaseline(r.Context(), env, body.Database, body.Schema, body.Table, body.RunID, "report-token")
+		approvedBy := "report-token"
+		if user:=requestIdentity(r);user!=nil {approvedBy=user.Username}
+		item, err := backend.SelectAuditBaseline(r.Context(), env, body.Database, body.Schema, body.Table, body.RunID, approvedBy)
 		if errors.Is(err, repository.ErrBaselineIneligible) {
 			writeError(w, http.StatusConflict, CodeValidation, "A execução não tem cobertura completa para este escopo.")
 			return
