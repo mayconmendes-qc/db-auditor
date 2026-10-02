@@ -11,37 +11,41 @@ import (
 
 // Finding is a persisted diagnostic.
 type Finding struct {
-	ID             string          `json:"id"`
-	EnvironmentID  string          `json:"environment_id"`
-	AuditRunID     *string         `json:"audit_run_id,omitempty"`
-	FindingType    string          `json:"finding_type"`
-	Severity       string          `json:"severity"`
-	Status         string          `json:"status"`
-	Title          string          `json:"title"`
-	Summary        string          `json:"summary"`
-	ObjectType     string          `json:"object_type"`
-	ObjectKey      string          `json:"object_key"`
-	DatabaseName   string          `json:"database_name"`
-	SchemaName     string          `json:"schema_name"`
-	ObjectName     string          `json:"object_name"`
-	Evidence       json.RawMessage `json:"evidence"`
-	DedupKey       string          `json:"dedup_key"`
-	RuleID         string          `json:"rule_id"`
-	RuleVersion    string          `json:"rule_version"`
-	Category       string          `json:"category"`
-	Confidence     float64         `json:"confidence"`
-	Impact         string          `json:"impact"`
-	Risk           string          `json:"risk"`
-	Recommendation string          `json:"recommendation"`
-	Validation     string          `json:"validation"`
-	References     json.RawMessage `json:"references"`
-	RuleParameters json.RawMessage `json:"rule_parameters"`
-	FirstSeenAt    time.Time       `json:"first_seen_at"`
-	LastSeenAt     time.Time       `json:"last_seen_at"`
-	ResolvedAt     *time.Time      `json:"resolved_at,omitempty"`
-	Notes          *string         `json:"notes,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID                string          `json:"id"`
+	EnvironmentID     string          `json:"environment_id"`
+	AuditRunID        *string         `json:"audit_run_id,omitempty"`
+	FindingType       string          `json:"finding_type"`
+	Severity          string          `json:"severity"`
+	Status            string          `json:"status"`
+	Title             string          `json:"title"`
+	Summary           string          `json:"summary"`
+	ObjectType        string          `json:"object_type"`
+	ObjectKey         string          `json:"object_key"`
+	DatabaseName      string          `json:"database_name"`
+	SchemaName        string          `json:"schema_name"`
+	ObjectName        string          `json:"object_name"`
+	Evidence          json.RawMessage `json:"evidence"`
+	DedupKey          string          `json:"dedup_key"`
+	RuleID            string          `json:"rule_id"`
+	RuleVersion       string          `json:"rule_version"`
+	Category          string          `json:"category"`
+	Confidence        float64         `json:"confidence"`
+	Impact            string          `json:"impact"`
+	Risk              string          `json:"risk"`
+	Recommendation    string          `json:"recommendation"`
+	Validation        string          `json:"validation"`
+	References        json.RawMessage `json:"references"`
+	RuleParameters    json.RawMessage `json:"rule_parameters"`
+	FirstSeenAt       time.Time       `json:"first_seen_at"`
+	LastSeenAt        time.Time       `json:"last_seen_at"`
+	ResolvedAt        *time.Time      `json:"resolved_at,omitempty"`
+	RecurrenceCount   int             `json:"recurrence_count"`
+	SuppressionReason *string         `json:"suppression_reason,omitempty"`
+	SuppressedUntil   *time.Time      `json:"suppressed_until,omitempty"`
+	SupersededBy      *string         `json:"superseded_by,omitempty"`
+	Notes             *string         `json:"notes,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 // UpsertFindingParams is the input for inserting or refreshing a finding.
@@ -85,7 +89,7 @@ INSERT INTO finding (
   $12::jsonb, $13, $14, $15, $16, $17, $18, $19,
   $20, $21, $22::jsonb, $23::jsonb, now(), now()
 )
-ON CONFLICT (environment_id, dedup_key) DO UPDATE SET
+ON CONFLICT (environment_id, dedup_key, rule_version) DO UPDATE SET
   last_seen_at = now(),
   audit_run_id = COALESCE(EXCLUDED.audit_run_id, finding.audit_run_id),
   severity = EXCLUDED.severity,
@@ -102,15 +106,18 @@ ON CONFLICT (environment_id, dedup_key) DO UPDATE SET
   validation = EXCLUDED.validation,
   reference_urls = EXCLUDED.reference_urls,
   rule_parameters = EXCLUDED.rule_parameters,
-  status = CASE WHEN finding.status = 'resolved' THEN 'open' ELSE finding.status END,
+  status = CASE WHEN finding.status = 'resolved' OR (finding.status = 'suppressed' AND finding.suppressed_until <= now()) THEN 'open' ELSE finding.status END,
+  recurrence_count = finding.recurrence_count + CASE WHEN finding.status = 'resolved' THEN 1 ELSE 0 END,
   resolved_at = CASE WHEN finding.status = 'resolved' THEN NULL ELSE finding.resolved_at END,
+  suppression_reason = CASE WHEN finding.status = 'suppressed' AND finding.suppressed_until <= now() THEN NULL ELSE finding.suppression_reason END,
+  suppressed_until = CASE WHEN finding.status = 'suppressed' AND finding.suppressed_until <= now() THEN NULL ELSE finding.suppressed_until END,
   updated_at = now()
 RETURNING id::text, environment_id::text, audit_run_id::text,
   finding_type, severity, status, title, summary,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
 `
 
 // UpsertFinding inserts a new open finding or refreshes last_seen on match.
@@ -130,7 +137,14 @@ func (s *Store) UpsertFinding(ctx context.Context, p UpsertFindingParams) (*Find
 		p.Evidence, p.DedupKey, p.RuleID, p.RuleVersion, p.Category, p.Confidence, p.Impact, p.Risk,
 		p.Recommendation, p.Validation, p.References, p.RuleParameters,
 	)
-	return scanFinding(row)
+	f, err := scanFinding(row)
+	if err != nil {
+		return nil, err
+	}
+	if p.AuditRunID != "" {
+		_, err = s.pool.Exec(ctx, `INSERT INTO finding_event (finding_id,audit_run_id,event_type,category,severity,database_name,schema_name,object_name,rule_version,title,summary,recommendation,confidence,evidence,finding_status,impact,risk,validation,reference_urls,rule_parameters) VALUES ($1::uuid,$2::uuid,'observed',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,$18::jsonb,$19::jsonb) ON CONFLICT DO NOTHING`, f.ID, p.AuditRunID, p.Category, p.Severity, p.DatabaseName, p.SchemaName, p.ObjectName, p.RuleVersion, p.Title, p.Summary, p.Recommendation, p.Confidence, p.Evidence, f.Status, p.Impact, p.Risk, p.Validation, p.References, p.RuleParameters)
+	}
+	return f, err
 }
 
 // ListFindings filters findings by environment and optional dimensions.
@@ -144,7 +158,7 @@ SELECT id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
 FROM finding
 WHERE ($1 = '' OR environment_id = $1::uuid)
   AND ($2 = '' OR finding_type = $2)
@@ -176,7 +190,7 @@ SELECT id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
 FROM finding WHERE id = $1::uuid
 `, id)
 	return scanFinding(row)
@@ -196,19 +210,28 @@ RETURNING id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
 `, id, status, notes)
 	f, err := scanFinding(row)
 	if err != nil {
 		return nil, fmt.Errorf("update finding: %w", err)
+	}
+	eventType := status
+	if status == "open" {
+		eventType = "reopened"
+	}
+	if status == "acknowledged" || status == "resolved" || status == "open" {
+		if _, err := s.pool.Exec(ctx, `INSERT INTO finding_event(finding_id,event_type,reason) VALUES ($1::uuid,$2,$3)`, id, eventType, notes); err != nil {
+			return nil, err
+		}
 	}
 	return f, nil
 }
 
 func scanFinding(row scannable) (*Finding, error) {
 	var f Finding
-	var auditRun, notes pgtype.Text
-	var resolvedAt pgtype.Timestamptz
+	var auditRun, notes, suppressionReason, supersededBy pgtype.Text
+	var resolvedAt, suppressedUntil pgtype.Timestamptz
 	var evidence []byte
 	if err := row.Scan(
 		&f.ID, &f.EnvironmentID, &auditRun,
@@ -217,7 +240,7 @@ func scanFinding(row scannable) (*Finding, error) {
 		&evidence, &f.DedupKey, &f.RuleID, &f.RuleVersion, &f.Category, &f.Confidence, &f.Impact, &f.Risk,
 		&f.Recommendation, &f.Validation, &f.References, &f.RuleParameters,
 		&f.FirstSeenAt, &f.LastSeenAt, &resolvedAt, &notes,
-		&f.CreatedAt, &f.UpdatedAt,
+		&f.CreatedAt, &f.UpdatedAt, &f.RecurrenceCount, &suppressionReason, &suppressedUntil, &supersededBy,
 	); err != nil {
 		return nil, err
 	}
@@ -232,6 +255,16 @@ func scanFinding(row scannable) (*Finding, error) {
 	if resolvedAt.Valid {
 		t := resolvedAt.Time
 		f.ResolvedAt = &t
+	}
+	if suppressionReason.Valid {
+		f.SuppressionReason = &suppressionReason.String
+	}
+	if suppressedUntil.Valid {
+		t := suppressedUntil.Time
+		f.SuppressedUntil = &t
+	}
+	if supersededBy.Valid {
+		f.SupersededBy = &supersededBy.String
 	}
 	if len(evidence) == 0 {
 		f.Evidence = json.RawMessage("{}")

@@ -6,6 +6,7 @@ export { FindingsPage } from "./FindingsPage";
 export { InventoryPage } from "./InventoryPage";
 export { MappingsPage } from "./MappingsPage";
 export { PerformancePage } from "./PerformancePage";
+export { ReportsPage } from "./ReportsPage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
 export { SecurityPage } from "./SecurityPage";
 export { StatusPage } from "./StatusPage";

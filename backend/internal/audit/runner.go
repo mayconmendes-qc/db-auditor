@@ -22,6 +22,12 @@ type AnalysisProcessor interface {
 	AnalyzeRun(ctx context.Context, environmentID, auditRunID string) (produced, saved int, err error)
 }
 
+// CompletedRunReconciler compares approved baselines and closes findings only
+// after the final run status and coverage have been persisted.
+type CompletedRunReconciler interface {
+	ReconcileCompletedRun(ctx context.Context, environmentID, runID string) error
+}
+
 // RunnerOptions configures timeouts, retries and concurrency.
 type RunnerOptions struct {
 	ServiceVersion    string
@@ -184,6 +190,11 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	if err := r.store.FinishAuditRun(finalCtx, auditRunID, status, warnings, errs); err != nil {
 		return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis},
 			fmt.Errorf("finish audit run: %w", err)
+	}
+	if reconciler, ok := r.store.(CompletedRunReconciler); ok {
+		if err := reconciler.ReconcileCompletedRun(finalCtx, environmentID, auditRunID); err != nil {
+			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("reconcile completed run: %w", err)
+		}
 	}
 	return RunResult{
 		AuditRunID: auditRunID,

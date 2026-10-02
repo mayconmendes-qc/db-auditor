@@ -2,8 +2,10 @@ import { networkApiError, toApiError } from "../lib/errors";
 import type {
   AnalysisRun,
   AnalyzeResult,
+  AuditBaseline,
   AuditRun,
   AuditRunCoverage,
+  BaselineComparison,
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
@@ -19,6 +21,7 @@ import type {
   DimensionSnapshot,
   EnvironmentsResponse,
   Finding,
+  FindingEvent,
   FindingsTrendResponse,
   FunctionSnapshot,
   GrantSnapshot,
@@ -33,9 +36,12 @@ import type {
   PagedResponse,
   PolicySnapshot,
   RelationshipGraph,
+  ReportFilters,
+  ReportJob,
   RLSPolicySnapshot,
   SchemaSnapshot,
   ScopeHistoryPoint,
+  ScopeScore,
   SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
@@ -47,7 +53,31 @@ import type {
   WorkloadSnapshot,
 } from "../types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
+).replace(/\/$/, "");
+
+let reportToken = "";
+
+async function reportRequest<T>(
+  path: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  if (!reportToken)
+    throw new Error("Informe o token de relatórios para esta sessão.");
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${reportToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  if (!response.ok) throw await toApiError(response, path);
+  return response.json() as Promise<T>;
+}
 
 async function getJSON<T>(path: string): Promise<T> {
   let response: Response;
@@ -145,6 +175,50 @@ export type TableScopeParams = {
 
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
+  setReportToken: (value: string) => {
+    reportToken = value;
+  },
+  reportJobs: (environmentId: string) =>
+    reportRequest<ItemsResponse<ReportJob>>(
+      `/api/v1/environments/${environmentId}/reports`,
+    ),
+  requestPDFReport: (
+    environmentId: string,
+    auditRunId: string,
+    reportType: ReportJob["report_type"],
+    filters: ReportFilters,
+  ) =>
+    reportRequest<ReportJob>(
+      `/api/v1/environments/${environmentId}/reports`,
+      "POST",
+      { audit_run_id: auditRunId, report_type: reportType, filters },
+    ),
+  cancelPDFReport: (environmentId: string, id: string) =>
+    reportRequest<{ status: string }>(
+      `/api/v1/environments/${environmentId}/reports/${id}/cancel`,
+      "POST",
+    ),
+  retryPDFReport: (environmentId: string, id: string) =>
+    reportRequest<ReportJob>(
+      `/api/v1/environments/${environmentId}/reports/${id}/retry`,
+      "POST",
+    ),
+  downloadPDFReport: async (
+    environmentId: string,
+    id: string,
+  ): Promise<Blob> => {
+    if (!reportToken)
+      throw new Error("Informe o token de relatórios para esta sessão.");
+    const path = `/api/v1/environments/${environmentId}/reports/${id}/download`;
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${reportToken}` },
+      cache: "no-store",
+    });
+    if (!response.ok) throw await toApiError(response, path);
+    return new Blob([await response.arrayBuffer()], {
+      type: "application/pdf",
+    });
+  },
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
   status: () => getJSON<StatusResponse>("/api/v1/status"),
@@ -360,6 +434,47 @@ export const api = {
     ),
   auditRunAnalysis: (id: string) =>
     getJSON<AnalysisRun>(`/api/v1/audit-runs/${id}/analysis`),
+  auditBaseline: (
+    environmentId: string,
+    database = "",
+    schema = "",
+    table = "",
+  ) =>
+    getJSON<AuditBaseline>(
+      `/api/v1/environments/${environmentId}/baseline${qs({ database, schema, table })}`,
+    ),
+  selectAuditBaseline: (
+    environmentId: string,
+    auditRunId: string,
+    database = "",
+    schema = "",
+    table = "",
+  ) =>
+    reportRequest<AuditBaseline>(
+      `/api/v1/environments/${environmentId}/baseline`,
+      "PUT",
+      {
+        audit_run_id: auditRunId,
+        database,
+        schema,
+        table,
+        confirm: true,
+      },
+    ),
+  baselineComparisons: (environmentId: string, auditRunId?: string) =>
+    getJSON<ItemsResponse<BaselineComparison>>(
+      `/api/v1/environments/${environmentId}/baseline/comparisons${qs({ audit_run_id: auditRunId })}`,
+    ),
+  scopeScore: (
+    environmentId: string,
+    runId: string,
+    database?: string,
+    schema?: string,
+    table?: string,
+  ) =>
+    getJSON<ScopeScore>(
+      `/api/v1/environments/${environmentId}/runs/${runId}/score${qs({ database, schema, table })}`,
+    ),
   reprocessAuditRun: (id: string) =>
     postJSON<{ audit_run_id: string; produced: number; saved: number }>(
       `/api/v1/audit-runs/${id}/reprocess`,
@@ -437,6 +552,14 @@ export const api = {
     );
   },
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
+  findingTimeline: (id: string) =>
+    getJSON<ItemsResponse<FindingEvent>>(`/api/v1/findings/${id}/timeline`),
+  suppressFinding: (id: string, reason: string, suppressedUntil: string) =>
+    patchJSON<Finding>(`/api/v1/findings/${id}`, {
+      status: "suppressed",
+      suppression_reason: reason,
+      suppressed_until: suppressedUntil,
+    }),
   updateFindingStatus: (id: string, status: string, notes?: string) =>
     patchJSON<Finding>(`/api/v1/findings/${id}`, { status, notes }),
   analyzeFindings: (body: {
