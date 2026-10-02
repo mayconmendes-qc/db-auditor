@@ -19,7 +19,7 @@ func CollectColumns(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]
 	out := make([]ColumnFacts, 0)
 	for rows.Next() {
 		var f ColumnFacts
-		var colDefault, identityGen, collation *string
+		var colDefault, identityGen, collation, comment *string
 		if err := rows.Scan(
 			&f.DatabaseName,
 			&f.SchemaName,
@@ -32,12 +32,14 @@ func CollectColumns(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]
 			&f.IsGenerated,
 			&identityGen,
 			&collation,
+			&comment,
 		); err != nil {
 			return nil, fmt.Errorf("column collector scan: %w", err)
 		}
 		f.ColumnDefault = colDefault
 		f.IdentityGeneration = identityGen
 		f.CollationName = collation
+		f.Comment = comment
 		if !scope.AllowsSchema(f.SchemaName) {
 			continue
 		}

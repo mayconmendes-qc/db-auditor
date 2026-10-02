@@ -61,6 +61,7 @@ type TableFacts struct {
 	RelRowSecurity      bool       `json:"relrowsecurity"`
 	RelForceRowSecurity bool       `json:"relforcerowsecurity"`
 	TableComment        *string    `json:"table_comment,omitempty"`
+	StorageParameters   []string   `json:"storage_parameters,omitempty"`
 	DataSizeBytes       int64      `json:"data_size_bytes"`
 	IndexSizeBytes      int64      `json:"index_size_bytes"`
 	TotalSizeBytes      int64      `json:"total_size_bytes"`
@@ -94,6 +95,7 @@ type ColumnFacts struct {
 	IsGenerated        bool    `json:"is_generated"`
 	IdentityGeneration *string `json:"identity_generation,omitempty"`
 	CollationName      *string `json:"collation_name,omitempty"`
+	Comment            *string `json:"comment,omitempty"`
 }
 
 // ColumnStatFacts contains only aggregate planner estimates. Raw values and

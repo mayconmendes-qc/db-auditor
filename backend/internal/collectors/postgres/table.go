@@ -37,6 +37,7 @@ func CollectTables(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]T
 			&f.RelRowSecurity,
 			&f.RelForceRowSecurity,
 			&tableComment,
+			&f.StorageParameters,
 			&f.DataSizeBytes,
 			&f.IndexSizeBytes,
 			&f.TotalSizeBytes,

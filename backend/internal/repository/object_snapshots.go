@@ -27,7 +27,7 @@ func (s *Store) SaveObjectInventory(
 INSERT INTO table_snapshot (
   audit_run_id, environment_id, database_name, schema_name, table_name, owner_name, relkind,
   relation_class, is_partition, parent_schema_name, parent_table_name, partition_bound,
-  tablespace_name, relpersistence, relrowsecurity, relforcerowsecurity, table_comment,
+  tablespace_name, relpersistence, relrowsecurity, relforcerowsecurity, table_comment, storage_parameters,
   data_size_bytes, index_size_bytes, total_size_bytes, row_estimate,
   n_live_tup, n_dead_tup, n_tup_ins, n_tup_upd, n_tup_del, seq_scan, idx_scan,
   last_vacuum, last_autovacuum, last_analyze, last_autoanalyze,
@@ -35,16 +35,16 @@ INSERT INTO table_snapshot (
 ) VALUES (
   $1,$2,$3,$4,$5,$6,$7,
   $8,$9,$10,$11,$12,
-  $13,$14,$15,$16,$17,
-  $18,$19,$20,$21,
-  $22,$23,$24,$25,$26,$27,$28,
-  $29,$30,$31,$32,
-  $33,$34,$35, now()
+  $13,$14,$15,$16,$17,$18,
+  $19,$20,$21,$22,
+  $23,$24,$25,$26,$27,$28,$29,
+  $30,$31,$32,$33,
+  $34,$35,$36, now()
 )
 ON CONFLICT (audit_run_id, database_name, schema_name, table_name) DO NOTHING
 `, auditRunID, environmentID, t.DatabaseName, t.SchemaName, t.TableName, nullString(t.Owner), t.Relkind,
 			nullString(t.RelationClass), t.IsPartition, nullStringPtr(t.ParentSchemaName), nullStringPtr(t.ParentTableName), nullStringPtr(t.PartitionBound),
-			nullStringPtr(t.TablespaceName), nullString(t.RelPersistence), t.RelRowSecurity, t.RelForceRowSecurity, nullStringPtr(t.TableComment),
+			nullStringPtr(t.TablespaceName), nullString(t.RelPersistence), t.RelRowSecurity, t.RelForceRowSecurity, nullStringPtr(t.TableComment), t.StorageParameters,
 			t.DataSizeBytes, t.IndexSizeBytes, t.TotalSizeBytes, t.RowEstimate,
 			t.NLiveTup, t.NDeadTup, t.NTupIns, t.NTupUpd, t.NTupDel, t.SeqScan, t.IdxScan,
 			t.LastVacuum, t.LastAutovacuum, t.LastAnalyze, t.LastAutoanalyze,
@@ -59,16 +59,16 @@ ON CONFLICT (audit_run_id, database_name, schema_name, table_name) DO NOTHING
 INSERT INTO column_snapshot (
   audit_run_id, environment_id, database_name, schema_name, table_name, column_name,
   ordinal_position, data_type, is_nullable, column_default, is_generated,
-  identity_generation, collation_name, collected_at
+  identity_generation, collation_name, column_comment, collected_at
 ) VALUES (
   $1,$2,$3,$4,$5,$6,
   $7,$8,$9,$10,$11,
-  $12,$13, now()
+  $12,$13,$14, now()
 )
 ON CONFLICT (audit_run_id, database_name, schema_name, table_name, column_name) DO NOTHING
 `, auditRunID, environmentID, c.DatabaseName, c.SchemaName, c.TableName, c.ColumnName,
 			c.OrdinalPosition, c.DataType, c.IsNullable, nullStringPtr(c.ColumnDefault), c.IsGenerated,
-			nullStringPtr(c.IdentityGeneration), nullStringPtr(c.CollationName))
+			nullStringPtr(c.IdentityGeneration), nullStringPtr(c.CollationName), nullStringPtr(c.Comment))
 		if err != nil {
 			return fmt.Errorf("insert column_snapshot %s.%s.%s.%s: %w", c.DatabaseName, c.SchemaName, c.TableName, c.ColumnName, err)
 		}

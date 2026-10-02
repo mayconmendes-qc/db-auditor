@@ -15,6 +15,10 @@ type structuralPersister interface {
 	SaveStructuralInventory(ctx context.Context, environmentID, auditRunID pgtype.UUID, sequences []postgres.SequenceFacts, triggers []postgres.TriggerFacts, policies []postgres.PolicyFacts) error
 }
 
+type assessmentMetadataPersister interface {
+	SaveAssessmentMetadata(ctx context.Context, environmentID, auditRunID pgtype.UUID, grants []postgres.GrantFacts, dependencies []postgres.DependencyFacts) error
+}
+
 // AttachStructuralCollectors registers sequences/triggers/RLS policy collectors (Sprint 14).
 func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 	if r == nil {
@@ -127,4 +131,55 @@ func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 		}
 		return finishMulti(int64(len(all)), partial, nil)
 	})
+
+	var metadataWriter assessmentMetadataPersister
+	if opts.Writer != nil {
+		metadataWriter, _ = opts.Writer.(assessmentMetadataPersister)
+	}
+	collectMetadata := func(name string, grants bool) {
+		_ = r.Register(CollectorSpec{
+			Name: name, Version: "1.0.0",
+			// Effective-privilege checks are heavier than ordinary catalog reads.
+			Profiles: map[string]struct{}{ProfileManual: {}, ProfileMonthly: {}},
+			Run: func(ctx context.Context) (int64, error) {
+				dsn, err := dsnFromContext(ctx, targets)
+				if err != nil {
+					return 0, err
+				}
+				var allGrants []postgres.GrantFacts
+				var allDeps []postgres.DependencyFacts
+				partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+					if grants {
+						items, err := postgres.CollectEffectiveGrants(cctx, conn, scope)
+						if err != nil {
+							return err
+						}
+						allGrants = append(allGrants, items...)
+					} else {
+						items, err := postgres.CollectObjectDependencies(cctx, conn, scope)
+						if err != nil {
+							return err
+						}
+						allDeps = append(allDeps, items...)
+					}
+					return nil
+				})
+				if hard != nil {
+					return 0, hard
+				}
+				if metadataWriter != nil && len(allGrants)+len(allDeps) > 0 {
+					envID, runID, err := runIDs(ctx)
+					if err != nil {
+						return 0, err
+					}
+					if err := metadataWriter.SaveAssessmentMetadata(ctx, envID, runID, allGrants, allDeps); err != nil {
+						return 0, fmt.Errorf("persistir metadados do assessment: %w", err)
+					}
+				}
+				return finishMulti(int64(len(allGrants)+len(allDeps)), partial, nil)
+			},
+		})
+	}
+	collectMetadata("postgres.effective_grants", true)
+	collectMetadata("postgres.object_dependencies", false)
 }
