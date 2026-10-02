@@ -1,0 +1,331 @@
+import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "../components/PageHeader";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  Select,
+} from "../components/ui";
+import { useApp } from "../context/AppContext";
+import { formatError } from "../lib/errors";
+import { downloadBlob } from "../lib/export";
+import { api } from "../services/api";
+import type { AuditRun, ReportFilters, ReportJob } from "../types";
+
+export function reportJobActions(
+  job: ReportJob,
+  now = Date.now(),
+): Array<"download" | "retry" | "cancel"> {
+  if (Date.parse(job.expires_at) <= now) return [];
+  if (job.status === "success") return ["download"];
+  if (job.status === "failed" && job.attempts < 3) return ["retry"];
+  if (job.status === "queued" || job.status === "running") return ["cancel"];
+  return [];
+}
+
+export function reportFormReady(
+  env: string,
+  runId: string,
+  token: string,
+  kind: ReportJob["report_type"],
+  filters: ReportFilters,
+): boolean {
+  if (!env || !runId || !token) return false;
+  if (filters.schema && !filters.database) return false;
+  if (filters.table && !filters.schema) return false;
+  return (
+    kind !== "table" ||
+    Boolean(filters.database && filters.schema && filters.table)
+  );
+}
+
+export function ReportsPage() {
+  const { environmentId, environments } = useApp();
+  const [env, setEnv] = useState(environmentId ?? "");
+  const [token, setToken] = useState("");
+  const [runs, setRuns] = useState<AuditRun[]>([]);
+  const [runId, setRunId] = useState("");
+  const [kind, setKind] = useState<ReportJob["report_type"]>("executive");
+  const [database, setDatabase] = useState("");
+  const [schema, setSchema] = useState("");
+  const [table, setTable] = useState("");
+  const [severity, setSeverity] = useState("");
+  const [jobs, setJobs] = useState<ReportJob[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (environmentId) setEnv(environmentId);
+  }, [environmentId]);
+  useEffect(() => {
+    if (!env) {
+      setRuns([]);
+      setRunId("");
+      return;
+    }
+    void api
+      .auditRuns({ environment_id: env })
+      .then((result) => {
+        const completed = result.items.filter(
+          (run) => run.status === "success" || run.status === "partial_success",
+        );
+        setRuns(completed);
+        setRunId((current) =>
+          completed.some((run) => run.id === current)
+            ? current
+            : (completed[0]?.id ?? ""),
+        );
+      })
+      .catch(() => setRuns([]));
+  }, [env]);
+
+  const refresh = useCallback(async () => {
+    if (!env || !token) return;
+    api.setReportToken(token);
+    try {
+      setJobs((await api.reportJobs(env)).items);
+      setError(null);
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Não foi possível consultar os relatórios"));
+    }
+  }, [env, token]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  useEffect(() => {
+    if (
+      !jobs.some((job) => job.status === "queued" || job.status === "running")
+    )
+      return;
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [jobs, refresh]);
+
+  const request = async () => {
+    const filters: ReportFilters = {
+      database: database.trim() || undefined,
+      schema: schema.trim() || undefined,
+      table: table.trim() || undefined,
+      severity: severity || undefined,
+    };
+    if (!reportFormReady(env, runId, token, kind, filters)) return;
+    setBusy(true);
+    try {
+      api.setReportToken(token);
+      await api.requestPDFReport(env, runId, kind, filters);
+      await refresh();
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Falha ao solicitar relatório"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const act = async (
+    job: ReportJob,
+    action: "cancel" | "retry" | "download",
+  ) => {
+    setBusy(true);
+    try {
+      api.setReportToken(token);
+      if (action === "cancel") await api.cancelPDFReport(env, job.id);
+      if (action === "retry") await api.retryPDFReport(env, job.id);
+      if (action === "download")
+        downloadBlob(
+          `db-auditor-${job.report_type}-${job.id}.pdf`,
+          await api.downloadPDFReport(env, job.id),
+        );
+      await refresh();
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Falha na operação do relatório"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Relatórios"
+        title="Relatórios PDF"
+        description="Gere relatórios versionados a partir de uma execução específica. O token permanece somente nesta sessão."
+      />
+      <div className="mt-8 space-y-5">
+        <Card
+          title="Solicitar relatório"
+          subtitle="O processamento é assíncrono e o PDF expira após 30 dias."
+        >
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Select
+              label="Ambiente"
+              value={env}
+              onChange={(event) => setEnv(event.target.value)}
+              options={[
+                { value: "", label: "Selecione" },
+                ...environments.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                })),
+              ]}
+            />
+            <Select
+              label="Execução"
+              value={runId}
+              onChange={(event) => setRunId(event.target.value)}
+              options={[
+                { value: "", label: "Selecione" },
+                ...runs.map((run) => ({
+                  value: run.id,
+                  label: `${run.id.slice(0, 8)}… · ${run.status}`,
+                })),
+              ]}
+            />
+            <Select
+              label="Tipo"
+              value={kind}
+              onChange={(event) =>
+                setKind(event.target.value as ReportJob["report_type"])
+              }
+              options={[
+                { value: "executive", label: "Executivo" },
+                { value: "technical", label: "Técnico" },
+                { value: "table", label: "Tabela" },
+              ]}
+            />
+            <Select
+              label="Severidade"
+              value={severity}
+              onChange={(event) => setSeverity(event.target.value)}
+              options={[
+                { value: "", label: "Todas" },
+                ...["critical", "high", "medium", "low", "info"].map(
+                  (value) => ({ value, label: value }),
+                ),
+              ]}
+            />
+            <input
+              aria-label="Banco"
+              placeholder="Banco (opcional)"
+              value={database}
+              onChange={(event) => setDatabase(event.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+            <input
+              aria-label="Schema"
+              placeholder="Schema (opcional)"
+              value={schema}
+              onChange={(event) => setSchema(event.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+            <input
+              aria-label="Tabela"
+              placeholder="Tabela (obrigatória para relatório de tabela)"
+              value={table}
+              onChange={(event) => setTable(event.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+            <input
+              aria-label="Token de relatórios"
+              type="password"
+              autoComplete="off"
+              placeholder="Token de relatórios"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+            />
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Button
+              disabled={
+                busy ||
+                !reportFormReady(env, runId, token, kind, {
+                  database,
+                  schema,
+                  table,
+                  severity,
+                })
+              }
+              onClick={() => void request()}
+            >
+              Gerar PDF
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy || !env || !token}
+              onClick={() => void refresh()}
+            >
+              Atualizar histórico
+            </Button>
+          </div>
+        </Card>
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => void refresh()} />
+        ) : null}
+        {jobs.length === 0 ? (
+          <EmptyState
+            title="Sem relatórios"
+            description="Selecione o ambiente, informe o token e solicite o primeiro PDF."
+          />
+        ) : null}
+        {jobs.map((job) => (
+          <Card
+            key={job.id}
+            title={`${job.report_type} · ${job.audit_run_id.slice(0, 8)}…`}
+            subtitle={`Solicitado em ${new Date(job.created_at).toLocaleString()} · expira em ${new Date(job.expires_at).toLocaleDateString()}`}
+          >
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+              <Badge
+                tone={
+                  job.status === "success" &&
+                  Date.parse(job.expires_at) > Date.now()
+                    ? "success"
+                    : job.status === "failed"
+                      ? "danger"
+                      : "warning"
+                }
+              >
+                {Date.parse(job.expires_at) <= Date.now()
+                  ? "expirado"
+                  : job.status}
+              </Badge>
+              <span>Tentativa {job.attempts}/3</span>
+              {job.sha256 ? (
+                <span title={job.sha256}>
+                  SHA-256: {job.sha256.slice(0, 12)}…
+                </span>
+              ) : null}
+            </div>
+            {job.error ? (
+              <p className="mt-2 text-xs text-rose-300">{job.error}</p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
+              {reportJobActions(job).includes("download") ? (
+                <Button onClick={() => void act(job, "download")}>
+                  Baixar PDF
+                </Button>
+              ) : null}
+              {reportJobActions(job).includes("retry") ? (
+                <Button onClick={() => void act(job, "retry")}>
+                  Tentar novamente
+                </Button>
+              ) : null}
+              {reportJobActions(job).includes("cancel") ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => void act(job, "cancel")}
+                >
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+}

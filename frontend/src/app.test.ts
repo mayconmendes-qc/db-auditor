@@ -8,6 +8,7 @@ describe("navigationSections", () => {
       "Documentação",
       "Ambientes",
       "Execuções",
+      "Relatórios",
       "Inventário",
       "Mapeamentos",
       "Desvio de schema",

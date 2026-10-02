@@ -15,6 +15,7 @@ import (
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
 	"github.com/mayconmendes-qc/db-auditor/internal/database"
 	"github.com/mayconmendes-qc/db-auditor/internal/observability"
+	"github.com/mayconmendes-qc/db-auditor/internal/reportworker"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
 )
@@ -50,6 +51,7 @@ func main() {
 		slog.Error("could not initialize rule catalog", "error", err)
 		os.Exit(1)
 	}
+	go (reportworker.Worker{Store: store}).Run(ctx)
 	runStore := &repository.AuditRunStore{Store: store}
 	liveOpts := audit.LiveRegistryOptions{
 		Targets: targets,

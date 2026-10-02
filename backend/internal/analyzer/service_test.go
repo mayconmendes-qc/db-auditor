@@ -10,6 +10,7 @@ type serviceStub struct {
 	facts      SnapshotFacts
 	saveErr    error
 	started    bool
+	manifest   string
 	finished   string
 	finishErr  string
 	savedCount int
@@ -18,8 +19,9 @@ type serviceStub struct {
 func (s *serviceStub) LoadSnapshotFacts(context.Context, string, string) (SnapshotFacts, error) {
 	return s.facts, nil
 }
-func (s *serviceStub) StartAnalysisRun(context.Context, string, string, string) error {
+func (s *serviceStub) StartAnalysisRun(_ context.Context, _, _, _, manifest string) error {
 	s.started = true
+	s.manifest = manifest
 	return nil
 }
 func (s *serviceStub) SaveAnalysisFindings(_ context.Context, findings []Finding) (int, error) {
@@ -40,8 +42,8 @@ func TestServiceRecordsSuccessfulLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !stub.started || stub.finished != "success" {
-		t.Fatalf("lifecycle = started:%v finished:%s", stub.started, stub.finished)
+	if !stub.started || stub.finished != "success" || stub.manifest != RuleManifestHash() || len(stub.manifest) != 64 {
+		t.Fatalf("lifecycle = started:%v finished:%s manifest:%s", stub.started, stub.finished, stub.manifest)
 	}
 	if produced != saved {
 		t.Fatalf("produced=%d saved=%d", produced, saved)

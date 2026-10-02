@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"sort"
 	"strings"
@@ -274,6 +276,14 @@ type EffectiveRule struct {
 	RuleDefinition
 	Enabled             bool           `json:"enabled"`
 	EffectiveParameters map[string]any `json:"effective_parameters"`
+}
+
+// RuleManifestHash identifies the exact rule metadata bundled with this build.
+// encoding/json emits map keys in stable order and Catalog returns sorted rules.
+func RuleManifestHash() string {
+	payload, _ := json.Marshal(Catalog())
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
 }
 
 func EffectiveCatalog(f SnapshotFacts, schema string) []EffectiveRule {

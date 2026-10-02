@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
@@ -18,8 +19,10 @@ type FindingStore interface {
 }
 
 type updateFindingBody struct {
-	Status string `json:"status"`
-	Notes  string `json:"notes"`
+	Status            string `json:"status"`
+	Notes             string `json:"notes"`
+	SuppressionReason string `json:"suppression_reason"`
+	SuppressedUntil   string `json:"suppressed_until"`
 }
 
 type analyzeBody struct {
@@ -34,6 +37,26 @@ type AnalysisRunner interface {
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis AnalysisRunner) {
 	mux.HandleFunc("GET /api/v1/findings", listFindings(store))
 	mux.HandleFunc("GET /api/v1/findings/{id}", getFinding(store))
+	mux.HandleFunc("GET /api/v1/findings/{id}/timeline", func(w http.ResponseWriter, r *http.Request) {
+		backend, ok := store.(interface {
+			ListFindingEvents(context.Context, string) ([]repository.FindingEvent, error)
+		})
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Histórico indisponível.")
+			return
+		}
+		id := r.PathValue("id")
+		if !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Finding inválido.")
+			return
+		}
+		items, err := backend.ListFindingEvents(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao carregar histórico.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
 	mux.HandleFunc("PATCH /api/v1/findings/{id}", patchFinding(store))
 	mux.HandleFunc("POST /api/v1/findings/analyze", analyzeFindings(analysis))
 }
@@ -82,6 +105,27 @@ func patchFinding(store FindingStore) http.HandlerFunc {
 		case "open", "acknowledged", "resolved", "suppressed":
 		default:
 			writeError(w, http.StatusBadRequest, CodeValidation, "Status inválido. Use open, acknowledged, resolved ou suppressed.")
+			return
+		}
+		if body.Status == "suppressed" {
+			until, parseErr := time.Parse(time.RFC3339, body.SuppressedUntil)
+			if body.SuppressionReason == "" || parseErr != nil || !until.After(time.Now()) {
+				writeError(w, http.StatusBadRequest, CodeValidation, "Informe motivo e validade futura da supressão.")
+				return
+			}
+			backend, ok := store.(interface {
+				SuppressFinding(context.Context, string, string, time.Time) (*repository.Finding, error)
+			})
+			if !ok {
+				writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Supressão indisponível.")
+				return
+			}
+			f, err := backend.SuppressFinding(r.Context(), id, body.SuppressionReason, until)
+			if err != nil {
+				writeError(w, http.StatusNotFound, CodeNotFound, "Finding não encontrado.")
+				return
+			}
+			writeJSON(w, http.StatusOK, f)
 			return
 		}
 		f, err := store.UpdateFindingStatus(r.Context(), id, body.Status, body.Notes)
