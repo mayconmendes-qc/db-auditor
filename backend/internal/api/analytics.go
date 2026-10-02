@@ -121,8 +121,16 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			res.Notes = append(res.Notes, "list environments failed")
 		} else if envID != "" {
 			found := false
-			for _, environment := range envs { if environment.ID==envID {found=true;break} }
-			if !found {writeError(w,http.StatusNotFound,CodeNotFound,"Ambiente não encontrado.");return}
+			for _, environment := range envs {
+				if environment.ID == envID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				writeError(w, http.StatusNotFound, CodeNotFound, "Ambiente não encontrado.")
+				return
+			}
 			res.Environments = 1
 		} else {
 			res.Environments = len(envs)
