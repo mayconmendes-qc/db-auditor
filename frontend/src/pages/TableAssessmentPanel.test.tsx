@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { RelationshipGraph, TableSnapshot } from "../types";
+import type {
+  RelationshipGraph,
+  TableAssessment,
+  TableSnapshot,
+} from "../types";
 import {
+  AssessmentRunNotice,
+  AssessmentScoreSummary,
   RelationshipDiagram,
   visibleRelationshipEdges,
 } from "./TableAssessmentPanel";
@@ -74,6 +80,8 @@ describe("table relationship graph", () => {
     expect(markup).toContain('aria-label="Zoom do diagrama"');
     expect(markup).toContain('aria-label="Filtrar schema relacionado"');
     expect(markup).toContain("orders_customer_fk");
+    expect(markup).toContain("#/inventory?env=env");
+    expect(markup).toContain("run=run");
   });
 
   it("shows an explicit empty state without foreign keys", () => {
@@ -127,5 +135,65 @@ describe("table relationship graph", () => {
     );
     expect(markup).toContain("Grafo limitado a 50 relacionamentos");
     expect(markup.match(/Abrir tabela/g)).toHaveLength(50);
+  });
+});
+
+describe("table assessment score", () => {
+  const summary: TableAssessment["summary"] = {
+    columns: 3,
+    constraints: 1,
+    indexes: 1,
+    findings: 0,
+    grants: 0,
+    dependencies: 0,
+    triggers: 0,
+    rls_policies: 0,
+    score: 80,
+    score_status: "available",
+    score_version: "structural-v1",
+    score_confidence: 0.75,
+    score_factors: [
+      {
+        code: "missing_primary_key",
+        description: "Tabela sem chave primária",
+        penalty: 20,
+      },
+    ],
+    score_missing_collectors: [],
+  };
+
+  it("shows score, confidence and the contributing factor", () => {
+    const markup = renderToStaticMarkup(
+      <AssessmentScoreSummary summary={summary} />,
+    );
+    expect(markup).toContain("80/100");
+    expect(markup).toContain("confiança 75%");
+    expect(markup).toContain("Tabela sem chave primária");
+  });
+
+  it("does not turn missing collector coverage into a healthy score", () => {
+    const markup = renderToStaticMarkup(
+      <AssessmentScoreSummary
+        summary={{
+          ...summary,
+          score: null,
+          score_status: "insufficient_coverage",
+          score_confidence: null,
+          score_factors: [],
+          score_missing_collectors: ["postgres.indexes"],
+        }}
+      />,
+    );
+    expect(markup).toContain("Score indisponível");
+    expect(markup).toContain("postgres.indexes");
+    expect(markup).not.toContain("80/100");
+  });
+
+  it("explains that a partial run does not prove absence of problems", () => {
+    const markup = renderToStaticMarkup(<AssessmentRunNotice partial />);
+    expect(markup).toContain("Run parcial");
+    expect(renderToStaticMarkup(<AssessmentRunNotice partial={false} />)).toBe(
+      "",
+    );
   });
 });

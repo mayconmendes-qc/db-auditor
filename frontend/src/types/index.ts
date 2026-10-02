@@ -292,6 +292,14 @@ export interface TableAssessment {
     rls_policies: number;
     score: number | null;
     score_status: string;
+    score_version: string;
+    score_confidence: number | null;
+    score_factors: Array<{
+      code: string;
+      description: string;
+      penalty: number;
+    }>;
+    score_missing_collectors: string[];
   };
   links: Record<string, string>;
 }
