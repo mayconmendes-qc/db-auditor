@@ -74,7 +74,7 @@ ON CONFLICT (audit_run_id, database_name, schema_name, table_name, trigger_name)
 	}
 	for _, p := range policies {
 		_, err := tx.Exec(ctx, `
-INSERT INTO policy_snapshot (
+INSERT INTO rls_policy_snapshot (
   audit_run_id, environment_id, database_name, schema_name, table_name, policy_name,
   permissive, roles, cmd, qual, with_check, collected_at
 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
@@ -82,7 +82,7 @@ ON CONFLICT (audit_run_id, database_name, schema_name, table_name, policy_name) 
 `, auditRunID, environmentID, p.DatabaseName, p.SchemaName, p.TableName, p.PolicyName,
 			nullStringPtr(p.Permissive), p.Roles, nullStringPtr(p.Cmd), nullStringPtr(p.Qual), nullStringPtr(p.WithCheck))
 		if err != nil {
-			return fmt.Errorf("insert policy_snapshot: %w", err)
+			return fmt.Errorf("insert rls_policy_snapshot: %w", err)
 		}
 	}
 	return tx.Commit(ctx)

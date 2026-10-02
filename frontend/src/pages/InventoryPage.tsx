@@ -21,7 +21,6 @@ import {
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
-  ColumnSnapshot,
   ColumnStatSnapshot,
   DatabaseSnapshot,
   FunctionSnapshot,
@@ -40,9 +39,9 @@ import {
   FunctionDetail,
   HypertableDetail,
   IndexDetail,
-  TableDetail,
   ViewDetail,
 } from "./InventoryDetails";
+import { TableAssessmentPanel } from "./TableAssessmentPanel";
 
 const PAGE_SIZE = 50;
 
@@ -101,15 +100,18 @@ export function InventoryPage() {
   const [functions, setFunctions] = useState<FunctionSnapshot[]>([]);
   const [hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [deepLinkedTable, setDeepLinkedTable] = useState<TableSnapshot | null>(
+    null,
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState<SortState | null>(null);
   const [snapshotStatus, setSnapshotStatus] =
     useState<SnapshotCompleteness | null>(null);
-  const [detailColumns, setDetailColumns] = useState<ColumnSnapshot[]>([]);
   const [detailHistory, setDetailHistory] = useState<TableHistoryPoint[]>([]);
   const [detailStats, setDetailStats] = useState<ColumnStatSnapshot[]>([]);
   const [detailWorkload, setDetailWorkload] = useState<WorkloadSnapshot[]>([]);
   const selectedKeyRef = useRef<string | null>(null);
+  const openedDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!envId) {
@@ -175,7 +177,6 @@ export function InventoryPage() {
     setListError(null);
     setSelectedKey(null);
     setSheetOpen(false);
-    setDetailColumns([]);
     const params = {
       limit: PAGE_SIZE,
       offset,
@@ -378,7 +379,6 @@ export function InventoryPage() {
     selectedKeyRef.current = key;
     setSelectedKey(key);
     setSheetOpen(true);
-    setDetailColumns([]);
     setDetailHistory([]);
     setDetailStats([]);
     setDetailWorkload([]);
@@ -387,6 +387,15 @@ export function InventoryPage() {
   const openTable = (t: TableSnapshot) => {
     const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
     openRow(key);
+    setDeepLinkedTable(t);
+    const linkQuery = new URLSearchParams({
+      env: envId ?? t.environment_id,
+      run: t.audit_run_id,
+      database: t.database_name,
+      schema: t.schema_name,
+      table: t.table_name,
+    });
+    window.history.replaceState(null, "", `#/inventory?${linkQuery}`);
     if (!envId) return;
     const scope = {
       database: t.database_name,
@@ -394,15 +403,11 @@ export function InventoryPage() {
       table: t.table_name,
     };
     Promise.allSettled([
-      api.columns(envId, { ...scope, limit: 500 }),
       api.tableHistory(envId, { ...scope, granularity: "day" }),
       api.tableColumnStats(envId, scope),
       api.tableWorkload(envId, scope),
-    ]).then(([columns, history, stats, workload]) => {
+    ]).then(([history, stats, workload]) => {
       if (selectedKeyRef.current !== key) return;
-      setDetailColumns(
-        columns.status === "fulfilled" ? columns.value.items : [],
-      );
       setDetailHistory(
         history.status === "fulfilled" ? history.value.items : [],
       );
@@ -413,11 +418,61 @@ export function InventoryPage() {
     });
   };
 
-  const selectedTable = sortedTables.find(
-    (t) =>
-      `table:${t.database_name}.${t.schema_name}.${t.table_name}` ===
-      selectedKey,
-  );
+  useEffect(() => {
+    if (!envId || !page || loading) return;
+    const raw = window.location.hash;
+    if (!raw.startsWith("#/inventory?")) return;
+    const query = new URLSearchParams(raw.split("?")[1]);
+    const run = query.get("run"),
+      database = query.get("database"),
+      schema = query.get("schema"),
+      table = query.get("table");
+    if (!run || !database || !schema || !table || query.get("env") !== envId)
+      return;
+    const key = `${envId}/${run}/${database}/${schema}/${table}`;
+    if (openedDeepLinkRef.current === key) return;
+    openedDeepLinkRef.current = key;
+    api
+      .tableAssessment(envId, run, database, schema, table)
+      .then((result) => openTable(result.table))
+      .catch((cause: unknown) =>
+        setListError(
+          formatError(cause, "Não foi possível abrir o link da tabela"),
+        ),
+      );
+    // The link is opened after the inventory page is ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envId, page, loading]);
+
+  const selectedTable =
+    (deepLinkedTable &&
+    `table:${deepLinkedTable.database_name}.${deepLinkedTable.schema_name}.${deepLinkedTable.table_name}` ===
+      selectedKey
+      ? deepLinkedTable
+      : undefined) ??
+    sortedTables.find(
+      (t) =>
+        `table:${t.database_name}.${t.schema_name}.${t.table_name}` ===
+        selectedKey,
+    );
+
+  const navigateToRelatedTable = (schema: string, table: string) => {
+    if (!envId || !selectedTable) return;
+    api
+      .tableAssessment(
+        envId,
+        selectedTable.audit_run_id,
+        selectedTable.database_name,
+        schema,
+        table,
+      )
+      .then((result) => openTable(result.table))
+      .catch((cause: unknown) =>
+        setListError(
+          formatError(cause, "Não foi possível abrir a tabela relacionada"),
+        ),
+      );
+  };
   const selectedIndex = sortedIndexes.find(
     (i) =>
       `index:${i.database_name}.${i.schema_name}.${i.index_name}` ===
@@ -868,12 +923,13 @@ export function InventoryPage() {
             wide
           >
             {selectedTable ? (
-              <TableDetail
+              <TableAssessmentPanel
                 t={selectedTable}
-                columns={detailColumns}
+                env={envId ?? selectedTable.environment_id}
                 history={detailHistory}
                 columnStats={detailStats}
                 workload={detailWorkload}
+                onNavigate={navigateToRelatedTable}
               />
             ) : null}
             {selectedIndex ? <IndexDetail i={selectedIndex} /> : null}

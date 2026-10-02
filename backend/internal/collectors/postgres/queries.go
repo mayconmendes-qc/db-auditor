@@ -90,6 +90,7 @@ SELECT
   COALESCE(c.relrowsecurity, false) AS relrowsecurity,
   COALESCE(c.relforcerowsecurity, false) AS relforcerowsecurity,
   obj_description(c.oid, 'pg_class') AS table_comment,
+  COALESCE(c.reloptions, ARRAY[]::text[]) AS storage_parameters,
   COALESCE(pg_relation_size(c.oid), 0) AS data_size_bytes,
   COALESCE(pg_indexes_size(c.oid), 0) AS index_size_bytes,
   COALESCE(pg_total_relation_size(c.oid), 0) AS total_size_bytes,
@@ -147,7 +148,8 @@ SELECT
     WHEN a.attidentity = 'd' THEN 'by default'
     ELSE NULL
   END AS identity_generation,
-  col.collname AS collation_name
+  col.collname AS collation_name,
+  col_description(c.oid, a.attnum) AS column_comment
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
