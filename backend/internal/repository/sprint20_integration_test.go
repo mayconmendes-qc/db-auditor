@@ -77,10 +77,16 @@ func TestSprint20IdentityInventoryAndPagesIntegration(t *testing.T) {
 	if err != nil || total != 1 || len(items) != 1 {
 		t.Fatalf("runs %d/%d %v", len(items), total, err)
 	}
-	if _,err:=pool.Exec(ctx,`INSERT INTO finding(environment_id,audit_run_id,finding_type,severity,status,title,dedup_key)
-		VALUES($1::uuid,$2::uuid,'security.test','high','open','test',gen_random_uuid()::text)`,env,run);err!=nil {t.Fatal(err)}
-	findings,findingTotal,err:=store.ListFindingsCategoryPage(ctx,env,"security","open",20,0)
-	if err!=nil || findingTotal!=1 || len(findings)!=1 {t.Fatalf("security findings %d/%d %v",len(findings),findingTotal,err)}
-	allFindings,allTotal,err:=store.ListFindingsPage(ctx,env,"","","",20,0)
-	if err!=nil || allTotal!=1 || len(allFindings)!=1 {t.Fatalf("findings %d/%d %v",len(allFindings),allTotal,err)}
+	if _, err := pool.Exec(ctx, `INSERT INTO finding(environment_id,audit_run_id,finding_type,severity,status,title,dedup_key)
+		VALUES($1::uuid,$2::uuid,'security.test','high','open','test',gen_random_uuid()::text)`, env, run); err != nil {
+		t.Fatal(err)
+	}
+	findings, findingTotal, err := store.ListFindingsCategoryPage(ctx, env, "security", "open", 20, 0)
+	if err != nil || findingTotal != 1 || len(findings) != 1 {
+		t.Fatalf("security findings %d/%d %v", len(findings), findingTotal, err)
+	}
+	allFindings, allTotal, err := store.ListFindingsPage(ctx, env, "", "", "", 20, 0)
+	if err != nil || allTotal != 1 || len(allFindings) != 1 {
+		t.Fatalf("findings %d/%d %v", len(allFindings), allTotal, err)
+	}
 }

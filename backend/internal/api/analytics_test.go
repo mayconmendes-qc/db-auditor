@@ -46,10 +46,12 @@ func TestInventoryKPIsByEnvironment(t *testing.T) {
 }
 
 func TestInventoryKPIUnknownEnvironment(t *testing.T) {
-	h:=NewHandler(&kpiStore{})
-	w:=httptest.NewRecorder()
-	h.ServeHTTP(w,httptest.NewRequest(http.MethodGet,"/api/v1/analytics/kpis?environment_id=00000000-0000-4000-8000-000000000099",nil))
-	if w.Code!=http.StatusNotFound {t.Fatalf("status %d",w.Code)}
+	h := NewHandler(&kpiStore{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/analytics/kpis?environment_id=00000000-0000-4000-8000-000000000099", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status %d", w.Code)
+	}
 }
 
 func TestAnalyticsKPIs(t *testing.T) {

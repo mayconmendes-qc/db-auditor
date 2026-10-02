@@ -31,7 +31,11 @@ func TestValidateTargetDSNsNeedsAllowlist(t *testing.T) {
 }
 
 func TestApplyTargetStatementTimeout(t *testing.T) {
-	targets:=map[string]string{"env":"postgresql://ro:secret@db.example.com/data?sslmode=verify-full"}
-	if err:=ApplyTargetStatementTimeout(targets,15*time.Second);err!=nil {t.Fatal(err)}
-	if !strings.Contains(targets["env"],"statement_timeout=15000") {t.Fatalf("timeout missing: %s",targets["env"])}
+	targets := map[string]string{"env": "postgresql://ro:secret@db.example.com/data?sslmode=verify-full"}
+	if err := ApplyTargetStatementTimeout(targets, 15*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(targets["env"], "statement_timeout=15000") {
+		t.Fatalf("timeout missing: %s", targets["env"])
+	}
 }
