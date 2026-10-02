@@ -46,9 +46,18 @@ function parseHash(): { section: NavigationSection; env: string | null } {
 function writeHash(section: NavigationSection, envId: string | null) {
   const slug = SECTION_SLUGS[section];
   let next = `#/${slug}`;
-  if (envId) {
-    next += `?env=${encodeURIComponent(envId)}`;
+  const query = new URLSearchParams();
+  if (envId) query.set("env", envId);
+  if (slug === "inventory" && window.location.hash.startsWith("#/inventory?")) {
+    const current = new URLSearchParams(window.location.hash.split("?")[1]);
+    if (envId && current.get("env") === envId) {
+      for (const field of ["run", "database", "schema", "table"]) {
+        const value = current.get(field);
+        if (value) query.set(field, value);
+      }
+    }
   }
+  if (query.size) next += `?${query}`;
   if (window.location.hash !== next) {
     window.history.replaceState(null, "", next);
   }
