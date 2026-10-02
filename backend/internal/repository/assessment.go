@@ -21,16 +21,20 @@ type TableAssessment struct {
 }
 
 type AssessmentSummary struct {
-	Columns      int      `json:"columns"`
-	Constraints  int      `json:"constraints"`
-	Indexes      int      `json:"indexes"`
-	Findings     int      `json:"findings"`
-	Grants       int      `json:"grants"`
-	Dependencies int      `json:"dependencies"`
-	Triggers     int      `json:"triggers"`
-	RLSPolicies  int      `json:"rls_policies"`
-	Score        *float64 `json:"score"`
-	ScoreStatus  string   `json:"score_status"`
+	Columns                int                     `json:"columns"`
+	Constraints            int                     `json:"constraints"`
+	Indexes                int                     `json:"indexes"`
+	Findings               int                     `json:"findings"`
+	Grants                 int                     `json:"grants"`
+	Dependencies           int                     `json:"dependencies"`
+	Triggers               int                     `json:"triggers"`
+	RLSPolicies            int                     `json:"rls_policies"`
+	Score                  *float64                `json:"score"`
+	ScoreStatus            string                  `json:"score_status"`
+	ScoreVersion           string                  `json:"score_version"`
+	ScoreConfidence        *float64                `json:"score_confidence"`
+	ScoreFactors           []AssessmentScoreFactor `json:"score_factors"`
+	ScoreMissingCollectors []string                `json:"score_missing_collectors"`
 }
 
 type AssessmentRun struct {
@@ -94,7 +98,10 @@ WHERE r.environment_id = $1::uuid AND r.id = $2::uuid
 		return nil, fmt.Errorf("table assessment: %w", err)
 	}
 	result.Run.Partial = result.Run.Status == "partial_success"
-	result.Summary.ScoreStatus = "not_available"
+	result.Summary.ScoreVersion = structuralScoreVersion
+	result.Summary.ScoreFactors = []AssessmentScoreFactor{}
+	result.Summary.ScoreMissingCollectors = []string{}
+	var invalidIndexes, unvalidatedConstraints int
 	err = s.pool.QueryRow(ctx, `
 SELECT
   (SELECT count(*) FROM column_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5),
@@ -104,11 +111,58 @@ SELECT
   (SELECT count(*) FROM grant_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5),
   (SELECT count(*) FROM object_dependency_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND ((source_schema=$4 AND source_name=$5) OR (target_schema=$4 AND target_name=$5))),
   (SELECT count(*) FROM trigger_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5),
-  (SELECT count(*) FROM rls_policy_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5)
+  (SELECT count(*) FROM rls_policy_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5),
+  (SELECT count(*) FROM index_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5 AND NOT is_valid),
+  (SELECT count(*) FROM constraint_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND schema_name=$4 AND table_name=$5 AND NOT is_validated)
 `, env, run, database, schema, table).Scan(&result.Summary.Columns, &result.Summary.Constraints, &result.Summary.Indexes, &result.Summary.Findings,
-		&result.Summary.Grants, &result.Summary.Dependencies, &result.Summary.Triggers, &result.Summary.RLSPolicies)
+		&result.Summary.Grants, &result.Summary.Dependencies, &result.Summary.Triggers, &result.Summary.RLSPolicies,
+		&invalidIndexes, &unvalidatedConstraints)
 	if err != nil {
 		return nil, fmt.Errorf("table assessment summary: %w", err)
+	}
+	coverage, err := s.pool.Query(ctx, `
+SELECT collector_name, status FROM audit_run_coverage
+WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3
+  AND collector_name=ANY($4::text[])`, env, run, database, structuralScoreCollectors)
+	if err != nil {
+		return nil, fmt.Errorf("table assessment score coverage: %w", err)
+	}
+	collectorStatuses := make(map[string]string, len(structuralScoreCollectors))
+	for coverage.Next() {
+		var collector, status string
+		if err := coverage.Scan(&collector, &status); err != nil {
+			coverage.Close()
+			return nil, fmt.Errorf("table assessment score coverage: %w", err)
+		}
+		collectorStatuses[collector] = status
+	}
+	err = coverage.Err()
+	coverage.Close()
+	if err != nil {
+		return nil, fmt.Errorf("table assessment score coverage: %w", err)
+	}
+	for _, collector := range structuralScoreCollectors {
+		if collectorStatuses[collector] != "success" {
+			result.Summary.ScoreMissingCollectors = append(result.Summary.ScoreMissingCollectors, collector)
+		}
+	}
+	if len(result.Summary.ScoreMissingCollectors) > 0 {
+		result.Summary.ScoreStatus = "insufficient_coverage"
+	} else {
+		score, factors := calculateStructuralScore(structuralScoreInput{
+			RelationKind: result.Table.Relkind, IsPartition: result.Table.IsPartition,
+			HasPrimaryKey: result.Table.HasPrimaryKey, LiveTuples: result.Table.NLiveTup,
+			DeadTuples: result.Table.NDeadTup, InvalidIndexes: invalidIndexes,
+			UnvalidatedConstraints: unvalidatedConstraints,
+		})
+		result.Summary.Score = &score
+		result.Summary.ScoreFactors = factors
+		result.Summary.ScoreStatus = "available"
+		confidence := 1.0
+		if result.Run.Partial {
+			confidence = 0.75
+		}
+		result.Summary.ScoreConfidence = &confidence
 	}
 	base := "/api/v1/environments/" + url.PathEscape(env)
 	q := url.Values{"audit_run_id": {run}, "database": {database}, "schema": {schema}, "table": {table}}
