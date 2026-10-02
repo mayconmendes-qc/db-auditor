@@ -16,7 +16,7 @@ import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
-import type { Finding } from "../types";
+import type { Finding, FindingEvent } from "../types";
 
 function severityTone(
   severity: string,
@@ -90,6 +90,28 @@ export function FindingsPage() {
   const [busy, setBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
+  const [timeline, setTimeline] = useState<FindingEvent[]>([]);
+  const [suppressionReason, setSuppressionReason] = useState("");
+  const [suppressedUntil, setSuppressedUntil] = useState("");
+
+  useEffect(() => {
+    if (!selected) {
+      setTimeline([]);
+      return;
+    }
+    let active = true;
+    void api
+      .findingTimeline(selected.id)
+      .then((result) => {
+        if (active) setTimeline(result.items);
+      })
+      .catch(() => {
+        if (active) setTimeline([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selected?.id]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
@@ -125,6 +147,24 @@ export function FindingsPage() {
       setSelected((cur) => (cur?.id === id ? updated : cur));
     } catch (err: unknown) {
       setError(formatError(err, "Falha na triagem"));
+    }
+  };
+
+  const suppressSelected = async () => {
+    if (!selected || !suppressionReason.trim() || !suppressedUntil) return;
+    try {
+      const updated = await api.suppressFinding(
+        selected.id,
+        suppressionReason.trim(),
+        new Date(suppressedUntil).toISOString(),
+      );
+      setItems((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      setSelected(updated);
+      setSuppressionReason("");
+      setSuppressedUntil("");
+      setTimeline((await api.findingTimeline(updated.id)).items);
+    } catch (err: unknown) {
+      setError(formatError(err, "Falha ao suprimir finding"));
     }
   };
 
@@ -357,12 +397,6 @@ export function FindingsPage() {
                 Resolver
               </Button>
               <Button
-                disabled={bulkBusy}
-                onClick={() => void bulkTriage("suppressed")}
-              >
-                Suprimir
-              </Button>
-              <Button
                 variant="secondary"
                 disabled={bulkBusy}
                 onClick={() => void bulkTriage("open")}
@@ -494,6 +528,32 @@ export function FindingsPage() {
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
               <li>Tipo: {selected.finding_type}</li>
               <li>Status: {labels.findingStatus(selected.status)}</li>
+              <li>
+                Primeira observação:{" "}
+                {new Date(selected.first_seen_at).toLocaleString()}
+              </li>
+              <li>
+                Última observação:{" "}
+                {new Date(selected.last_seen_at).toLocaleString()}
+              </li>
+              <li>Recorrências: {selected.recurrence_count ?? 0}</li>
+              {selected.resolved_at ? (
+                <li>
+                  Resolução: {new Date(selected.resolved_at).toLocaleString()}
+                </li>
+              ) : null}
+              {selected.superseded_by ? (
+                <li>Substituído por: {selected.superseded_by}</li>
+              ) : null}
+              {selected.suppression_reason ? (
+                <li>
+                  Supressão: {selected.suppression_reason} (até{" "}
+                  {selected.suppressed_until
+                    ? new Date(selected.suppressed_until).toLocaleString()
+                    : "—"}
+                  )
+                </li>
+              ) : null}
               <li>Objeto: {selected.object_key || "—"}</li>
               <li>Resumo: {selected.summary}</li>
               <li>
@@ -554,9 +614,6 @@ export function FindingsPage() {
               <Button onClick={() => void triage(selected.id, "resolved")}>
                 Resolver
               </Button>
-              <Button onClick={() => void triage(selected.id, "suppressed")}>
-                Suprimir
-              </Button>
               <Button
                 variant="secondary"
                 onClick={() => void triage(selected.id, "open")}
@@ -564,6 +621,40 @@ export function FindingsPage() {
                 Reabrir
               </Button>
             </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <input
+                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                aria-label="Motivo da supressão"
+                placeholder="Motivo da supressão"
+                value={suppressionReason}
+                onChange={(event) => setSuppressionReason(event.target.value)}
+              />
+              <input
+                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                aria-label="Validade da supressão"
+                type="datetime-local"
+                value={suppressedUntil}
+                onChange={(event) => setSuppressedUntil(event.target.value)}
+              />
+              <Button
+                disabled={!suppressionReason.trim() || !suppressedUntil}
+                onClick={() => void suppressSelected()}
+              >
+                Suprimir com validade
+              </Button>
+            </div>
+            <h3 className="mt-5 text-sm font-semibold text-slate-200">
+              Linha do tempo
+            </h3>
+            <ul className="mt-2 space-y-1 text-xs text-slate-400">
+              {timeline.map((event) => (
+                <li key={event.id}>
+                  {new Date(event.recorded_at).toLocaleString()} ·{" "}
+                  {event.event_type}
+                  {event.reason ? ` — ${event.reason}` : ""}
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
       </div>

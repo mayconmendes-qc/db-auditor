@@ -35,6 +35,7 @@ services:
       AUDITOR_APPLICATION_NAME: db-auditor
       AUDITOR_LOG_FORMAT: ${AUDITOR_LOG_FORMAT:-json}
       AUDITOR_LOG_LEVEL: ${AUDITOR_LOG_LEVEL:-info}
+      AUDITOR_REPORT_API_TOKEN: ${AUDITOR_REPORT_API_TOKEN:-}
       AUDITOR_DATABASE_DENYLIST: ${AUDITOR_DATABASE_DENYLIST:-template0,template1,postgres}
       AUDITOR_SCHEMA_DENYLIST: ${AUDITOR_SCHEMA_DENYLIST:-pg_catalog,information_schema}
     networks: [auditor]

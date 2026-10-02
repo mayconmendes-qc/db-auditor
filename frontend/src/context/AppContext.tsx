@@ -15,6 +15,7 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Documentação: "docs",
   Ambientes: "environments",
   Execuções: "runs",
+  Relatórios: "reports",
   Inventário: "inventory",
   Mapeamentos: "mappings",
   "Desvio de schema": "schema-drift",

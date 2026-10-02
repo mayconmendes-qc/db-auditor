@@ -4,6 +4,7 @@ import { formatError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
 import { api } from "../services/api";
 import type {
+  AuditBaseline,
   ColumnSnapshot,
   ColumnStatSnapshot,
   ConstraintSnapshot,
@@ -16,6 +17,7 @@ import type {
   RelationshipEdge,
   RelationshipGraph,
   RLSPolicySnapshot,
+  ScopeScore,
   TableAssessment,
   TableHistoryPoint,
   TableSnapshot,
@@ -457,6 +459,9 @@ export function TableAssessmentPanel({
   const [tab, setTab] = useState<Tab>("overview");
   const [assessment, setAssessment] = useState<TableAssessment | null>(null);
   const [graph, setGraph] = useState<RelationshipGraph | null>(null);
+  const [baseline, setBaseline] = useState<AuditBaseline | null>(null);
+  const [baselineToken, setBaselineToken] = useState("");
+  const [scopeScore, setScopeScore] = useState<ScopeScore | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const key = `${env}/${t.audit_run_id}/${t.database_name}/${t.schema_name}/${t.table_name}`;
@@ -493,6 +498,60 @@ export function TableAssessmentPanel({
     // key is the canonical identity of this assessment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
+  useEffect(() => {
+    let active = true;
+    void api
+      .auditBaseline(env, t.database_name, t.schema_name, t.table_name)
+      .then((value) => {
+        if (active) setBaseline(value);
+      })
+      .catch(() => {
+        if (active) setBaseline(null);
+      });
+    void api
+      .scopeScore(
+        env,
+        t.audit_run_id,
+        t.database_name,
+        t.schema_name,
+        t.table_name,
+      )
+      .then((value) => {
+        if (active) setScopeScore(value);
+      })
+      .catch(() => {
+        if (active) setScopeScore(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+
+  const approveBaseline = async () => {
+    if (
+      !window.confirm(
+        `Aprovar a execução ${t.audit_run_id} como baseline da tabela ${t.database_name}.${t.schema_name}.${t.table_name}?`,
+      )
+    )
+      return;
+    try {
+      api.setReportToken(baselineToken);
+      setBaseline(
+        await api.selectAuditBaseline(
+          env,
+          t.audit_run_id,
+          t.database_name,
+          t.schema_name,
+          t.table_name,
+        ),
+      );
+      setError(null);
+    } catch (cause: unknown) {
+      setError(
+        formatError(cause, "Não foi possível aprovar o baseline da tabela"),
+      );
+    }
+  };
   useEffect(() => {
     if (tab !== "relationships" || !assessment) return;
     let cancelled = false;
@@ -597,6 +656,46 @@ export function TableAssessmentPanel({
         </p>
       ) : null}
       <AssessmentRunNotice partial={assessment?.run.partial ?? false} />
+      <div className="rounded border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
+        <p>
+          Baseline desta tabela:{" "}
+          {baseline ? `${baseline.audit_run_id.slice(0, 8)}…` : "não definido"}
+        </p>
+        <p>
+          Score de escopo:{" "}
+          {scopeScore?.score == null
+            ? "indisponível por cobertura"
+            : `${scopeScore.score}/100`}{" "}
+          · confiança {Math.round((scopeScore?.confidence ?? 0) * 100)}%
+        </p>
+        {scopeScore?.categories.map((category) => (
+          <p key={category.category}>
+            {category.category}: {category.score}/100 · {category.findings}{" "}
+            findings · penalidade {category.penalty}
+          </p>
+        ))}
+        {assessment?.run.status === "success" ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              aria-label="Token para baseline da tabela"
+              type="password"
+              autoComplete="off"
+              placeholder="Token de operação protegida"
+              value={baselineToken}
+              onChange={(event) => setBaselineToken(event.target.value)}
+              className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+            />
+            <button
+              type="button"
+              disabled={!baselineToken}
+              className="rounded border border-slate-500 px-2 py-1 text-cyan-300 disabled:opacity-50"
+              onClick={() => void approveBaseline()}
+            >
+              Aprovar esta execução como baseline da tabela
+            </button>
+          </div>
+        ) : null}
+      </div>
       <div
         role="tablist"
         aria-label="Seções do assessment"

@@ -17,9 +17,12 @@ import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type {
   AnalysisRun,
+  AuditBaseline,
   AuditRun,
   AuditRunCoverage,
+  BaselineComparison,
   CollectorRun,
+  ScopeScore,
 } from "../types";
 
 const POLL_MS = 2500;
@@ -149,6 +152,10 @@ export function AuditRunsPage() {
   const [collectors, setCollectors] = useState<CollectorRun[] | null>(null);
   const [coverage, setCoverage] = useState<AuditRunCoverage[] | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisRun | null>(null);
+  const [baseline, setBaseline] = useState<AuditBaseline | null>(null);
+  const [baselineToken, setBaselineToken] = useState("");
+  const [comparison, setComparison] = useState<BaselineComparison | null>(null);
+  const [scopeScore, setScopeScore] = useState<ScopeScore | null>(null);
   const [triggerEnv, setTriggerEnv] = useState("");
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -233,6 +240,52 @@ export function AuditRunsPage() {
     () => runs?.find((r) => r.id === selectedId) ?? null,
     [runs, selectedId],
   );
+
+  useEffect(() => {
+    if (!selected || selected.status === "running") {
+      setBaseline(null);
+      setComparison(null);
+      setScopeScore(null);
+      return;
+    }
+    let active = true;
+    void Promise.allSettled([
+      api.auditBaseline(selected.environment_id),
+      api.baselineComparisons(selected.environment_id, selected.id),
+      api.scopeScore(selected.environment_id, selected.id),
+    ]).then(([base, comparisons, score]) => {
+      if (!active) return;
+      setBaseline(base.status === "fulfilled" ? base.value : null);
+      setComparison(
+        comparisons.status === "fulfilled"
+          ? (comparisons.value.items[0] ?? null)
+          : null,
+      );
+      setScopeScore(score.status === "fulfilled" ? score.value : null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [selected]);
+
+  const chooseBaseline = async () => {
+    if (
+      !selected ||
+      !window.confirm(
+        `Usar a execução ${selected.id} como baseline aprovado para todo o ambiente?`,
+      )
+    )
+      return;
+    try {
+      api.setReportToken(baselineToken);
+      setBaseline(
+        await api.selectAuditBaseline(selected.environment_id, selected.id),
+      );
+      setError(null);
+    } catch (err: unknown) {
+      setError(formatError(err, "Não foi possível aprovar o baseline"));
+    }
+  };
 
   useEffect(() => {
     const listRunning = runs?.some((r) => r.status === "running") ?? false;
@@ -452,6 +505,65 @@ export function AuditRunsPage() {
                 </ul>
               ) : null}
             </Card>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card
+                title="Baseline aprovado"
+                subtitle={
+                  baseline
+                    ? `Execução ${baseline.audit_run_id.slice(0, 8)}…`
+                    : "Ainda não definido"
+                }
+              >
+                <p className="mt-2 text-xs text-slate-400">
+                  A seleção é registrada no histórico e exige cobertura
+                  completa.
+                </p>
+                <input
+                  aria-label="Token para aprovar baseline"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Token de operação protegida"
+                  value={baselineToken}
+                  onChange={(event) => setBaselineToken(event.target.value)}
+                  className="mt-2 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                />
+                {selected.status === "success" ? (
+                  <div className="mt-3">
+                    <Button
+                      disabled={!baselineToken}
+                      onClick={() => void chooseBaseline()}
+                    >
+                      Aprovar esta execução
+                    </Button>
+                  </div>
+                ) : null}
+                {comparison ? (
+                  <p className="mt-2 text-sm text-slate-300">
+                    Comparação {comparison.status}: +{comparison.added_tables} /
+                    −{comparison.removed_tables} tabelas;{" "}
+                    {comparison.changed_tables} alteradas.
+                  </p>
+                ) : null}
+              </Card>
+              <Card
+                title="Score por escopo"
+                subtitle={scopeScore?.version ?? "Aguardando"}
+              >
+                <p className="mt-2 text-sm text-slate-300">
+                  {scopeScore?.score == null
+                    ? "Indisponível por cobertura insuficiente"
+                    : `${scopeScore.score}/100`}{" "}
+                  · confiança {Math.round((scopeScore?.confidence ?? 0) * 100)}%
+                </p>
+                {scopeScore?.categories.map((category) => (
+                  <p key={category.category} className="text-xs text-slate-400">
+                    {category.category}: {category.score}/100 (
+                    {category.findings} findings)
+                  </p>
+                ))}
+              </Card>
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Card

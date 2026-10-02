@@ -12,6 +12,8 @@ As migrations posteriores são incrementais e append-only:
 - `05_sprint15_history_stats_workload.sql`: índices temporais, estatísticas agregadas de colunas e workload sanitizado.
 - `06_sprint16_rules.sql`: versão de regras, políticas por escopo e metadados explicativos dos findings; também completa metadados da Sprint 15.
 - `07_sprint17_assessment.sql`: comentários de coluna, grants efetivos, dependências e índices do assessment; separa policies RLS das policies TimescaleDB, que já usam `policy_snapshot`.
+- `08_sprint18_history.sql`: baseline auditável, comparação temporal, eventos imutáveis de findings e supressão com validade.
+- `09_sprint19_reports.sql`: fila persistente de relatórios e artefatos PDF com retenção.
 
 Nunca altere uma migration que já possa ter sido aplicada.
 
