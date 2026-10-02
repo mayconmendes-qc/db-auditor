@@ -11,6 +11,7 @@ As migrations posteriores são incrementais e append-only:
 - `04_sprint14_structural.sql`: inventário estrutural de relações, constraints, sequences, triggers e RLS.
 - `05_sprint15_history_stats_workload.sql`: índices temporais, estatísticas agregadas de colunas e workload sanitizado.
 - `06_sprint16_rules.sql`: versão de regras, políticas por escopo e metadados explicativos dos findings; também completa metadados da Sprint 15.
+- `07_sprint17_assessment.sql`: comentários de coluna, grants efetivos, dependências e índices do assessment; separa policies RLS das policies TimescaleDB, que já usam `policy_snapshot`.
 
 Nunca altere uma migration que já possa ter sido aplicada.
 

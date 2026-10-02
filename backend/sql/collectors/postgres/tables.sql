@@ -6,6 +6,16 @@ SELECT
   c.relname AS table_name,
   pg_catalog.pg_get_userbyid(c.relowner) AS owner_name,
   c.relkind::text AS relkind,
+  COALESCE(c.relispartition, false) AS is_partition,
+  pn.nspname AS parent_schema_name,
+  pc.relname AS parent_table_name,
+  pg_catalog.pg_get_expr(c.relpartbound, c.oid) AS partition_bound,
+  ts.spcname AS tablespace_name,
+  c.relpersistence::text AS relpersistence,
+  COALESCE(c.relrowsecurity, false) AS relrowsecurity,
+  COALESCE(c.relforcerowsecurity, false) AS relforcerowsecurity,
+  obj_description(c.oid, 'pg_class') AS table_comment,
+  COALESCE(c.reloptions, ARRAY[]::text[]) AS storage_parameters,
   COALESCE(pg_relation_size(c.oid), 0) AS data_size_bytes,
   COALESCE(pg_indexes_size(c.oid), 0) AS index_size_bytes,
   COALESCE(pg_total_relation_size(c.oid), 0) AS total_size_bytes,
@@ -36,9 +46,12 @@ SELECT
   (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()) AS stats_reset
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-LEFT JOIN pg_stat_user_tables s
-  ON s.relid = c.oid
-WHERE c.relkind = 'r'
+LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+LEFT JOIN pg_inherits inh ON inh.inhrelid = c.oid
+LEFT JOIN pg_class pc ON pc.oid = inh.inhparent
+LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+LEFT JOIN pg_tablespace ts ON ts.oid = c.reltablespace
+WHERE c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, c.relname;

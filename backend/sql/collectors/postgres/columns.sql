@@ -14,7 +14,8 @@ SELECT
     WHEN a.attidentity = 'd' THEN 'by default'
     ELSE NULL
   END AS identity_generation,
-  col.collname AS collation_name
+  col.collname AS collation_name,
+  col_description(c.oid, a.attnum) AS column_comment
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -22,7 +23,7 @@ LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
 LEFT JOIN pg_collation col ON col.oid = a.attcollation
 WHERE a.attnum > 0
   AND NOT a.attisdropped
-  AND c.relkind = 'r'
+  AND c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
 ORDER BY n.nspname, c.relname, a.attnum;

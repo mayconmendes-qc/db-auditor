@@ -52,6 +52,7 @@ type ColumnSnapshotRow struct {
 	IsGenerated        bool      `json:"is_generated"`
 	IdentityGeneration *string   `json:"identity_generation"`
 	CollationName      *string   `json:"collation_name"`
+	Comment            *string   `json:"comment,omitempty"`
 	CollectedAt        time.Time `json:"collected_at"`
 }
 
@@ -196,7 +197,7 @@ func (s *Store) ListColumnSnapshots(ctx context.Context, f InventoryFilter) ([]C
 	query := fmt.Sprintf(`
 SELECT id::text, database_name, schema_name, table_name, column_name,
   ordinal_position, data_type, is_nullable, column_default, is_generated,
-  identity_generation, collation_name, collected_at
+  identity_generation, collation_name, column_comment, collected_at
 FROM column_snapshot
 WHERE %s
 ORDER BY database_name, schema_name, table_name, ordinal_position
@@ -214,7 +215,7 @@ LIMIT $%d OFFSET $%d
 		if err := rows.Scan(
 			&r.ID, &r.DatabaseName, &r.SchemaName, &r.TableName, &r.ColumnName,
 			&r.OrdinalPosition, &r.DataType, &r.IsNullable, &r.ColumnDefault, &r.IsGenerated,
-			&r.IdentityGeneration, &r.CollationName, &r.CollectedAt,
+			&r.IdentityGeneration, &r.CollationName, &r.Comment, &r.CollectedAt,
 		); err != nil {
 			return nil, 0, err
 		}

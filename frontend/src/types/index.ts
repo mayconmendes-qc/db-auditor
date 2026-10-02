@@ -243,7 +243,99 @@ export interface ColumnSnapshot {
   is_generated: boolean;
   identity_generation: string | null;
   collation_name: string | null;
+  comment?: string | null;
   collected_at: string;
+}
+
+export interface ConstraintSnapshot {
+  id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  constraint_name: string;
+  constraint_type: string;
+  constraint_definition: string;
+  is_validated: boolean;
+  is_deferrable: boolean;
+  is_deferred: boolean;
+  constrained_columns: string[];
+  referenced_schema_name?: string | null;
+  referenced_table_name?: string | null;
+  referenced_columns?: string[];
+}
+
+export interface TableAssessment {
+  version: number;
+  run: { id: string; status: string; started_at: string; partial: boolean };
+  table: TableSnapshot & {
+    parent_schema_name?: string | null;
+    parent_table_name?: string | null;
+    tablespace_name?: string | null;
+    persistence?: string | null;
+    rls_enabled: boolean;
+    rls_forced: boolean;
+    comment?: string | null;
+    storage_parameters: string[];
+    n_live_tup: number;
+    n_dead_tup: number;
+    seq_scan: number;
+    idx_scan: number;
+  };
+  summary: {
+    columns: number;
+    constraints: number;
+    indexes: number;
+    findings: number;
+    grants: number;
+    dependencies: number;
+    triggers: number;
+    rls_policies: number;
+    score: number | null;
+    score_status: string;
+  };
+  links: Record<string, string>;
+}
+
+export interface RelationshipNode {
+  database: string;
+  schema: string;
+  table: string;
+}
+export interface RelationshipEdge {
+  from: RelationshipNode;
+  to: RelationshipNode;
+  constraint_name: string;
+  columns: string[];
+  referenced_columns: string[];
+}
+export interface RelationshipGraph {
+  nodes: RelationshipNode[];
+  edges: RelationshipEdge[];
+  truncated: boolean;
+}
+export interface GrantSnapshot {
+  grantee: string;
+  privileges: string[];
+}
+export interface DependencySnapshot {
+  source_schema: string;
+  source_name: string;
+  source_kind: string;
+  target_schema: string;
+  target_name: string;
+  target_kind: string;
+}
+export interface TriggerSnapshot {
+  name: string;
+  enabled: string;
+  timing?: string;
+  events?: string;
+}
+export interface RLSPolicySnapshot {
+  name: string;
+  command?: string;
+  permissive?: string;
+  roles: string[];
 }
 
 export interface IndexSnapshot {

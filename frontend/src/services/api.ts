@@ -12,13 +12,16 @@ import type {
   CompareObjectItem,
   CompareResult,
   ConnectionStatus,
+  ConstraintSnapshot,
   DashboardKPIs,
   DatabaseSnapshot,
+  DependencySnapshot,
   DimensionSnapshot,
   EnvironmentsResponse,
   Finding,
   FindingsTrendResponse,
   FunctionSnapshot,
+  GrantSnapshot,
   HealthResponse,
   HypertableSnapshot,
   IndexSnapshot,
@@ -29,13 +32,17 @@ import type {
   ObjectMapping,
   PagedResponse,
   PolicySnapshot,
+  RelationshipGraph,
+  RLSPolicySnapshot,
   SchemaSnapshot,
   ScopeHistoryPoint,
   SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
+  TableAssessment,
   TableHistoryPoint,
   TableSnapshot,
+  TriggerSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
@@ -103,7 +110,18 @@ function qs(params?: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : "";
 }
 
+function tableScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  table: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}`;
+}
+
 export type InventoryListParams = {
+  audit_run_id?: string;
   limit?: number;
   offset?: number;
   q?: string;
@@ -190,6 +208,91 @@ export const api = {
   tables: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<TableSnapshot>>(
       `/api/v1/environments/${environmentId}/tables${qs(params)}`,
+    ),
+  tableAssessment: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+  ) =>
+    getJSON<TableAssessment>(
+      `${tableScopePath(env, run, database, schema, table)}/assessment`,
+    ),
+  tableGraph: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+  ) =>
+    getJSON<RelationshipGraph>(
+      `${tableScopePath(env, run, database, schema, table)}/graph${qs({ limit })}`,
+    ),
+  tableFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${tableScopePath(env, run, database, schema, table)}/findings${qs({ limit, offset })}`,
+    ),
+  tableGrants: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<GrantSnapshot>>(
+      `${tableScopePath(env, run, database, schema, table)}/grants${qs({ limit, offset })}`,
+    ),
+  tableDependencies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<DependencySnapshot>>(
+      `${tableScopePath(env, run, database, schema, table)}/dependencies${qs({ limit, offset })}`,
+    ),
+  tableTriggers: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<TriggerSnapshot>>(
+      `${tableScopePath(env, run, database, schema, table)}/triggers${qs({ limit, offset })}`,
+    ),
+  tableRLSPolicies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    table: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<RLSPolicySnapshot>>(
+      `${tableScopePath(env, run, database, schema, table)}/rls-policies${qs({ limit, offset })}`,
+    ),
+  constraints: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<ConstraintSnapshot>>(
+      `/api/v1/environments/${environmentId}/constraints${qs(params)}`,
     ),
   tableHistory: (environmentId: string, params: TableScopeParams) =>
     getJSON<ItemsResponse<TableHistoryPoint>>(
