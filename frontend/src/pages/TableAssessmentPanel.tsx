@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  type PageSize,
+  PaginationControls,
+} from "../components/ui/PaginationControls";
 import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { formatError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
+import { fetchAllPages } from "../lib/pagination";
 import { api } from "../services/api";
 import type {
   AuditBaseline,
@@ -60,11 +65,12 @@ function permalink(env: string, t: TableSnapshot): string {
 function useCollection<T>(
   enabled: boolean,
   key: string,
-  load: (offset: number) => Promise<PagedResponse<T>>,
+  load: (offset: number, limit: number) => Promise<PagedResponse<T>>,
 ) {
   const loader = useRef(load);
   loader.current = load;
   const [offset, setOffset] = useState(0);
+  const [size, setSize] = useState<PageSize>(20);
   const [items, setItems] = useState<T[]>([]);
   const [page, setPage] = useState<PageMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,8 +85,19 @@ function useCollection<T>(
     if (!enabled) return;
     let cancelled = false;
     setLoading(true);
-    loader
-      .current(offset)
+    const request =
+      size === "all"
+        ? fetchAllPages(loader.current).then((allItems) => ({
+            items: allItems,
+            page: {
+              total: allItems.length,
+              limit: allItems.length,
+              offset: 0,
+              has_more: false,
+            },
+          }))
+        : loader.current(offset, size);
+    request
       .then((result) => {
         if (!cancelled) {
           setItems(result.items);
@@ -91,6 +108,7 @@ function useCollection<T>(
       .catch((cause: unknown) => {
         if (!cancelled) {
           setItems([]);
+          setPage(null);
           setError(formatError(cause, "Não foi possível carregar esta seção"));
         }
       })
@@ -100,8 +118,8 @@ function useCollection<T>(
     return () => {
       cancelled = true;
     };
-  }, [enabled, key, offset]);
-  return { items, page, error, loading, setOffset };
+  }, [enabled, key, offset, size]);
+  return { items, page, error, loading, offset, size, setOffset, setSize };
 }
 
 function CollectionState({
@@ -123,35 +141,26 @@ function CollectionState({
         {data.error}
       </p>
     );
-  if (data.items.length === 0)
-    return <p className="text-sm text-slate-400">Nenhum item neste run.</p>;
   const page = data.page;
   return (
     <div className="space-y-2">
-      {children}
-      {page && page.total > page.limit ? (
-        <nav aria-label="Paginação" className="flex items-center gap-2 text-xs">
-          <button
-            type="button"
-            disabled={page.offset === 0}
-            onClick={() =>
-              data.setOffset(Math.max(0, page.offset - page.limit))
-            }
-          >
-            Anterior
-          </button>
-          <span>
-            {page.offset + 1}–{Math.min(page.offset + page.limit, page.total)}{" "}
-            de {page.total}
-          </span>
-          <button
-            type="button"
-            disabled={!page.has_more}
-            onClick={() => data.setOffset(page.offset + page.limit)}
-          >
-            Próxima
-          </button>
-        </nav>
+      {data.items.length === 0 ? (
+        <p className="text-sm text-slate-400">Nenhum item neste run.</p>
+      ) : (
+        children
+      )}
+      {page ? (
+        <PaginationControls
+          total={page.total}
+          offset={data.offset}
+          size={data.size}
+          onSizeChange={(next) => {
+            data.setSize(next);
+            data.setOffset(0);
+          }}
+          onOffsetChange={data.setOffset}
+          label="Detalhe da tabela"
+        />
       ) : null}
     </div>
   );
@@ -571,66 +580,66 @@ export function TableAssessmentPanel({
   const columns = useCollection<ColumnSnapshot>(
     assessment !== null && tab === "structure",
     key,
-    (offset) =>
+    (offset, limit) =>
       api.columns(env, {
         audit_run_id: t.audit_run_id,
         database: t.database_name,
         schema: t.schema_name,
         table: t.table_name,
-        limit: 50,
+        limit,
         offset,
       }),
   );
   const constraints = useCollection<ConstraintSnapshot>(
     assessment !== null && tab === "structure",
     key,
-    (offset) =>
+    (offset, limit) =>
       api.constraints(env, {
         audit_run_id: t.audit_run_id,
         database: t.database_name,
         schema: t.schema_name,
         table: t.table_name,
-        limit: 50,
+        limit,
         offset,
       }),
   );
   const indexes = useCollection<IndexSnapshot>(
     assessment !== null && tab === "structure",
     key,
-    (offset) =>
+    (offset, limit) =>
       api.indexes(env, {
         audit_run_id: t.audit_run_id,
         database: t.database_name,
         schema: t.schema_name,
         table: t.table_name,
-        limit: 50,
+        limit,
         offset,
       }),
   );
   const dependencies = useCollection<DependencySnapshot>(
     assessment !== null && tab === "relationships",
     key,
-    (offset) => api.tableDependencies(...args, 50, offset),
+    (offset, limit) => api.tableDependencies(...args, limit, offset),
   );
   const grants = useCollection<GrantSnapshot>(
     assessment !== null && tab === "security",
     key,
-    (offset) => api.tableGrants(...args, 50, offset),
+    (offset, limit) => api.tableGrants(...args, limit, offset),
   );
   const triggers = useCollection<TriggerSnapshot>(
     assessment !== null && tab === "security",
     key,
-    (offset) => api.tableTriggers(...args, 50, offset),
+    (offset, limit) => api.tableTriggers(...args, limit, offset),
   );
   const policies = useCollection<RLSPolicySnapshot>(
     assessment !== null && tab === "security",
     key,
-    (offset) => api.tableRLSPolicies(...args, 50, offset),
+    (offset, limit) => api.tableRLSPolicies(...args, limit, offset),
   );
   const findings = useCollection<Finding>(
     assessment !== null && tab === "recommendations",
     key,
-    (offset) => api.tableFindings(...args, 50, offset),
+    (offset, limit) => api.tableFindings(...args, limit, offset),
   );
   if (!loading && !assessment) {
     return (
@@ -676,18 +685,20 @@ export function TableAssessmentPanel({
         ))}
         {assessment?.run.status === "success" ? (
           <div className="mt-2 flex flex-wrap gap-2">
-            <input
-              aria-label="Token para baseline da tabela"
-              type="password"
-              autoComplete="off"
-              placeholder="Token de operação protegida"
-              value={baselineToken}
-              onChange={(event) => setBaselineToken(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
-            />
+            {!api.hasSession() && (
+              <input
+                aria-label="Token para baseline da tabela"
+                type="password"
+                autoComplete="off"
+                placeholder="Token de operação protegida"
+                value={baselineToken}
+                onChange={(event) => setBaselineToken(event.target.value)}
+                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+            )}
             <button
               type="button"
-              disabled={!baselineToken}
+              disabled={!api.hasRole("operator") && !baselineToken}
               className="rounded border border-slate-500 px-2 py-1 text-cyan-300 disabled:opacity-50"
               onClick={() => void approveBaseline()}
             >

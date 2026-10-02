@@ -48,11 +48,11 @@ Release MVP: `docs/mvp-release.md`.
 
 ### Relatórios PDF (Sprints 18–19)
 
-Defina `AUDITOR_REPORT_API_TOKEN` com pelo menos 32 caracteres aleatórios no `.env` do servidor (por exemplo, gerado com `openssl rand -hex 32`). Sem o token, as rotas de relatório e a aprovação de baseline ficam desativadas. Informe o mesmo valor na página **Relatórios** ou no campo de aprovação de baseline; a interface mantém o valor apenas na memória da aba, sem persisti-lo no navegador. Use HTTPS em produção.
+Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local e suas permissões. Crie o segredo inicial em `secrets/bootstrap-password` e siga o [guia operacional](docs/sprint20-operations.md); não coloque credenciais no frontend. Use HTTPS em produção.
 
 Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; os metadados do histórico são preservados por mais 90 dias. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.
 
-Em uma instalação com volume PostgreSQL existente, aplique as migrações `08_sprint18_history.sql` e `09_sprint19_reports.sql` nesta ordem antes de iniciar a API atualizada. Não reinicialize o volume de produção; veja `backend/migrations/README.md`.
+Em uma instalação com volume PostgreSQL existente, aplique apenas as migrações incrementais ainda pendentes, incluindo `10_sprint20_identity.sql`, antes de iniciar a API atualizada. Não reinicialize o volume de produção; veja [o guia operacional da Sprint 20](docs/sprint20-operations.md) e `backend/migrations/README.md`.
 
 Relatórios só podem ser solicitados para execuções de auditoria concluídas cuja análise de regras também tenha terminado com sucesso. O trabalho registra o hash do catálogo de regras da análise (ou a versão do analisador para execuções anteriores à migração).
 

@@ -628,7 +628,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 			}
 			var all []postgres.ColumnStatFacts
 			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
-				items, err := postgres.CollectColumnStats(cctx, conn, scope, opts.Policy.ColumnStatsSchemas, opts.Policy.ColumnStatsLimit)
+				items, err := postgres.CollectColumnStatsWithBudget(cctx, conn, scope, opts.Policy.ColumnStatsSchemas, opts.Policy.ColumnStatsLimit, opts.Policy.OptionalMaxPlanCost)
 				if err != nil {
 					return err
 				}
@@ -660,7 +660,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 			var all []postgres.WorkloadFacts
 			unavailable := 0
 			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
-				items, available, err := postgres.CollectWorkload(cctx, conn, opts.Policy.WorkloadLimit)
+				items, available, err := postgres.CollectWorkloadWithBudget(cctx, conn, opts.Policy.WorkloadLimit, opts.Policy.OptionalMaxPlanCost)
 				if err != nil {
 					return err
 				}

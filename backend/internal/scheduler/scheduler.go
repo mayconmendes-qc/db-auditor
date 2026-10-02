@@ -35,20 +35,33 @@ type Entry struct {
 
 // Scheduler prevents overlap and tracks next/last execution.
 type Scheduler struct {
-	mu       sync.Mutex
-	runner   Runner
-	entries  map[string]*Entry
-	inFlight map[string]struct{}
-	now      func() time.Time
+	mu            sync.Mutex
+	runner        Runner
+	entries       map[string]*Entry
+	inFlight      map[string]struct{}
+	cancel        map[string]context.CancelFunc
+	maxConcurrent int
+	now           func() time.Time
 }
 
 // New creates a scheduler bound to a runner.
 func New(runner Runner) *Scheduler {
+	return NewWithLimits(runner, 4)
+}
+
+// NewWithLimits bounds concurrent runs across all environments. A single
+// environment cannot overlap even when profiles differ.
+func NewWithLimits(runner Runner, maxConcurrent int) *Scheduler {
+	if maxConcurrent < 1 {
+		maxConcurrent = 1
+	}
 	return &Scheduler{
-		runner:   runner,
-		entries:  make(map[string]*Entry),
-		inFlight: make(map[string]struct{}),
-		now:      time.Now,
+		runner:        runner,
+		entries:       make(map[string]*Entry),
+		inFlight:      make(map[string]struct{}),
+		cancel:        make(map[string]context.CancelFunc),
+		maxConcurrent: maxConcurrent,
+		now:           time.Now,
 	}
 }
 
@@ -102,26 +115,35 @@ func (s *Scheduler) TryRun(ctx context.Context, environmentID, profile string) (
 	if profile == "" {
 		profile = audit.ProfileManual
 	}
-	k := key(environmentID, profile)
+	k := environmentID
 	s.mu.Lock()
 	if _, busy := s.inFlight[k]; busy {
 		s.mu.Unlock()
 		return audit.RunResult{}, fmt.Errorf("run already in progress for %s/%s", environmentID, profile)
 	}
+	if len(s.inFlight) >= s.maxConcurrent {
+		s.mu.Unlock()
+		return audit.RunResult{}, fmt.Errorf("global run concurrency limit reached")
+	}
+	runCtx, cancel := context.WithCancel(ctx)
 	s.inFlight[k] = struct{}{}
+	s.cancel[k] = cancel
 	s.mu.Unlock()
 	defer func() {
+		cancel()
 		s.mu.Lock()
 		delete(s.inFlight, k)
+		delete(s.cancel, k)
 		s.mu.Unlock()
 	}()
 
-	res, err := s.runner.Run(ctx, environmentID, profile)
+	res, err := s.runner.Run(runCtx, environmentID, profile)
 	s.mu.Lock()
-	e, ok := s.entries[k]
+	entryKey := key(environmentID, profile)
+	e, ok := s.entries[entryKey]
 	if !ok {
 		e = &Entry{EnvironmentID: environmentID, Profile: profile, Enabled: profile != audit.ProfileManual}
-		s.entries[k] = e
+		s.entries[entryKey] = e
 	}
 	e.LastRunAt = s.now().UTC()
 	if err == nil {
@@ -134,6 +156,29 @@ func (s *Scheduler) TryRun(ctx context.Context, environmentID, profile string) (
 	}
 	s.mu.Unlock()
 	return res, err
+}
+
+// CancelEnvironment requests cancellation of the currently running collectors.
+func (s *Scheduler) CancelEnvironment(environmentID string) bool {
+	s.mu.Lock()
+	cancel := s.cancel[environmentID]
+	s.mu.Unlock()
+	if cancel == nil {
+		return false
+	}
+	cancel()
+	return true
+}
+
+func (s *Scheduler) CancelDatabase(environmentID, databaseName string) bool {
+	s.mu.Lock()
+	_, active := s.inFlight[environmentID]
+	s.mu.Unlock()
+	if !active {
+		return false
+	}
+	controller, ok := s.runner.(interface{ SkipDatabase(string, string) bool })
+	return ok && controller.SkipDatabase(environmentID, databaseName)
 }
 
 // TickDue runs enabled entries whose NextRunAt is due. Returns number of runs started.

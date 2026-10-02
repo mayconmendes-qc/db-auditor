@@ -12,6 +12,25 @@ type stubRunner struct {
 	calls int
 }
 
+type skipRunner struct {
+	stubRunner
+	skipped string
+}
+
+func (s *skipRunner) SkipDatabase(_, database string) bool { s.skipped = database; return true }
+
+func TestCancelDatabaseOnlyActiveRun(t *testing.T) {
+	r := &skipRunner{}
+	sch := New(r)
+	if sch.CancelDatabase("env", "app") {
+		t.Fatal("idle run accepted")
+	}
+	sch.inFlight["env"] = struct{}{}
+	if !sch.CancelDatabase("env", "app") || r.skipped != "app" {
+		t.Fatal("active database was not cancelled")
+	}
+}
+
 func (s *stubRunner) Run(context.Context, string, string) (audit.RunResult, error) {
 	s.calls++
 	return audit.RunResult{AuditRunID: "r1", Status: audit.RunStatusSuccess}, nil
@@ -21,10 +40,19 @@ func TestOverlapRejected(t *testing.T) {
 	t.Parallel()
 	r := &stubRunner{}
 	sch := New(r)
-	sch.inFlight[key("e1", audit.ProfileDaily)] = struct{}{}
+	sch.inFlight["e1"] = struct{}{}
 	_, err := sch.TryRun(context.Background(), "e1", audit.ProfileDaily)
 	if err == nil {
 		t.Fatal("expected overlap error")
+	}
+}
+
+func TestGlobalLimitRejectsAnotherEnvironment(t *testing.T) {
+	t.Parallel()
+	sch := NewWithLimits(&stubRunner{}, 1)
+	sch.inFlight["e1"] = struct{}{}
+	if _, err := sch.TryRun(context.Background(), "e2", audit.ProfileDaily); err == nil {
+		t.Fatal("expected global concurrency limit")
 	}
 }
 

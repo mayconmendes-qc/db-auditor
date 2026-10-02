@@ -26,6 +26,13 @@ type pdfReportStore interface {
 // token. The frontend supplies it per session; it is never embedded in a build.
 func authorizeReport(w http.ResponseWriter, r *http.Request) bool {
 	w.Header().Set("Cache-Control", "no-store")
+	if user := requestIdentity(r); user != nil {
+		if roleAtLeast(user.Role, "auditor") {
+			return true
+		}
+		writeError(w, http.StatusForbidden, CodeUnavailable, "Permissão de auditor necessária.")
+		return false
+	}
 	expected := os.Getenv("AUDITOR_REPORT_API_TOKEN")
 	if len(expected) < 32 {
 		writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Esta operação exige AUDITOR_REPORT_API_TOKEN no servidor.")
@@ -59,7 +66,11 @@ func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Pedido de relatorio invalido.")
 			return
 		}
-		job, err := backend.CreateReportJob(r.Context(), repository.ReportRequest{EnvironmentID: env, AuditRunID: body.AuditRunID, Type: body.ReportType, Filters: body.Filters, RequestedBy: "report-token", IdempotencyKey: body.IdempotencyKey})
+		requestedBy := "report-token"
+		if user := requestIdentity(r); user != nil {
+			requestedBy = user.Username
+		}
+		job, err := backend.CreateReportJob(r.Context(), repository.ReportRequest{EnvironmentID: env, AuditRunID: body.AuditRunID, Type: body.ReportType, Filters: body.Filters, RequestedBy: requestedBy, IdempotencyKey: body.IdempotencyKey})
 		if errors.Is(err, repository.ErrReportIneligible) {
 			writeError(w, http.StatusConflict, CodeValidation, "Execucao indisponivel para o ambiente.")
 			return

@@ -51,6 +51,7 @@ type HandlerOptions struct {
 	Runner   ManualRunner
 	Analysis AnalysisRunner
 	Targets  map[string]string
+	Auth     AuthStore
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -85,6 +86,10 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)
 	registerConnectionRoutes(mux, store, opts.Targets)
+	if opts.Auth != nil {
+		registerAuthRoutes(mux, opts.Auth, &loginLimiter{byIP: make(map[string]attemptWindow)})
+		return observability.Middleware(authMiddleware(mux, opts.Auth))
+	}
 	return observability.Middleware(mux)
 }
 
@@ -113,6 +118,15 @@ func listEnvironments(store InventoryStore) http.HandlerFunc {
 		}
 		if items == nil {
 			items = []repository.Environment{}
+		}
+		if user := requestIdentity(r); user != nil && user.Role != "operator" {
+			visible := make([]repository.Environment, 0, len(items))
+			for _, item := range items {
+				if hasEnvironment(user, item.ID) {
+					visible = append(visible, item)
+				}
+			}
+			items = visible
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	}

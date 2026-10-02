@@ -152,6 +152,23 @@ func (s *Store) ListFindings(ctx context.Context, environmentID, findingType, se
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
+	return s.listFindings(ctx, environmentID, findingType, severity, status, limit, 0)
+}
+
+func (s *Store) ListFindingsPage(ctx context.Context, environmentID, findingType, severity, status string, limit, offset int) ([]Finding, int, error) {
+	if limit < 1 || limit > 500 || offset < 0 {
+		return nil, 0, fmt.Errorf("invalid pagination")
+	}
+	var total int
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM finding WHERE ($1='' OR environment_id=$1::uuid) AND ($2='' OR finding_type=$2) AND ($3='' OR severity=$3) AND ($4='' OR status=$4)`, environmentID, findingType, severity, status).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err := s.listFindings(ctx, environmentID, findingType, severity, status, limit, offset)
+	return items, total, err
+}
+
+func (s *Store) listFindings(ctx context.Context, environmentID, findingType, severity, status string, limit, offset int) ([]Finding, error) {
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, environment_id::text, audit_run_id::text,
   finding_type, severity, status, title, summary,
@@ -164,9 +181,9 @@ WHERE ($1 = '' OR environment_id = $1::uuid)
   AND ($2 = '' OR finding_type = $2)
   AND ($3 = '' OR severity = $3)
   AND ($4 = '' OR status = $4)
-ORDER BY last_seen_at DESC
-LIMIT $5
-`, environmentID, findingType, severity, status, limit)
+ORDER BY last_seen_at DESC,id DESC
+LIMIT $5 OFFSET $6
+`, environmentID, findingType, severity, status, limit, offset)
 	if err != nil {
 		return nil, err
 	}

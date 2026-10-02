@@ -26,6 +26,8 @@ services:
     env_file:
       - path: .env
         required: false
+    volumes:
+      - ./secrets:/run/secrets:ro
     environment:
       AUDITOR_HTTP_ADDRESS: :8080
       AUDITOR_DATABASE_URL: postgresql://${POSTGRES_USER:-auditor}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-db_auditor}?sslmode=disable

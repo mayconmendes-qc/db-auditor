@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -99,6 +100,10 @@ func referencedObjects(normalized string) []string {
 }
 
 func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope, schemas []string, limit int) ([]ColumnStatFacts, error) {
+	return CollectColumnStatsWithBudget(ctx, conn, scope, schemas, limit, 0)
+}
+
+func CollectColumnStatsWithBudget(ctx context.Context, conn *pgx.Conn, scope config.Scope, schemas []string, limit int, maxPlanCost float64) ([]ColumnStatFacts, error) {
 	if limit <= 0 || limit > 50000 {
 		limit = 5000
 	}
@@ -120,6 +125,9 @@ func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope,
 		if len(allowed) == 0 {
 			return []ColumnStatFacts{}, nil
 		}
+	}
+	if err := checkPlanBudget(ctx, conn, maxPlanCost, columnStatsSQL, allowed, scope.SchemaDenylist, limit); err != nil {
+		return nil, err
 	}
 	rows, err := conn.Query(ctx, columnStatsSQL, allowed, scope.SchemaDenylist, limit)
 	if err != nil {
@@ -144,6 +152,10 @@ func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope,
 }
 
 func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]WorkloadFacts, bool, error) {
+	return CollectWorkloadWithBudget(ctx, conn, limit, 0)
+}
+
+func CollectWorkloadWithBudget(ctx context.Context, conn *pgx.Conn, limit int, maxPlanCost float64) ([]WorkloadFacts, bool, error) {
 	var version string
 	if err := conn.QueryRow(ctx, workloadAvailableSQL).Scan(&version); err != nil {
 		return nil, false, fmt.Errorf("detect pg_stat_statements: %w", err)
@@ -153,6 +165,9 @@ func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]Workload
 	}
 	if limit <= 0 || limit > 5000 {
 		limit = 500
+	}
+	if err := checkPlanBudget(ctx, conn, maxPlanCost, workloadSQL, limit); err != nil {
+		return nil, true, err
 	}
 	// pg_stat_database has an independent reset clock. If the extension's
 	// own clock cannot be read, retain an unknown observation start.
@@ -189,4 +204,26 @@ func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]Workload
 		out = append(out, fact)
 	}
 	return out, true, rows.Err()
+}
+
+func checkPlanBudget(ctx context.Context, conn *pgx.Conn, maxCost float64, sql string, args ...any) error {
+	if maxCost <= 0 {
+		return nil
+	}
+	var raw []byte
+	if err := conn.QueryRow(ctx, "EXPLAIN (FORMAT JSON) "+sql, args...).Scan(&raw); err != nil {
+		return fmt.Errorf("optional collector plan unavailable: %w", err)
+	}
+	var plan []struct {
+		Plan struct {
+			TotalCost float64 `json:"Total Cost"`
+		} `json:"Plan"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil || len(plan) != 1 {
+		return fmt.Errorf("optional collector plan invalid")
+	}
+	if plan[0].Plan.TotalCost > maxCost {
+		return fmt.Errorf("optional collector plan cost %.0f exceeds budget %.0f", plan[0].Plan.TotalCost, maxCost)
+	}
+	return nil
 }
