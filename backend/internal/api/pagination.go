@@ -64,6 +64,25 @@ func parseInventoryQuery(r *http.Request) InventoryQuery {
 	return q
 }
 
+func parseListPage(r *http.Request, defaultLimit int) (int, int, bool) {
+	limit, offset := defaultLimit, 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > maxPageLimit {
+			return 0, 0, false
+		}
+		limit = parsed
+	}
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > 1000000000 {
+			return 0, 0, false
+		}
+		offset = parsed
+	}
+	return limit, offset, true
+}
+
 func pageMeta(limit, offset, total int) PageMeta {
 	return PageMeta{
 		Limit:   limit,

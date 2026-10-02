@@ -58,35 +58,57 @@ const API_BASE = (
 ).replace(/\/$/, "");
 
 let reportToken = "";
+let sessionToken = "";
+let sessionRole = "";
+
+function authHeaders(): Record<string, string> {
+  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+}
+
+function handleSessionExpiry(response: Response, path: string): void {
+  if (
+    response.status === 401 &&
+    path !== "/api/v1/auth/login" &&
+    sessionToken
+  ) {
+    sessionToken = "";
+    sessionRole = "";
+    window.dispatchEvent(new Event("auditor:session-expired"));
+  }
+}
 
 async function reportRequest<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  if (!reportToken)
+  if (!reportToken && !sessionToken)
     throw new Error("Informe o token de relatórios para esta sessão.");
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${reportToken}`,
+      Authorization: `Bearer ${sessionToken || reportToken}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
-  if (!response.ok) throw await toApiError(response, path);
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
   return response.json() as Promise<T>;
 }
 
 async function getJSON<T>(path: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`);
+    response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -97,13 +119,14 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -114,13 +137,14 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -175,6 +199,29 @@ export type TableScopeParams = {
 
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
+  hasSession: () => Boolean(sessionToken),
+  hasRole: (minimum: "auditor" | "operator") =>
+    ({ viewer: 1, auditor: 2, operator: 3 })[
+      sessionRole as "viewer" | "auditor" | "operator"
+    ] >= { auditor: 2, operator: 3 }[minimum],
+  login: async (username: string, password: string) => {
+    const result = await postJSON<{
+      token: string;
+      user: { username: string; role: string };
+    }>("/api/v1/auth/login", { username, password });
+    sessionToken = result.token;
+    sessionRole = result.user.role;
+    return result.user;
+  },
+  logout: async () => {
+    try {
+      if (sessionToken) await postJSON("/api/v1/auth/logout", {});
+    } finally {
+      sessionToken = "";
+      sessionRole = "";
+      reportToken = "";
+    }
+  },
   setReportToken: (value: string) => {
     reportToken = value;
   },
@@ -207,14 +254,17 @@ export const api = {
     environmentId: string,
     id: string,
   ): Promise<Blob> => {
-    if (!reportToken)
+    if (!reportToken && !sessionToken)
       throw new Error("Informe o token de relatórios para esta sessão.");
     const path = `/api/v1/environments/${environmentId}/reports/${id}/download`;
     const response = await fetch(`${API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${reportToken}` },
+      headers: { Authorization: `Bearer ${sessionToken || reportToken}` },
       cache: "no-store",
     });
-    if (!response.ok) throw await toApiError(response, path);
+    if (!response.ok) {
+      handleSessionExpiry(response, path);
+      throw await toApiError(response, path);
+    }
     return new Blob([await response.arrayBuffer()], {
       type: "application/pdf",
     });
@@ -425,7 +475,21 @@ export const api = {
       `/api/v1/audit-runs${s ? `?${s}` : ""}`,
     );
   },
+  auditRunsPage: (params: {
+    environment_id?: string;
+    profile?: string;
+    status?: string;
+    limit: number;
+    offset: number;
+  }) => getJSON<PagedResponse<AuditRun>>(`/api/v1/audit-runs${qs(params)}`),
   auditRun: (id: string) => getJSON<AuditRun>(`/api/v1/audit-runs/${id}`),
+  cancelAuditRun: (id: string) =>
+    postJSON<{ status: string }>(`/api/v1/audit-runs/${id}/cancel`, {}),
+  cancelAuditDatabase: (id: string, database: string) =>
+    postJSON<{ status: string }>(
+      `/api/v1/audit-runs/${id}/databases/${encodeURIComponent(database)}/cancel`,
+      {},
+    ),
   auditRunCollectors: (id: string) =>
     getJSON<ItemsResponse<CollectorRun>>(`/api/v1/audit-runs/${id}/collectors`),
   auditRunCoverage: (id: string) =>
@@ -551,6 +615,26 @@ export const api = {
       `/api/v1/findings${s ? `?${s}` : ""}`,
     );
   },
+  findingsPage: (params: {
+    environment_id?: string;
+    finding_type?: string;
+    severity?: string;
+    status?: string;
+    limit: number;
+    offset: number;
+  }) => getJSON<PagedResponse<Finding>>(`/api/v1/findings${qs(params)}`),
+  findingsCategoryPage: (
+    category: "security" | "performance",
+    params: {
+      environment_id?: string;
+      status?: string;
+      limit: number;
+      offset: number;
+    },
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `/api/v1/finding-categories/${category}${qs(params)}`,
+    ),
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
   findingTimeline: (id: string) =>
     getJSON<ItemsResponse<FindingEvent>>(`/api/v1/findings/${id}/timeline`),

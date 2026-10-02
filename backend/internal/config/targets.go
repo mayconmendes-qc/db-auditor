@@ -30,7 +30,7 @@ func TargetSlotHint(environmentID string) string {
 }
 
 // BuildTargetDSN assembles a PostgreSQL URI from discrete fields.
-// Empty port defaults to 5432; empty sslmode defaults to require.
+// Empty port defaults to 5432; empty sslmode defaults to verify-full.
 func BuildTargetDSN(host, port, database, user, password, sslmode string) (string, error) {
 	host = strings.TrimSpace(host)
 	database = strings.TrimSpace(database)
@@ -53,7 +53,7 @@ func BuildTargetDSN(host, port, database, user, password, sslmode string) (strin
 		return "", fmt.Errorf("port must be numeric")
 	}
 	if sslmode == "" {
-		sslmode = "require"
+		sslmode = "verify-full"
 	}
 	u := &url.URL{
 		Scheme: "postgresql",
@@ -77,7 +77,7 @@ func envTrim(key string) string {
 
 // loadDiscreteTargetDSNs reads AUDITOR_TARGET_N_* slots (N=1..maxTargetSlots).
 // Required per slot: ENVIRONMENT_ID, HOST, DATABASE, USER.
-// Optional: PORT (default 5432), PASSWORD, SSLMODE (default require).
+// Optional: PORT (default 5432), PASSWORD, SSLMODE (default verify-full).
 func loadDiscreteTargetDSNs() map[string]string {
 	out := make(map[string]string)
 	for n := 1; n <= maxTargetSlots; n++ {
@@ -140,6 +140,9 @@ func DSNForEnvironment(targets map[string]string, environmentID string) string {
 		if dsn, ok := targets[id]; ok && dsn != "" {
 			return dsn
 		}
+		// A configured registry is authoritative: never discover an unvalidated
+		// environment variable after startup.
+		return ""
 	}
 	// Rebuild from env (covers nil map and vars set after process start in tests).
 	m := LoadTargetDSNs()

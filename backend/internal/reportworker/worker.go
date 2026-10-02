@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/report"
@@ -56,6 +57,7 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)
 	}
+	document.RedactMetadata(os.Getenv("AUDITOR_REPORT_REDACT_METADATA"))
 	pdf, err := report.RenderPDF(document)
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)
