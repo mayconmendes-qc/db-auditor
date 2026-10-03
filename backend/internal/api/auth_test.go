@@ -49,6 +49,8 @@ func TestAuthMiddlewareRoleAndEnvironment(t *testing.T) {
 		{"auditor_cross_env", "auditor", "PATCH", "/api/v1/findings/" + resource, other, 403},
 		{"viewer_logout", "viewer", "POST", "/api/v1/auth/logout", "", 200},
 		{"viewer_admin", "viewer", "POST", "/api/v1/auth/users", "", 403},
+		{"viewer_pdf", "viewer", "GET", "/api/v1/environments/" + allowed + "/reports/" + resource + "/download", "", 403},
+		{"auditor_pdf", "auditor", "GET", "/api/v1/environments/" + allowed + "/reports/" + resource + "/download", "", 200},
 		{"mapping_query_cannot_bypass_scope", "viewer", "GET", "/api/v1/mappings?environment_id=" + allowed, "", 403},
 		{"status_query_cannot_bypass_scope", "viewer", "GET", "/api/v1/status?environment_id=" + allowed, "", 403},
 	} {

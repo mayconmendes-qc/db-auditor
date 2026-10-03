@@ -877,3 +877,15 @@ CREATE INDEX audit_run_latest_idx ON audit_run (environment_id,started_at DESC,i
 
 DROP INDEX finding_dedup_idx;
 CREATE UNIQUE INDEX finding_dedup_version_idx ON finding (environment_id, dedup_key, rule_version);
+
+CREATE TABLE audit_schedule (
+  environment_id uuid NOT NULL REFERENCES audit_environment(id) ON DELETE CASCADE,
+  profile text NOT NULL CHECK (profile IN ('fast', 'daily', 'weekly', 'monthly')),
+  enabled boolean NOT NULL DEFAULT true,
+  next_run_at timestamptz NOT NULL,
+  last_status text,
+  last_run_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (environment_id, profile)
+);
+

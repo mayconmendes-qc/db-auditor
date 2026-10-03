@@ -33,10 +33,17 @@ type Entry struct {
 	NextRunAt     time.Time `json:"next_run_at,omitempty"`
 }
 
+// ScheduleStore persists agenda rows across process restarts.
+type ScheduleStore interface {
+	ListSchedules(ctx context.Context) ([]Entry, error)
+	SaveSchedule(ctx context.Context, entry Entry) error
+}
+
 // Scheduler prevents overlap and tracks next/last execution.
 type Scheduler struct {
 	mu            sync.Mutex
 	runner        Runner
+	store         ScheduleStore
 	entries       map[string]*Entry
 	inFlight      map[string]struct{}
 	cancel        map[string]context.CancelFunc
@@ -65,12 +72,36 @@ func NewWithLimits(runner Runner, maxConcurrent int) *Scheduler {
 	}
 }
 
+// UseStore attaches the database that survives a restart.
+func (s *Scheduler) UseStore(store ScheduleStore) {
+	s.store = store
+}
+
+// Load replaces in-memory entries with the persisted agenda.
+func (s *Scheduler) Load(ctx context.Context) error {
+	if s.store == nil {
+		return nil
+	}
+	rows, err := s.store.ListSchedules(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries = make(map[string]*Entry, len(rows))
+	for i := range rows {
+		row := rows[i]
+		s.entries[key(row.EnvironmentID, row.Profile)] = &row
+	}
+	return nil
+}
+
 func key(environmentID, profile string) string {
 	return environmentID + "|" + profile
 }
 
 // UpsertSchedule enables a profile for an environment and sets next run.
-func (s *Scheduler) UpsertSchedule(environmentID, profile string, enabled bool) (*Entry, error) {
+func (s *Scheduler) UpsertSchedule(ctx context.Context, environmentID, profile string, enabled bool) (*Entry, error) {
 	if environmentID == "" {
 		return nil, fmt.Errorf("environment id required")
 	}
@@ -78,10 +109,14 @@ func (s *Scheduler) UpsertSchedule(environmentID, profile string, enabled bool) 
 		return nil, fmt.Errorf("unknown profile %q", profile)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	k := key(environmentID, profile)
-	e, ok := s.entries[k]
-	if !ok {
+	prev, had := s.entries[k]
+	var previous Entry
+	if had {
+		previous = *prev
+	}
+	e := prev
+	if e == nil {
 		e = &Entry{EnvironmentID: environmentID, Profile: profile}
 		s.entries[k] = e
 	}
@@ -92,6 +127,17 @@ func (s *Scheduler) UpsertSchedule(environmentID, profile string, enabled bool) 
 		}
 	}
 	copy := *e
+	s.mu.Unlock()
+	if err := s.persist(ctx, copy); err != nil {
+		s.mu.Lock()
+		if had {
+			s.entries[k] = &previous
+		} else {
+			delete(s.entries, k)
+		}
+		s.mu.Unlock()
+		return nil, err
+	}
 	return &copy, nil
 }
 
@@ -154,8 +200,17 @@ func (s *Scheduler) TryRun(ctx context.Context, environmentID, profile string) (
 	if d, ok := ProfileInterval[profile]; ok {
 		e.NextRunAt = e.LastRunAt.Add(d)
 	}
+	copy := *e
 	s.mu.Unlock()
+	_ = s.persist(ctx, copy)
 	return res, err
+}
+
+func (s *Scheduler) persist(ctx context.Context, entry Entry) error {
+	if s.store == nil || entry.Profile == audit.ProfileManual {
+		return nil
+	}
+	return s.store.SaveSchedule(ctx, entry)
 }
 
 // CancelEnvironment requests cancellation of the currently running collectors.

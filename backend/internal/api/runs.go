@@ -8,7 +8,6 @@ import (
 
 	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
-	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
 )
 
 // RunService exposes audit run operations to HTTP handlers.
@@ -40,6 +39,7 @@ func registerRunRoutes(mux *http.ServeMux, runs RunService, runner ManualRunner,
 	mux.HandleFunc("POST /api/v1/audit-runs/{id}/cancel", cancelAuditRun(runs, runner))
 	mux.HandleFunc("POST /api/v1/audit-runs/{id}/databases/{database}/cancel", cancelAuditDatabase(runs, runner))
 	mux.HandleFunc("POST /api/v1/audit-runs", triggerAuditRun(runner))
+	registerScheduleRoutes(mux, runner)
 }
 
 func cancelAuditDatabase(runs RunService, runner ManualRunner) http.HandlerFunc {
@@ -216,6 +216,3 @@ func triggerAuditRun(runner ManualRunner) http.HandlerFunc {
 		writeJSON(w, http.StatusAccepted, res)
 	}
 }
-
-// Ensure scheduler import used when wiring schedules later.
-var _ = scheduler.ProfileInterval
