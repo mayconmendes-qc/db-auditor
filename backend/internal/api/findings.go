@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
@@ -36,6 +35,31 @@ type AnalysisRunner interface {
 
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis AnalysisRunner) {
 	mux.HandleFunc("GET /api/v1/findings", listFindings(store))
+	mux.HandleFunc("GET /api/v1/finding-categories/{category}", func(w http.ResponseWriter, r *http.Request) {
+		backend, ok := store.(interface {
+			ListFindingsCategoryPage(context.Context, string, string, string, int, int) ([]repository.Finding, int, error)
+		})
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Listagem indisponível.")
+			return
+		}
+		category := r.PathValue("category")
+		if category != "security" && category != "performance" {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Categoria inválida.")
+			return
+		}
+		limit, offset, valid := parseListPage(r, 20)
+		if !valid {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Paginação inválida.")
+			return
+		}
+		items, total, err := backend.ListFindingsCategoryPage(r.Context(), r.URL.Query().Get("environment_id"), category, r.URL.Query().Get("status"), limit, offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao listar findings.")
+			return
+		}
+		writePage(w, items, limit, offset, total)
+	})
 	mux.HandleFunc("GET /api/v1/findings/{id}", getFinding(store))
 	mux.HandleFunc("GET /api/v1/findings/{id}/timeline", func(w http.ResponseWriter, r *http.Request) {
 		backend, ok := store.(interface {
@@ -64,7 +88,22 @@ func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis Anal
 func listFindings(store FindingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
+		limit, offset, valid := parseListPage(r, 100)
+		if !valid {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Paginação inválida.")
+			return
+		}
+		if backend, ok := store.(interface {
+			ListFindingsPage(context.Context, string, string, string, string, int, int) ([]repository.Finding, int, error)
+		}); ok {
+			items, total, err := backend.ListFindingsPage(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), limit, offset)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")
+				return
+			}
+			writePage(w, items, limit, offset, total)
+			return
+		}
 		items, err := store.ListFindings(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")

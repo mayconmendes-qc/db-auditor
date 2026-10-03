@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +31,14 @@ func main() {
 	}
 
 	targets := config.LoadTargetDSNs()
+	if err := config.ApplyTargetStatementTimeout(targets, cfg.TargetStatementTimeout); err != nil {
+		slog.Error("invalid target query budget", "error", err)
+		os.Exit(1)
+	}
+	if err := config.ValidateTargetDSNs(targets); err != nil {
+		slog.Error("unsafe target configuration", "error", err)
+		os.Exit(1)
+	}
 	if len(targets) == 0 {
 		slog.Warn("nenhum AUDITOR_TARGET_DSN_* configurado; execuções de auditoria falharão até definir DSNs somente leitura")
 	} else {
@@ -47,6 +56,28 @@ func main() {
 	defer pool.Close()
 
 	store := repository.NewStore(pool)
+	hasUsers, err := store.HasAuditorUsers(ctx)
+	if err != nil {
+		slog.Error("identity schema unavailable; apply Sprint 20 migration", "error", err)
+		os.Exit(1)
+	}
+	if !hasUsers {
+		secretPath := os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD_FILE")
+		username := os.Getenv("AUDITOR_BOOTSTRAP_USER")
+		if secretPath == "" || username == "" {
+			slog.Error("first start requires AUDITOR_BOOTSTRAP_USER and AUDITOR_BOOTSTRAP_PASSWORD_FILE")
+			os.Exit(1)
+		}
+		secret, err := os.ReadFile(secretPath)
+		if err != nil {
+			slog.Error("could not read bootstrap secret", "error", err)
+			os.Exit(1)
+		}
+		if err := store.BootstrapOperator(ctx, username, strings.TrimRight(string(secret), "\r\n")); err != nil {
+			slog.Error("could not bootstrap operator", "error", err)
+			os.Exit(1)
+		}
+	}
 	if err := store.EnsureRuleCatalog(ctx); err != nil {
 		slog.Error("could not initialize rule catalog", "error", err)
 		os.Exit(1)
@@ -63,12 +94,14 @@ func main() {
 	audit.AttachStructuralCollectors(registry, liveOpts)
 	analysisService := analyzer.NewService(store, store, "1.0.0")
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:    "0.14.0",
-		CollectorVersion:  "1.1.0",
-		MaxWorkers:        4,
-		AnalysisProcessor: analysisService,
+		ServiceVersion:           "0.14.0",
+		CollectorVersion:         "1.1.0",
+		MaxWorkers:               cfg.MaxCollectorWorkers,
+		MaxDatabaseConnections:   cfg.MaxDatabaseConnections,
+		OptionalCollectorTimeout: cfg.OptionalCollectorTimeout,
+		AnalysisProcessor:        analysisService,
 	})
-	sch := scheduler.New(runner)
+	sch := scheduler.NewWithLimits(runner, cfg.MaxConcurrentRuns)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddress,
@@ -76,6 +109,7 @@ func main() {
 			Runner:   sch,
 			Analysis: analysisService,
 			Targets:  targets,
+			Auth:     store,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -91,6 +125,21 @@ func main() {
 				n := sch.TickDue(ctx)
 				if n > 0 {
 					slog.Info("scheduler triggered runs", "count", n)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := store.DeleteExpiredAuditorSessions(ctx); err != nil {
+					slog.Warn("could not remove expired sessions", "error", err)
 				}
 			}
 		}

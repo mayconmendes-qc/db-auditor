@@ -44,6 +44,7 @@ export interface ShellProps {
   children: ReactNode;
   activeSection?: NavigationSection;
   onNavigate?: (section: NavigationSection) => void;
+  onLogout?: () => void;
 }
 
 function ThemeToggle() {
@@ -118,6 +119,7 @@ export function Shell({
   children,
   activeSection = "Dashboard",
   onNavigate,
+  onLogout,
 }: ShellProps) {
   const { environments, environmentId, setEnvironmentId } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
@@ -154,7 +156,7 @@ export function Shell({
         }
       });
     api
-      .analyticsKpis()
+      .analyticsKpis({ environment_id: environmentId || undefined })
       .then((k) => {
         if (!cancelled) {
           setOpenFindings(k.open_findings ?? 0);
@@ -166,7 +168,10 @@ export function Shell({
         }
       });
     api
-      .auditRuns({ status: "running" })
+      .auditRuns({
+        status: "running",
+        environment_id: environmentId || undefined,
+      })
       .then((res) => {
         if (!cancelled) {
           setRunningRuns(res.items.length);
@@ -180,7 +185,7 @@ export function Shell({
     return () => {
       cancelled = true;
     };
-  }, [activeSection]);
+  }, [activeSection, environmentId]);
 
   const { title: healthTitle, short: healthShort } = healthLabel(
     apiOk,
@@ -197,7 +202,7 @@ export function Shell({
         : "bg-rose-400";
 
   const envOptions = [
-    { value: "", label: "Todos" },
+    ...(api.hasRole("operator") ? [{ value: "", label: "Todos" }] : []),
     ...environments.map((env) => ({ value: env.id, label: env.name })),
   ];
 
@@ -238,43 +243,52 @@ export function Shell({
                 {group.label}
               </p>
               <div className="grid grid-cols-1 gap-0.5">
-                {group.items.map((section) => {
-                  const isActive = section === activeSection;
-                  const count = badgeFor(section);
-                  return (
-                    <button
-                      key={section}
-                      type="button"
-                      onClick={() => onNavigate?.(section)}
-                      className={
-                        isActive
-                          ? "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                          : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                      }
-                      style={
-                        isActive
-                          ? {
-                              backgroundColor: "var(--nav-active-bg)",
-                              color: "var(--nav-active-fg)",
+                {group.items
+                  .filter(
+                    (section) =>
+                      api.hasRole("operator") ||
+                      (!["Mapeamentos", "Desvio de schema", "Status"].includes(
+                        section,
+                      ) &&
+                        (section !== "Relatórios" || api.hasRole("auditor"))),
+                  )
+                  .map((section) => {
+                    const isActive = section === activeSection;
+                    const count = badgeFor(section);
+                    return (
+                      <button
+                        key={section}
+                        type="button"
+                        onClick={() => onNavigate?.(section)}
+                        className={
+                          isActive
+                            ? "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                            : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                        }
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: "var(--nav-active-bg)",
+                                color: "var(--nav-active-fg)",
+                              }
+                            : undefined
+                        }
+                      >
+                        <span className="min-w-0 truncate">{section}</span>
+                        {count != null ? (
+                          <span
+                            className={
+                              isActive
+                                ? "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] opacity-70"
+                                : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
                             }
-                          : undefined
-                      }
-                    >
-                      <span className="min-w-0 truncate">{section}</span>
-                      {count != null ? (
-                        <span
-                          className={
-                            isActive
-                              ? "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] opacity-70"
-                              : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
-                          }
-                        >
-                          {count > 99 ? "99+" : count}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                          >
+                            {count > 99 ? "99+" : count}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           ))}
@@ -301,6 +315,15 @@ export function Shell({
             </span>
           </button>
           <ThemeToggle />
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="text-xs text-slate-300 hover:text-white"
+            >
+              Sair
+            </button>
+          ) : null}
         </div>
       </aside>
 
