@@ -20,6 +20,7 @@ type ContinuousAggregateFacts struct {
 	CompressionEnabled        bool   `json:"compression_enabled"`
 	Finalized                 *bool  `json:"finalized,omitempty"`
 	ViewDefinition            string `json:"view_definition"`
+	LagInterval               string `json:"lag_interval,omitempty"`
 }
 
 // CollectContinuousAggregates lists CAGGs and applies schema scope on view schema.
@@ -66,5 +67,41 @@ func CollectContinuousAggregates(ctx context.Context, conn *pgx.Conn, scope conf
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("cagg collector rows: %w", err)
 	}
+	attachCAGGLag(ctx, conn, out)
 	return out, nil
+}
+
+func attachCAGGLag(ctx context.Context, conn *pgx.Conn, items []ContinuousAggregateFacts) {
+	if len(items) == 0 {
+		return
+	}
+	queries := []string{
+		`SELECT ca.view_schema, ca.view_name, COALESCE((now() - _timescaledb_functions.to_timestamp(_timescaledb_functions.cagg_watermark(format('%I.%I', ca.view_schema, ca.view_name)::regclass)))::text, '') FROM timescaledb_information.continuous_aggregates ca`,
+		`SELECT ca.view_schema, ca.view_name, COALESCE((now() - _timescaledb_internal.to_timestamp(_timescaledb_internal.cagg_watermark(format('%I.%I', ca.view_schema, ca.view_name)::regclass)))::text, '') FROM timescaledb_information.continuous_aggregates ca`,
+	}
+	for _, query := range queries {
+		rows, err := conn.Query(ctx, query)
+		if err != nil {
+			continue
+		}
+		lag := map[string]string{}
+		for rows.Next() {
+			var schema, name, value string
+			if err = rows.Scan(&schema, &name, &value); err != nil {
+				rows.Close()
+				lag = nil
+				break
+			}
+			lag[schema+"."+name] = value
+		}
+		if rows.Err() != nil || lag == nil {
+			rows.Close()
+			continue
+		}
+		rows.Close()
+		for i := range items {
+			items[i].LagInterval = lag[items[i].SchemaName+"."+items[i].ViewName]
+		}
+		return
+	}
 }

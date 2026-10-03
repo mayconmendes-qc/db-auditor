@@ -81,6 +81,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerRunRoutes(mux, store, opts.Runner, opts.Analysis)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
+	registerServerCompare(mux, store)
 	registerFindingRoutes(mux, store, opts.Analysis)
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)

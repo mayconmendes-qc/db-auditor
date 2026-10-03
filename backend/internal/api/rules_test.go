@@ -30,7 +30,16 @@ func TestRulesEndpointReturnsVersionedCatalog(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Schema != "public" || len(body.Items) != len(analyzer.Catalog()) || body.Items[0].Version != "1.0.0" {
-		t.Fatalf("invalid rules response: %#v", body)
+	if body.Schema != "public" || len(body.Items) != len(analyzer.Catalog()) {
+		t.Fatalf("invalid rules response: schema=%s items=%d", body.Schema, len(body.Items))
+	}
+	var storage string
+	for _, item := range body.Items {
+		if item.ID == "storage.large_table" {
+			storage = item.Version
+		}
+	}
+	if storage != "1.0.0" {
+		t.Fatalf("storage rule version %s", storage)
 	}
 }

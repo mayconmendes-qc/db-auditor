@@ -105,7 +105,14 @@ function boolLabel(v: boolean | null | undefined): string {
 }
 
 export function InventoryPage() {
-  const { environmentId, environments, setSection } = useApp();
+  const {
+    environmentId,
+    environments,
+    setSection,
+    inventory,
+    search,
+    openInventory,
+  } = useApp();
   const envId = environmentId;
 
   const [error, setError] = useState<string | null>(null);
@@ -429,14 +436,14 @@ export function InventoryPage() {
     const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
     openRow(key);
     setDeepLinkedTable(t);
-    const linkQuery = new URLSearchParams({
-      env: envId ?? t.environment_id,
-      run: t.audit_run_id,
-      database: t.database_name,
-      schema: t.schema_name,
-      table: t.table_name,
-    });
-    window.history.replaceState(null, "", `#/inventory?${linkQuery}`);
+    openInventory(
+      {
+        database: t.database_name,
+        schema: t.schema_name,
+        table: t.table_name,
+      },
+      t.audit_run_id,
+    );
     if (!envId) return;
     const scope = {
       database: t.database_name,
@@ -461,15 +468,25 @@ export function InventoryPage() {
 
   useEffect(() => {
     if (!envId || !page || loading) return;
-    const raw = window.location.hash;
-    if (!raw.startsWith("#/inventory?")) return;
-    const query = new URLSearchParams(raw.split("?")[1]);
-    const run = query.get("run"),
-      database = query.get("database"),
-      schema = query.get("schema"),
-      table = query.get("table");
-    if (!run || !database || !schema || !table || query.get("env") !== envId)
-      return;
+    const raw = window.location.hash.replace(/^#\/?/, "");
+    const [pathPart, queryPart] = raw.split("?");
+    const parts = pathPart.split("/").filter(Boolean);
+    const query = new URLSearchParams(queryPart || "");
+    let database = query.get("database");
+    let schema = query.get("schema");
+    let table = query.get("table");
+    if (parts[0] === "inventory" && parts.length >= 4) {
+      database = decodeURIComponent(parts[1]);
+      schema = decodeURIComponent(parts[2]);
+      table = decodeURIComponent(parts[3]);
+    } else if (inventory) {
+      database = inventory.database;
+      schema = inventory.schema;
+      table = inventory.table;
+    }
+    const run = query.get("run") || search.run;
+    if (!run || !database || !schema || !table) return;
+    if (query.get("env") && query.get("env") !== envId) return;
     const key = `${envId}/${run}/${database}/${schema}/${table}`;
     if (openedDeepLinkRef.current === key) return;
     openedDeepLinkRef.current = key;
@@ -483,7 +500,7 @@ export function InventoryPage() {
       );
     // The link is opened after the inventory page is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [envId, page, loading]);
+  }, [envId, page, loading, inventory, search.run]);
 
   const selectedTable =
     (deepLinkedTable &&

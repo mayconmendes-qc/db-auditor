@@ -66,20 +66,22 @@ type Finding struct {
 
 // SnapshotFacts is the read-only input analyzers consume.
 type SnapshotFacts struct {
-	EnvironmentID string
-	AuditRunID    string
-	RulePolicies  []RulePolicy
-	Tables        []TableFact
-	Columns       []ColumnFact
-	Constraints   []ConstraintFact
-	Sequences     []SequenceFact
-	Indexes       []IndexFact
-	Hypertables   []HypertableFact
-	Chunks        []ChunkFact
-	CAGGs         []CAGGFact
-	Policies      []PolicyFact
-	Jobs          []JobFact
-	Activity      []ActivityFact
+	EnvironmentID   string
+	AuditRunID      string
+	RulePolicies    []RulePolicy
+	Tables          []TableFact
+	Columns         []ColumnFact
+	Constraints     []ConstraintFact
+	Sequences       []SequenceFact
+	Indexes         []IndexFact
+	Hypertables     []HypertableFact
+	Chunks          []ChunkFact
+	ChunkStats      []ChunkStat
+	ChunksTruncated bool
+	CAGGs           []CAGGFact
+	Policies        []PolicyFact
+	Jobs            []JobFact
+	Activity        []ActivityFact
 	// Sprint 9 — performance & security facts (demo or collector-fed).
 	Vacuum      []VacuumFact
 	Locks       []LockFact
@@ -88,6 +90,12 @@ type SnapshotFacts struct {
 	Roles       []RoleFact
 	Grants      []GrantFact
 	Functions   []FunctionSecurityFact
+	// P1 — snapshot-only drift inputs. Peers are other environments' latest success runs.
+	ServerVersion    string
+	TimescaleVersion string
+	Extensions       []ExtensionFact
+	Settings         map[string]string
+	Peers            []ServerSide
 }
 
 // TableFact is a minimal table size fact for storage analysis.
@@ -165,11 +173,24 @@ type IndexFact struct {
 
 // HypertableFact summarizes chunk topology.
 type HypertableFact struct {
-	Database  string `json:"database"`
-	Schema    string `json:"schema"`
-	Name      string `json:"name"`
-	NumChunks int    `json:"num_chunks"`
-	SizeBytes int64  `json:"size_bytes"`
+	Database                 string `json:"database"`
+	Schema                   string `json:"schema"`
+	Name                     string `json:"name"`
+	NumChunks                int    `json:"num_chunks"`
+	SizeBytes                int64  `json:"size_bytes"`
+	ChunkInterval            string `json:"chunk_interval,omitempty"`
+	UncompressedClosedChunks int    `json:"uncompressed_closed_chunks,omitempty"`
+	ReadsOutsideTime         bool   `json:"reads_outside_time,omitempty"`
+}
+
+// ChunkStat is the size distribution of one hypertable without listing chunks.
+type ChunkStat struct {
+	Database       string `json:"database"`
+	Schema         string `json:"schema"`
+	HypertableName string `json:"hypertable_name"`
+	Count          int    `json:"count"`
+	MaxBytes       int64  `json:"max_bytes"`
+	SumBytes       int64  `json:"sum_bytes"`
 }
 
 // ChunkFact is a single chunk size observation.
@@ -191,31 +212,42 @@ type CAGGFact struct {
 	MaterializedOnly          bool   `json:"materialized_only"`
 	HasRefreshPolicy          bool   `json:"has_refresh_policy"`
 	ViewDefinition            string `json:"view_definition"`
+	Lag                       string `json:"lag,omitempty"`
+	Hierarchical              bool   `json:"hierarchical,omitempty"`
+	Realtime                  bool   `json:"realtime,omitempty"`
 }
 
 // PolicyFact describes a Timescale retention/compression/refresh policy.
 type PolicyFact struct {
-	Database         string `json:"database"`
-	JobID            int64  `json:"job_id"`
-	PolicyType       string `json:"policy_type"` // retention, compression, refresh, reorder
-	ProcName         string `json:"proc_name"`
-	HypertableSchema string `json:"hypertable_schema"`
-	HypertableName   string `json:"hypertable_name"`
-	ScheduleInterval string `json:"schedule_interval"`
-	Config           string `json:"config"`
-	Scheduled        bool   `json:"scheduled"`
-	LastRunStatus    string `json:"last_run_status"`
+	Database         string  `json:"database"`
+	JobID            int64   `json:"job_id"`
+	PolicyType       string  `json:"policy_type"` // retention, compression, refresh, reorder
+	ProcName         string  `json:"proc_name"`
+	HypertableSchema string  `json:"hypertable_schema"`
+	HypertableName   string  `json:"hypertable_name"`
+	ScheduleInterval string  `json:"schedule_interval"`
+	Config           string  `json:"config"`
+	Scheduled        bool    `json:"scheduled"`
+	LastRunStatus    string  `json:"last_run_status"`
+	CompressionRatio float64 `json:"compression_ratio,omitempty"`
+	SegmentBy        string  `json:"segmentby,omitempty"`
+	OrderBy          string  `json:"orderby,omitempty"`
 }
 
 // JobFact describes a background job.
 type JobFact struct {
-	Database      string `json:"database"`
-	JobID         int64  `json:"job_id"`
-	Application   string `json:"application_name"`
-	ProcName      string `json:"proc_name"`
-	Scheduled     bool   `json:"scheduled"`
-	LastRunStatus string `json:"last_run_status"`
-	TotalFailures int64  `json:"total_failures"`
+	Database             string `json:"database"`
+	JobID                int64  `json:"job_id"`
+	Application          string `json:"application_name"`
+	ProcName             string `json:"proc_name"`
+	Scheduled            bool   `json:"scheduled"`
+	LastRunStatus        string `json:"last_run_status"`
+	TotalFailures        int64  `json:"total_failures"`
+	ScheduleInterval     string `json:"schedule_interval,omitempty"`
+	LastRunDuration      string `json:"last_run_duration,omitempty"`
+	NextStart            string `json:"next_start,omitempty"`
+	MaxBackgroundWorkers int    `json:"max_background_workers,omitempty"`
+	ScheduledJobCount    int    `json:"scheduled_job_count,omitempty"`
 }
 
 // ActivityFact carries DML / temporal signals for inactivity analysis.
@@ -285,14 +317,17 @@ type QueryStatFact struct {
 
 // RoleFact describes a database role for privilege review.
 type RoleFact struct {
-	Database    string `json:"database"`
-	RoleName    string `json:"role_name"`
-	Superuser   bool   `json:"superuser"`
-	CreateDB    bool   `json:"createrole,omitempty"`
-	CreateRole  bool   `json:"create_role,omitempty"`
-	Login       bool   `json:"login"`
-	Replication bool   `json:"replication"`
-	BypassRLS   bool   `json:"bypass_rls"`
+	Database             string `json:"database"`
+	RoleName             string `json:"role_name"`
+	Superuser            bool   `json:"superuser"`
+	CreateDB             bool   `json:"createrole,omitempty"`
+	CreateRole           bool   `json:"create_role,omitempty"`
+	Login                bool   `json:"login"`
+	Replication          bool   `json:"replication"`
+	BypassRLS            bool   `json:"bypass_rls"`
+	Current              bool   `json:"current,omitempty"`
+	CanWrite             bool   `json:"can_write,omitempty"`
+	PrivilegeCheckFailed bool   `json:"privilege_check_failed,omitempty"`
 }
 
 // GrantFact is an ACL entry for review (no automatic REVOKE).

@@ -19,6 +19,7 @@ func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]C
 	if !ok {
 		return []ChunkFacts{}, nil
 	}
+	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 
 	rows, err := conn.Query(ctx, chunksSQL)
 	if err != nil {
@@ -46,6 +47,8 @@ func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]C
 			&f.TotalSizeBytes,
 			&f.DataSizeBytes,
 			&f.IndexSizeBytes,
+			&f.BeforeCompressionBytes,
+			&f.AfterCompressionBytes,
 		); err != nil {
 			return nil, fmt.Errorf("chunk collector scan: %w", err)
 		}
@@ -66,6 +69,9 @@ func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]C
 			continue
 		}
 		out = append(out, f)
+		if len(out) >= 2000 {
+			return out, fmt.Errorf("chunk inventory truncated")
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("chunk collector rows: %w", err)
