@@ -56,24 +56,34 @@ func main() {
 	defer pool.Close()
 
 	store := repository.NewStore(pool)
+	if err := store.EnsureIdentitySchema(ctx); err != nil {
+		slog.Error("could not ensure identity schema", "error", err)
+		os.Exit(1)
+	}
 	hasUsers, err := store.HasAuditorUsers(ctx)
 	if err != nil {
-		slog.Error("identity schema unavailable; apply Sprint 20 migration", "error", err)
+		slog.Error("identity schema unavailable", "error", err)
 		os.Exit(1)
 	}
 	if !hasUsers {
-		secretPath := os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD_FILE")
-		username := os.Getenv("AUDITOR_BOOTSTRAP_USER")
-		if secretPath == "" || username == "" {
-			slog.Error("first start requires AUDITOR_BOOTSTRAP_USER and AUDITOR_BOOTSTRAP_PASSWORD_FILE")
+		username := strings.TrimSpace(os.Getenv("AUDITOR_BOOTSTRAP_USER"))
+		password := strings.TrimRight(os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD"), "\r\n")
+		if password == "" {
+			secretPath := os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD_FILE")
+			if secretPath != "" {
+				secret, err := os.ReadFile(secretPath)
+				if err != nil {
+					slog.Error("could not read bootstrap secret", "error", err)
+					os.Exit(1)
+				}
+				password = strings.TrimRight(string(secret), "\r\n")
+			}
+		}
+		if username == "" || password == "" {
+			slog.Error("first start requires AUDITOR_BOOTSTRAP_USER and AUDITOR_BOOTSTRAP_PASSWORD in the environment")
 			os.Exit(1)
 		}
-		secret, err := os.ReadFile(secretPath)
-		if err != nil {
-			slog.Error("could not read bootstrap secret", "error", err)
-			os.Exit(1)
-		}
-		if err := store.BootstrapOperator(ctx, username, strings.TrimRight(string(secret), "\r\n")); err != nil {
+		if err := store.BootstrapOperator(ctx, username, password); err != nil {
 			slog.Error("could not bootstrap operator", "error", err)
 			os.Exit(1)
 		}

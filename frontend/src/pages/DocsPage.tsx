@@ -419,11 +419,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       content: (
         <SectionBody
           howTo={[
-            "Não há usuário nem senha padrão. O usuário é AUDITOR_BOOTSTRAP_USER no .env (o exemplo usa admin).",
-            "Crie secrets/bootstrap-password fora do Git, com pelo menos 16 caracteres. Esse arquivo é a senha. A conta operator só nasce se ainda não existir nenhum usuário.",
-            "Suba com make up e entre em http://localhost:5173. Trocar o arquivo depois não altera a senha já gravada.",
-            "Configure os alvos com sslmode=verify-full e AUDITOR_TARGET_ALLOWED_HOSTS. Use conta somente leitura e denylists de database/schema. Host e senha ficam no .env, não numa migration de seed.",
-            "Em volume existente, faça backup e aplique somente a nova migration incremental antes de atualizar a API. Nunca use reset-volume em produção: ele apaga os dados.",
+            "O usuário e a senha ficam no .env: AUDITOR_BOOTSTRAP_USER=admin e AUDITOR_BOOTSTRAP_PASSWORD=db-auditor-local-1. A senha precisa ter pelo menos 16 caracteres.",
+            "Suba com make up e entre em http://localhost:5173. A conta operator só nasce se ainda não existir nenhum usuário. Mudar o .env depois não troca a senha já gravada.",
+            "Configure os alvos com sslmode=verify-full e AUDITOR_TARGET_ALLOWED_HOSTS. Use conta somente leitura e denylists de database/schema. Host e senha dos Timescale ficam no .env, não numa migration.",
+            "O schema é 01_baseline.sql mais 02_seed_demo.sql. Não use reset-volume em produção: ele apaga os dados.",
           ]}
           terms={[
             {

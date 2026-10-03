@@ -44,35 +44,40 @@ make smoke
 
 ### Primeiro acesso
 
-Não há usuário nem senha padrão no Git. A tela de login usa a conta criada na primeira subida da API.
+Usuário e senha vêm do `.env`. O exemplo local é:
 
-1. Gere uma senha de pelo menos 16 caracteres e grave só nesse arquivo, fora do Git:
+| Campo | Valor em `.env.example` |
+| --- | --- |
+| Usuário | `admin` (`AUDITOR_BOOTSTRAP_USER`) |
+| Senha | `db-auditor-local-1` (`AUDITOR_BOOTSTRAP_PASSWORD`, 18 caracteres) |
 
-   ```bash
-   mkdir -p secrets
-   umask 077
-   # troque o valor; não reutilize este exemplo
-   printf '%s\n' 'escolha-uma-senha-longa' > secrets/bootstrap-password
-   ```
+Copie essas duas variáveis para o seu `.env` se ele foi criado antes. A senha precisa ter pelo menos 16 caracteres. Troque o valor antes de expor o serviço.
 
-2. No `.env`, o usuário é `AUDITOR_BOOTSTRAP_USER`. O exemplo usa `admin`. A senha **não** fica no `.env`: a API lê `AUDITOR_BOOTSTRAP_PASSWORD_FILE` (`/run/secrets/bootstrap-password`, que o Compose monta a partir de `secrets/bootstrap-password`).
-3. Suba com `make up`. Se a tabela `auditor_user` estiver vazia, a API cria essa conta com papel `operator`. Se já existir qualquer conta, o arquivo é ignorado.
-4. Abra http://localhost:5173 e entre com esse usuário e o conteúdo do arquivo.
-5. Trocar o arquivo depois **não** troca a senha. A sessão vale 8 horas e fica só na memória da aba. Outras contas, o `operator` cria em `POST /api/v1/auth/users`.
+```bash
+make up    # recompila a API
+```
 
-Detalhe de migração, papéis e retenção: [docs/sprint20-operations.md](docs/sprint20-operations.md).
+Abra http://localhost:5173 e entre com esse par. A conta `operator` só é criada se `auditor_user` estiver vazia. Mudar o `.env` depois **não** troca uma senha já gravada. Nesse caso, no snapshot store:
 
-Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. O compose de produção ainda não monta o arquivo de bootstrap nem passa `AUDITOR_BOOTSTRAP_*`; o primeiro acesso acima vale para o `make up` local.
+```sql
+DELETE FROM auditor_user;
+```
+
+e suba a API de novo. A sessão dura 8 horas e fica só na memória da aba.
+
+O schema está em `backend/migrations/01_baseline.sql` mais o seed local `02_seed_demo.sql`. Volumes antigos não reaplicam esse diretório; a API cria as tabelas de login se faltarem. Detalhe: [docs/sprint20-operations.md](docs/sprint20-operations.md).
+
+Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. Passe `AUDITOR_BOOTSTRAP_USER` e `AUDITOR_BOOTSTRAP_PASSWORD` para o container da API. O compose de produção ainda não faz isso.
 
 Release MVP: `docs/mvp-release.md`.
 
 ### Relatórios PDF (Sprints 18–19)
 
-Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local e suas permissões. Crie o segredo inicial em `secrets/bootstrap-password` e siga o [guia operacional](docs/sprint20-operations.md); não coloque credenciais no frontend. Use HTTPS em produção.
+Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local. O primeiro acesso está na seção acima. Use HTTPS em produção.
 
 Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; os metadados do histórico são preservados por mais 90 dias. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.
 
-Em uma instalação com volume PostgreSQL existente, aplique apenas as migrações incrementais ainda pendentes, incluindo `10_sprint20_identity.sql`, antes de iniciar a API atualizada. Não reinicialize o volume de produção; veja [o guia operacional da Sprint 20](docs/sprint20-operations.md) e `backend/migrations/README.md`.
+Em uma instalação com volume PostgreSQL existente, não rode `make reset-volume`: ele apaga snapshots, findings e relatórios. A API cria as tabelas de login se o volume for anterior a elas. Veja [o guia operacional da Sprint 20](docs/sprint20-operations.md) e `backend/migrations/README.md`.
 
 Relatórios só podem ser solicitados para execuções de auditoria concluídas cuja análise de regras também tenha terminado com sucesso. O trabalho registra o hash do catálogo de regras da análise (ou a versão do analisador para execuções anteriores à migração).
 

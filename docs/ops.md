@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql` (consolidado pré-produção).
+O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. As migrations incrementais das sprints 13–20 foram incorporadas no baseline.
 O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
 
 Após alterar o baseline em desenvolvimento:
