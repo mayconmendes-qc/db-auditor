@@ -40,3 +40,32 @@ Não reintroduza arquivos `.down.sql` neste diretório: o entrypoint do Postgres
 O entrypoint só executa scripts em volumes vazios. Em um volume existente, aplique somente a nova migration incremental por um processo controlado antes de subir a nova API. Nunca reaplique o baseline nem edite `01_baseline.sql` em uma instalação já provisionada.
 
 Para a Sprint 20, veja [o procedimento de migração, bootstrap e retenção](../../docs/sprint20-operations.md).
+
+## Ambientes: não criar outro `02_seed_*`
+
+`02_seed_demo.sql` não é a fonte dos dois Timescale da empresa. Ele só insere,
+em volume vazio, duas linhas de demonstração em `audit_environment`:
+
+| id | nome | papel |
+| --- | --- | --- |
+| `00000000-0000-0000-0000-000000000001` | Demo Tiger Cloud | rótulo local |
+| `00000000-0000-0000-0000-000000000002` | Demo Datacenter | rótulo local |
+
+Host, porta, database, usuário e senha **não** estão nessa migration. Já vêm de
+`AUDITOR_TARGET_N_*` no `.env` (ou do fallback `AUDITOR_TARGET_DSN_<uuid>`).
+Os coletores conectam com esse DSN e leem catálogo, hypertables, chunks e jobs
+do servidor. Isso já é dinâmico e não precisa de seed.
+
+O que o seed ainda faz, e o `.env` sozinho não faz, é criar a linha de catálogo.
+Runs, snapshots e findings referenciam `audit_environment.id`. O
+`AUDITOR_TARGET_N_ENVIRONMENT_ID` tem de ser o mesmo UUID. No laboratório, o
+contrato é manual com os dois IDs acima. Em volume já existente o entrypoint
+não reaplica `02_seed_demo.sql`.
+
+Não adicionar `02_seed_empresa.sql` (nem editar o seed demo) com os ambientes reais:
+
+- migration já aplicada não roda de novo; um volume de produção não vê o arquivo novo se ele for encaixado no meio da sequência já executada pelo entrypoint;
+- nome, tipo e modo de descoberta mudam sem ser mudança de schema;
+- senha de banco não pode ir para SQL versionado.
+
+O passo seguinte, se o catálogo tiver de acompanhar o `.env` sem SQL manual, é a API fazer upsert na subida a partir de variáveis (id, nome, tipo, `discovery_mode`), sem gravar DSN. Até lá, os dois servidores continuam nos slots do `.env`, apontando para linhas que já existem em `audit_environment`.

@@ -1,5 +1,26 @@
 # Sprint 20 — segurança, operação e retenção
 
+## Primeiro acesso na tela de login
+
+Não existe senha embutida. O usuário é o valor de `AUDITOR_BOOTSTRAP_USER`
+(no `.env.example`, `admin`). A senha é o conteúdo de
+`secrets/bootstrap-password`, com no mínimo 16 caracteres, sem aspas e sem
+espaço no fim. O Compose local publica esse arquivo em
+`/run/secrets/bootstrap-password`.
+
+A conta é criada uma única vez, como `operator`, quando `auditor_user` está
+vazia. Entre em http://localhost:5173 com esse par. Se o login falhar:
+
+- a API não subiu porque o arquivo ou a variável não existiam no primeiro boot;
+- a senha tem menos de 16 caracteres;
+- o arquivo foi alterado depois da criação da conta (isso não atualiza o hash);
+- já havia outro usuário e o bootstrap foi ignorado.
+
+Depois do primeiro login bem-sucedido, retire o arquivo do host ou substitua
+por um segredo gerenciado. Não coloque a senha no frontend nem no Git.
+`deploy/compose.prod.yaml` ainda não monta esse segredo: não use esse compose
+como está para o primeiro acesso.
+
 ## Migração sem perda de dados
 
 Faça backup do snapshot store antes da atualização. Em um volume PostgreSQL existente,
@@ -9,12 +30,8 @@ administração e confirme as tabelas `auditor_user`, `auditor_session` e
 `docker-entrypoint-initdb.d` só roda em volumes vazios. `make reset-volume`
 **apaga** snapshots, findings, baselines e relatórios e não é um passo de migração.
 
-Crie `secrets/bootstrap-password` com pelo menos 16 caracteres aleatórios e
-permissão restrita ao operador do host. Defina `AUDITOR_BOOTSTRAP_USER` e
-`AUDITOR_BOOTSTRAP_PASSWORD_FILE=/run/secrets/bootstrap-password` em `.env`.
-O serviço usa esse arquivo somente quando não há nenhuma conta; depois da
-criação, remova o arquivo do host ou o substitua por outro segredo gerenciado.
-Não coloque senhas no frontend nem no Git.
+O procedimento do arquivo `secrets/bootstrap-password` está na seção
+[Primeiro acesso na tela de login](#primeiro-acesso-na-tela-de-login).
 
 O `operator` pode criar outras contas pela rota administrativa
 `POST /api/v1/auth/users` com `username`, `password` (mínimo 16 caracteres),
