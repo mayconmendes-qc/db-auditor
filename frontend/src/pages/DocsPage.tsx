@@ -419,10 +419,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       content: (
         <SectionBody
           howTo={[
-            "Instale Podman (ou Docker) com Compose. Copie .env.example para .env e defina POSTGRES_PASSWORD.",
-            "Crie secrets/bootstrap-password fora do Git (mínimo 16 caracteres) e configure AUDITOR_BOOTSTRAP_USER. A conta inicial só é criada quando não existe usuário.",
-            "Configure os alvos com sslmode=verify-full e AUDITOR_TARGET_ALLOWED_HOSTS. Use conta somente leitura e denylists de database/schema.",
-            "Suba com make up; valide com make smoke e a tela Status.",
+            "Não há usuário nem senha padrão. O usuário é AUDITOR_BOOTSTRAP_USER no .env (o exemplo usa admin).",
+            "Crie secrets/bootstrap-password fora do Git, com pelo menos 16 caracteres. Esse arquivo é a senha. A conta operator só nasce se ainda não existir nenhum usuário.",
+            "Suba com make up e entre em http://localhost:5173. Trocar o arquivo depois não altera a senha já gravada.",
+            "Configure os alvos com sslmode=verify-full e AUDITOR_TARGET_ALLOWED_HOSTS. Use conta somente leitura e denylists de database/schema. Host e senha ficam no .env, não numa migration de seed.",
             "Em volume existente, faça backup e aplique somente a nova migration incremental antes de atualizar a API. Nunca use reset-volume em produção: ele apaga os dados.",
           ]}
           terms={[
@@ -432,7 +432,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             },
             {
               name: "Seed demo",
-              def: "Dados de exemplo carregados em volume vazio para demonstração local.",
+              def: "Duas linhas locais de audit_environment, só em volume vazio. Não guarda host nem senha dos Timescale; isso vem do .env.",
             },
           ]}
         />

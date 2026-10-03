@@ -42,7 +42,27 @@ make smoke
 | Status | http://localhost:8080/api/v1/status |
 | Dashboard KPIs | http://localhost:8080/api/v1/analytics/kpis |
 
-Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`.
+### Primeiro acesso
+
+Não há usuário nem senha padrão no Git. A tela de login usa a conta criada na primeira subida da API.
+
+1. Gere uma senha de pelo menos 16 caracteres e grave só nesse arquivo, fora do Git:
+
+   ```bash
+   mkdir -p secrets
+   umask 077
+   # troque o valor; não reutilize este exemplo
+   printf '%s\n' 'escolha-uma-senha-longa' > secrets/bootstrap-password
+   ```
+
+2. No `.env`, o usuário é `AUDITOR_BOOTSTRAP_USER`. O exemplo usa `admin`. A senha **não** fica no `.env`: a API lê `AUDITOR_BOOTSTRAP_PASSWORD_FILE` (`/run/secrets/bootstrap-password`, que o Compose monta a partir de `secrets/bootstrap-password`).
+3. Suba com `make up`. Se a tabela `auditor_user` estiver vazia, a API cria essa conta com papel `operator`. Se já existir qualquer conta, o arquivo é ignorado.
+4. Abra http://localhost:5173 e entre com esse usuário e o conteúdo do arquivo.
+5. Trocar o arquivo depois **não** troca a senha. A sessão vale 8 horas e fica só na memória da aba. Outras contas, o `operator` cria em `POST /api/v1/auth/users`.
+
+Detalhe de migração, papéis e retenção: [docs/sprint20-operations.md](docs/sprint20-operations.md).
+
+Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. O compose de produção ainda não monta o arquivo de bootstrap nem passa `AUDITOR_BOOTSTRAP_*`; o primeiro acesso acima vale para o `make up` local.
 
 Release MVP: `docs/mvp-release.md`.
 
