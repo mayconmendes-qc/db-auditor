@@ -114,6 +114,24 @@ async function getJSON<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
+  return response.json() as Promise<T>;
+}
+
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   let response: Response;
   try {
@@ -549,6 +567,24 @@ export const api = {
       environment_id: environmentId,
       profile,
     }),
+  schedules: (environmentId: string) =>
+    getJSON<{
+      items: {
+        environment_id: string;
+        profile: string;
+        enabled: boolean;
+        last_status?: string;
+        last_run_at?: string;
+        next_run_at?: string;
+      }[];
+    }>(`/api/v1/environments/${environmentId}/schedules`),
+  saveSchedule: (environmentId: string, profile: string, enabled: boolean) =>
+    putJSON<{
+      profile: string;
+      enabled: boolean;
+      next_run_at?: string;
+      last_status?: string;
+    }>(`/api/v1/environments/${environmentId}/schedules`, { profile, enabled }),
   mappings: (params?: {
     source_environment_id?: string;
     target_environment_id?: string;

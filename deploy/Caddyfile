@@ -5,10 +5,7 @@
 {$AUDITOR_DOMAIN:localhost} {
 	encode gzip
 
-	# Prometheus scrape (restrict at network layer in production).
-	handle /metrics {
-		reverse_proxy api:8080
-	}
+	# /metrics stays on the API's internal port and is not published here.
 
 	handle /health {
 		reverse_proxy api:8080

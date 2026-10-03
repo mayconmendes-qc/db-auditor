@@ -211,6 +211,9 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 	if path == "auth/logout" {
 		return "", true
 	}
+	if strings.HasSuffix(path, "/download") && !roleAtLeast(user.Role, "auditor") {
+		return environmentFromRequest(r, parts), false
+	}
 	if r.Method != http.MethodGet {
 		minimum := "operator"
 		if (parts[0] == "findings" && (r.Method == http.MethodPatch || len(parts) > 1 && parts[1] == "analyze")) ||

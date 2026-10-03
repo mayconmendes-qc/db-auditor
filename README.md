@@ -38,7 +38,7 @@ make smoke
 |---------|-----|
 | Frontend | http://localhost:5173 |
 | API | http://localhost:8080 |
-| Metrics | http://localhost:8080/metrics |
+| Metrics | http://127.0.0.1:9090/metrics |
 | Status | http://localhost:8080/api/v1/status |
 | Dashboard KPIs | http://localhost:8080/api/v1/analytics/kpis |
 

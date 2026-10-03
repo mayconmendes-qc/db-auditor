@@ -51,6 +51,24 @@ const PROFILE_OPTIONS = [
   { value: "monthly", label: "Mensal" },
 ];
 
+const SCHEDULE_PROFILES = [
+  { value: "fast", label: "Rápido (15 min)" },
+  { value: "daily", label: "Diário" },
+  { value: "weekly", label: "Semanal" },
+  { value: "monthly", label: "Mensal" },
+];
+
+function nextRunLabel(value?: string): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleString("pt-BR");
+}
+
 function statusTone(
   status: string,
 ): "success" | "warning" | "danger" | "neutral" {
@@ -169,6 +187,15 @@ export function AuditRunsPage() {
   const [busy, setBusy] = useState(false);
   const [polling, setPolling] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [schedules, setSchedules] = useState<
+    {
+      profile: string;
+      enabled: boolean;
+      next_run_at?: string;
+      last_status?: string;
+    }[]
+  >([]);
+  const [scheduleMsg, setScheduleMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (environmentId) {
@@ -177,6 +204,29 @@ export function AuditRunsPage() {
       setTriggerEnv(environments[0].id);
     }
   }, [environmentId, environments, triggerEnv]);
+
+  useEffect(() => {
+    if (!triggerEnv) {
+      setSchedules([]);
+      return;
+    }
+    let cancelled = false;
+    void api
+      .schedules(triggerEnv)
+      .then((result) => {
+        if (!cancelled) {
+          setSchedules(result.items);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setScheduleMsg(formatError(cause));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [triggerEnv]);
 
   const loadRuns = useCallback(() => {
     setError(null);
@@ -437,6 +487,64 @@ export function AuditRunsPage() {
             </div>
             {triggerMsg ? (
               <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {triggerEnv ? (
+          <Card title="Agenda">
+            <p className="mt-1 text-sm text-slate-400">
+              A agenda fica no snapshot store. Reiniciar a API não desliga o
+              perfil.
+            </p>
+            <ul className="mt-4 space-y-3">
+              {SCHEDULE_PROFILES.map((profile) => {
+                const row = schedules.find(
+                  (item) => item.profile === profile.value,
+                );
+                return (
+                  <li
+                    key={profile.value}
+                    className="flex flex-wrap items-center justify-between gap-3 text-sm"
+                  >
+                    <label className="flex items-center gap-2 text-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(row?.enabled)}
+                        disabled={!api.hasRole("operator") || busy}
+                        onChange={(event) => {
+                          const enabled = event.target.checked;
+                          setBusy(true);
+                          setScheduleMsg(null);
+                          void api
+                            .saveSchedule(triggerEnv, profile.value, enabled)
+                            .then((saved) => {
+                              setSchedules((current) => {
+                                const next = current.filter(
+                                  (item) => item.profile !== profile.value,
+                                );
+                                next.push(saved);
+                                return next;
+                              });
+                            })
+                            .catch((cause: unknown) =>
+                              setScheduleMsg(formatError(cause)),
+                            )
+                            .finally(() => setBusy(false));
+                        }}
+                      />
+                      {profile.label}
+                    </label>
+                    <span className="text-slate-400">
+                      Próxima: {nextRunLabel(row?.next_run_at)}
+                      {row?.last_status ? ` · última ${row.last_status}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            {scheduleMsg ? (
+              <p className="mt-3 text-sm text-rose-300">{scheduleMsg}</p>
             ) : null}
           </Card>
         ) : null}
