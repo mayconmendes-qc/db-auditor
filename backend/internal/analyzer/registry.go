@@ -35,5 +35,6 @@ func DefaultRegistry() *Registry {
 	r.Register(VacuumAnalyzer{})
 	r.Register(PerformanceAnalyzer{})
 	r.Register(SecurityAnalyzer{})
+	r.Register(DriftAnalyzer{})
 	return r
 }

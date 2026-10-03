@@ -40,7 +40,7 @@ func (s *Store) SuppressFinding(ctx context.Context, id, reason string, until ti
 	}
 	row := s.pool.QueryRow(ctx, `UPDATE finding SET status='suppressed',suppression_reason=$2,suppressed_until=$3,resolved_at=now(),updated_at=now() WHERE id=$1::uuid
 RETURNING id::text, environment_id::text, audit_run_id::text,
-finding_type,severity,status,title,summary,object_type,object_key,database_name,schema_name,object_name,evidence,dedup_key,rule_id,rule_version,category,confidence,impact,risk,recommendation,validation,reference_urls,rule_parameters,first_seen_at,last_seen_at,resolved_at,notes,created_at,updated_at,recurrence_count,suppression_reason,suppressed_until,superseded_by::text`, id, reason, until)
+finding_type,severity,status,title,summary,object_type,object_key,database_name,schema_name,object_name,evidence,dedup_key,rule_id,rule_version,category,confidence,impact,risk,recommendation,validation,reference_urls,rule_parameters,first_seen_at,last_seen_at,resolved_at,notes,created_at,updated_at,recurrence_count,suppression_reason,suppressed_until,superseded_by::text,assignee,due_at`, id, reason, until)
 	f, err := scanFinding(row)
 	if err != nil {
 		return nil, err

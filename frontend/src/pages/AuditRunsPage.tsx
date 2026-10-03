@@ -166,7 +166,7 @@ function CollectorProgress({
 }
 
 export function AuditRunsPage() {
-  const { environments, environmentId } = useApp();
+  const { environments, environmentId, runId, openRun } = useApp();
   const [runs, setRuns] = useState<AuditRun[] | null>(null);
   const [runTotal, setRunTotal] = useState(0);
   const [runOffset, setRunOffset] = useState(0);
@@ -174,7 +174,11 @@ export function AuditRunsPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [profileFilter, setProfileFilter] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(runId);
+
+  useEffect(() => {
+    if (runId) setSelectedId(runId);
+  }, [runId]);
   const [collectors, setCollectors] = useState<CollectorRun[] | null>(null);
   const [coverage, setCoverage] = useState<AuditRunCoverage[] | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisRun | null>(null);
@@ -405,6 +409,7 @@ export function AuditRunsPage() {
         `Execução iniciada (${res.audit_run_id.slice(0, 8)}…) — ${labels.runStatus(res.status)}`,
       );
       setSelectedId(res.audit_run_id);
+      openRun(res.audit_run_id);
       await loadRuns();
       await loadCollectors(res.audit_run_id);
     } catch (err: unknown) {
@@ -599,7 +604,10 @@ export function AuditRunsPage() {
                   className={`cursor-pointer border-t border-slate-800 hover:bg-slate-900/50 ${
                     selectedId === r.id ? "bg-slate-900/80" : ""
                   }`}
-                  onClick={() => setSelectedId(r.id)}
+                  onClick={() => {
+                    setSelectedId(r.id);
+                    openRun(r.id);
+                  }}
                 >
                   <td className="px-3 py-1.5 text-slate-100">{r.profile}</td>
                   <td className="px-3 py-1.5">

@@ -11,27 +11,29 @@ import (
 
 // JobFacts is one timescaledb_information.jobs row.
 type JobFacts struct {
-	DatabaseName     string     `json:"database_name"`
-	JobID            int64      `json:"job_id"`
-	ApplicationName  string     `json:"application_name"`
-	ScheduleInterval string     `json:"schedule_interval"`
-	MaxRuntime       string     `json:"max_runtime"`
-	MaxRetries       int        `json:"max_retries"`
-	RetryPeriod      string     `json:"retry_period"`
-	ProcSchema       string     `json:"proc_schema"`
-	ProcName         string     `json:"proc_name"`
-	Owner            string     `json:"owner_name"`
-	Scheduled        bool       `json:"scheduled"`
-	FixedSchedule    bool       `json:"fixed_schedule"`
-	ConfigJSON       *string    `json:"config_json,omitempty"`
-	NextStart        *time.Time `json:"next_start,omitempty"`
-	InitialStart     *time.Time `json:"initial_start,omitempty"`
-	HypertableSchema *string    `json:"hypertable_schema,omitempty"`
-	HypertableName   *string    `json:"hypertable_name,omitempty"`
-	CheckSchema      *string    `json:"check_schema,omitempty"`
-	CheckName        *string    `json:"check_name,omitempty"`
-	LastRunStatus    string     `json:"last_run_status,omitempty"`
-	TotalFailures    int64      `json:"total_failures"`
+	DatabaseName         string     `json:"database_name"`
+	JobID                int64      `json:"job_id"`
+	ApplicationName      string     `json:"application_name"`
+	ScheduleInterval     string     `json:"schedule_interval"`
+	MaxRuntime           string     `json:"max_runtime"`
+	MaxRetries           int        `json:"max_retries"`
+	RetryPeriod          string     `json:"retry_period"`
+	ProcSchema           string     `json:"proc_schema"`
+	ProcName             string     `json:"proc_name"`
+	Owner                string     `json:"owner_name"`
+	Scheduled            bool       `json:"scheduled"`
+	FixedSchedule        bool       `json:"fixed_schedule"`
+	ConfigJSON           *string    `json:"config_json,omitempty"`
+	NextStart            *time.Time `json:"next_start,omitempty"`
+	InitialStart         *time.Time `json:"initial_start,omitempty"`
+	HypertableSchema     *string    `json:"hypertable_schema,omitempty"`
+	HypertableName       *string    `json:"hypertable_name,omitempty"`
+	CheckSchema          *string    `json:"check_schema,omitempty"`
+	CheckName            *string    `json:"check_name,omitempty"`
+	LastRunStatus        string     `json:"last_run_status,omitempty"`
+	TotalFailures        int64      `json:"total_failures"`
+	LastRunDuration      string     `json:"last_run_duration,omitempty"`
+	MaxBackgroundWorkers int        `json:"max_background_workers,omitempty"`
 }
 
 // CollectJobs lists background jobs. Schema scope filters jobs tied to a hypertable schema when present.
@@ -44,6 +46,7 @@ func CollectJobs(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]Job
 	if !ok {
 		return []JobFacts{}, nil
 	}
+	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 
 	rows, err := conn.Query(ctx, jobsSQL)
 	if err != nil {
@@ -78,6 +81,8 @@ func CollectJobs(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]Job
 			&checkName,
 			&f.LastRunStatus,
 			&f.TotalFailures,
+			&f.LastRunDuration,
+			&f.MaxBackgroundWorkers,
 		); err != nil {
 			return nil, fmt.Errorf("jobs collector scan: %w", err)
 		}

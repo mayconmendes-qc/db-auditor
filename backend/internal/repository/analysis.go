@@ -119,5 +119,6 @@ RETURNING id::text`, persisted.ID, f.EnvironmentID, f.RuleID, f.ObjectKey, f.Rul
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
+	s.NotifyFindings(ctx, findings)
 	return len(findings), nil
 }

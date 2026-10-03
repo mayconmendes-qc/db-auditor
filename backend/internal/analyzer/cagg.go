@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // CAGGAnalyzer diagnoses continuous aggregates.
@@ -36,6 +37,44 @@ func (CAGGAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, 
 				DedupKey: DedupKey("cagg.missing_refresh_policy", key, title),
 			}
 			out = append(out, f)
+		}
+		if c.HasRefreshPolicy && durationExceeds(c.Lag, time.Hour) {
+			title := fmt.Sprintf("CAGG materialization lag: %s", key)
+			out = append(out, Finding{
+				EnvironmentID: facts.EnvironmentID,
+				AuditRunID:    facts.AuditRunID,
+				FindingType:   "cagg.materialization_lag",
+				Severity:      SeverityHigh,
+				Status:        StatusOpen,
+				Title:         title,
+				Summary:       "Continuous aggregate has a refresh policy and the materialized window is behind the server clock.",
+				ObjectType:    "continuous_aggregate",
+				ObjectKey:     key,
+				DatabaseName:  c.Database,
+				SchemaName:    c.Schema,
+				ObjectName:    c.ViewName,
+				Evidence:      map[string]any{"lag": c.Lag},
+				DedupKey:      DedupKey("cagg.materialization_lag", key, title),
+			})
+		}
+		if c.Realtime {
+			title := fmt.Sprintf("CAGG real-time aggregation enabled: %s", key)
+			out = append(out, Finding{
+				EnvironmentID: facts.EnvironmentID,
+				AuditRunID:    facts.AuditRunID,
+				FindingType:   "cagg.realtime_hypothesis",
+				Severity:      SeverityLow,
+				Status:        StatusOpen,
+				Title:         title,
+				Summary:       "Real-time aggregation is enabled. This is a hypothesis, not a request to turn it off.",
+				ObjectType:    "continuous_aggregate",
+				ObjectKey:     key,
+				DatabaseName:  c.Database,
+				SchemaName:    c.Schema,
+				ObjectName:    c.ViewName,
+				Evidence:      map[string]any{"realtime": true, "confidence": "low"},
+				DedupKey:      DedupKey("cagg.realtime_hypothesis", key, title),
+			})
 		}
 	}
 	// Potentially overlapping definitions (same view_definition text).

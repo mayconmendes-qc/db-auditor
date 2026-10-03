@@ -104,6 +104,7 @@ func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope,
 }
 
 func CollectColumnStatsWithBudget(ctx context.Context, conn *pgx.Conn, scope config.Scope, schemas []string, limit int, maxPlanCost float64) ([]ColumnStatFacts, error) {
+	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 	if limit <= 0 || limit > 50000 {
 		limit = 5000
 	}
@@ -156,6 +157,7 @@ func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]Workload
 }
 
 func CollectWorkloadWithBudget(ctx context.Context, conn *pgx.Conn, limit int, maxPlanCost float64) ([]WorkloadFacts, bool, error) {
+	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 	var version string
 	if err := conn.QueryRow(ctx, workloadAvailableSQL).Scan(&version); err != nil {
 		return nil, false, fmt.Errorf("detect pg_stat_statements: %w", err)

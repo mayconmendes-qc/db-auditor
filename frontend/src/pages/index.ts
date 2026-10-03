@@ -9,4 +9,5 @@ export { PerformancePage } from "./PerformancePage";
 export { ReportsPage } from "./ReportsPage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
 export { SecurityPage } from "./SecurityPage";
+export { ServerComparePage } from "./ServerComparePage";
 export { StatusPage } from "./StatusPage";
