@@ -2,36 +2,34 @@
 
 ## Primeiro acesso na tela de login
 
-Não existe senha embutida. O usuário é o valor de `AUDITOR_BOOTSTRAP_USER`
-(no `.env.example`, `admin`). A senha é o conteúdo de
-`secrets/bootstrap-password`, com no mínimo 16 caracteres, sem aspas e sem
-espaço no fim. O Compose local publica esse arquivo em
-`/run/secrets/bootstrap-password`.
+Usuário e senha ficam no `.env`:
 
-A conta é criada uma única vez, como `operator`, quando `auditor_user` está
-vazia. Entre em http://localhost:5173 com esse par. Se o login falhar:
+```bash
+AUDITOR_BOOTSTRAP_USER=admin
+AUDITOR_BOOTSTRAP_PASSWORD=db-auditor-local-1
+```
 
-- a API não subiu porque o arquivo ou a variável não existiam no primeiro boot;
+A senha do exemplo tem 18 caracteres. O mínimo é 16. O Compose local entrega o `.env` ao container da API. Entre em http://localhost:5173 com `admin` / `db-auditor-local-1`, depois troque a senha do `.env` **antes** da primeira subida se o serviço for compartilhado. Mudar o `.env` depois não atualiza o hash.
+
+A conta `operator` nasce uma vez, quando `auditor_user` está vazia. Se o login falhar:
+
+- as duas variáveis não estavam no `.env` na subida que criou a conta;
 - a senha tem menos de 16 caracteres;
-- o arquivo foi alterado depois da criação da conta (isso não atualiza o hash);
-- já havia outro usuário e o bootstrap foi ignorado.
+- já existe um usuário e o bootstrap foi ignorado. Apague `auditor_user` no snapshot store e suba de novo.
 
-Depois do primeiro login bem-sucedido, retire o arquivo do host ou substitua
-por um segredo gerenciado. Não coloque a senha no frontend nem no Git.
-`deploy/compose.prod.yaml` ainda não monta esse segredo: não use esse compose
-como está para o primeiro acesso.
+`AUDITOR_BOOTSTRAP_PASSWORD_FILE` continua válido apenas quando a variável de senha está vazia. Não coloque a senha no frontend nem no Git além do exemplo local. `deploy/compose.prod.yaml` ainda não passa essas variáveis.
 
 ## Migração sem perda de dados
 
-Faça backup do snapshot store antes da atualização. Em um volume PostgreSQL existente,
-aplique **somente** `backend/migrations/10_sprint20_identity.sql` com uma conta de
-administração e confirme as tabelas `auditor_user`, `auditor_session` e
-`auditor_operation_log` antes de iniciar a nova API. O diretório
-`docker-entrypoint-initdb.d` só roda em volumes vazios. `make reset-volume`
-**apaga** snapshots, findings, baselines e relatórios e não é um passo de migração.
+Faça backup do snapshot store antes de atualizar uma instalação que já tem dados.
+O schema novo de uma instalação vazia é só `backend/migrations/01_baseline.sql`
+e `02_seed_demo.sql`. Os arquivos `03`–`10` foram incorporados no baseline e
+removidos. O entrypoint só roda em volume vazio. `make reset-volume` **apaga**
+snapshots, findings, baselines e relatórios.
 
-O procedimento do arquivo `secrets/bootstrap-password` está na seção
-[Primeiro acesso na tela de login](#primeiro-acesso-na-tela-de-login).
+Num volume antigo, a API cria `auditor_user`, `auditor_session` e
+`auditor_operation_log` na subida se ainda não existirem. Não aplique o baseline
+de novo por cima desse volume.
 
 O `operator` pode criar outras contas pela rota administrativa
 `POST /api/v1/auth/users` com `username`, `password` (mínimo 16 caracteres),
@@ -90,8 +88,8 @@ plano (`AUDITOR_OPTIONAL_MAX_PLAN_COST`). Um plano acima do limite vira falha
 parcial auditável, não execução irrestrita. O inventário usa páginas de até 500 linhas
 por requisição; a opção Todas busca lotes e deve ser usada com filtros em
 ambientes grandes. Inspecione planos `EXPLAIN (ANALYZE, BUFFERS)` em cópia de
-dados representativa antes de elevar limites; índices da migration 10 cobrem
-ordenação estável das listas e o snapshot mais recente.
+dados representativa antes de elevar limites. Os índices de paginação ficam no
+baseline.
 
 A opção Todas interrompe a operação e apresenta erro se ultrapassar 500.000
 linhas; ela nunca exibe um subconjunto como se fosse o resultado completo.
