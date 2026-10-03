@@ -188,7 +188,12 @@ export function AuditRunsPage() {
   const [polling, setPolling] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [schedules, setSchedules] = useState<
-    { profile: string; enabled: boolean; next_run_at?: string; last_status?: string }[]
+    {
+      profile: string;
+      enabled: boolean;
+      next_run_at?: string;
+      last_status?: string;
+    }[]
   >([]);
   const [scheduleMsg, setScheduleMsg] = useState<string | null>(null);
 
@@ -489,11 +494,14 @@ export function AuditRunsPage() {
         {triggerEnv ? (
           <Card title="Agenda">
             <p className="mt-1 text-sm text-slate-400">
-              A agenda fica no snapshot store. Reiniciar a API não desliga o perfil.
+              A agenda fica no snapshot store. Reiniciar a API não desliga o
+              perfil.
             </p>
             <ul className="mt-4 space-y-3">
               {SCHEDULE_PROFILES.map((profile) => {
-                const row = schedules.find((item) => item.profile === profile.value);
+                const row = schedules.find(
+                  (item) => item.profile === profile.value,
+                );
                 return (
                   <li
                     key={profile.value}
@@ -519,7 +527,9 @@ export function AuditRunsPage() {
                                 return next;
                               });
                             })
-                            .catch((cause: unknown) => setScheduleMsg(formatError(cause)))
+                            .catch((cause: unknown) =>
+                              setScheduleMsg(formatError(cause)),
+                            )
                             .finally(() => setBusy(false));
                         }}
                       />
