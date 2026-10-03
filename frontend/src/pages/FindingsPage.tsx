@@ -10,10 +10,15 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import {
+  type PageSize,
+  PaginationControls,
+} from "../components/ui/PaginationControls";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
+import { fetchAllPages } from "../lib/pagination";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type { Finding, FindingEvent } from "../types";
@@ -86,6 +91,9 @@ function FilterChip({
 export function FindingsPage() {
   const { environmentId, setSection } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -121,12 +129,26 @@ export function FindingsPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.findings({
+      const filters = {
         severity: severityFilter || undefined,
         status: statusFilter || undefined,
         environment_id: environmentId || undefined,
-      });
-      setItems(res.items);
+      };
+      if (pageSize === "all") {
+        const rows = await fetchAllPages((pageOffset, limit) =>
+          api.findingsPage({ ...filters, offset: pageOffset, limit }),
+        );
+        setItems(rows);
+        setTotal(rows.length);
+      } else {
+        const res = await api.findingsPage({
+          ...filters,
+          offset,
+          limit: pageSize,
+        });
+        setItems(res.items);
+        setTotal(res.page.total);
+      }
       setSelectedIds(new Set());
     } catch (err: unknown) {
       setError(formatError(err, "Falha ao listar findings"));
@@ -134,7 +156,7 @@ export function FindingsPage() {
     } finally {
       setBusy(false);
     }
-  }, [severityFilter, statusFilter, environmentId]);
+  }, [severityFilter, statusFilter, environmentId, offset, pageSize]);
 
   useEffect(() => {
     void load();
@@ -305,14 +327,20 @@ export function FindingsPage() {
     activeChips.push({
       key: "sev",
       label: `Severidade: ${labels.severity(severityFilter)}`,
-      clear: () => setSeverityFilter(""),
+      clear: () => {
+        setSeverityFilter("");
+        setOffset(0);
+      },
     });
   }
   if (statusFilter) {
     activeChips.push({
       key: "status",
       label: `Status: ${labels.findingStatus(statusFilter)}`,
-      clear: () => setStatusFilter(""),
+      clear: () => {
+        setStatusFilter("");
+        setOffset(0);
+      },
     });
   }
 
@@ -357,13 +385,19 @@ export function FindingsPage() {
             label="Severidade"
             options={SEVERITY_OPTIONS}
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => {
+              setSeverityFilter(e.target.value);
+              setOffset(0);
+            }}
           />
           <Select
             label="Status"
             options={STATUS_OPTIONS}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setOffset(0);
+            }}
           />
         </div>
 
@@ -379,7 +413,7 @@ export function FindingsPage() {
           <Button onClick={() => void load()} disabled={busy || bulkBusy}>
             Atualizar
           </Button>
-          {selectionCount > 0 ? (
+          {selectionCount > 0 && api.hasRole("auditor") ? (
             <>
               <span className="text-xs text-slate-400">
                 {selectionCount} selecionado(s)
@@ -433,91 +467,107 @@ export function FindingsPage() {
         ) : null}
 
         {!busy && sortedItems.length > 0 ? (
-          <Table
-            dense
-            headers={[
-              { id: "sel", label: "Sel." },
-              { id: "type", label: "Tipo", sortable: true },
-              { id: "severity", label: "Severidade", sortable: true },
-              { id: "status", label: "Status", sortable: true },
-              { id: "title", label: "Título", sortable: true },
-              { id: "object", label: "Objeto", sortable: true },
-              { id: "last_seen", label: "Última vez", sortable: true },
-            ]}
-            sortKey={sort?.key}
-            sortDir={sort?.dir}
-            onSort={(id) => {
-              if (id === "sel") {
-                return;
-              }
-              setSort((prev) => nextSort(prev, id));
-            }}
-          >
-            <tr className="border-t border-slate-800 bg-slate-900/40">
-              <td className="px-3 py-1.5">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Selecionar todos"
-                  className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
-                />
-              </td>
-              <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
-                Selecionar todos na página ({sortedItems.length})
-              </td>
-            </tr>
-            {sortedItems.map((f) => (
-              <tr
-                key={f.id}
-                className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
-                onClick={() => setSelected(f)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelected(f);
-                  }
-                }}
-              >
+          <>
+            <Table
+              dense
+              pagination={false}
+              headers={[
+                { id: "sel", label: "Sel." },
+                { id: "type", label: "Tipo", sortable: true },
+                { id: "severity", label: "Severidade", sortable: true },
+                { id: "status", label: "Status", sortable: true },
+                { id: "title", label: "Título", sortable: true },
+                { id: "object", label: "Objeto", sortable: true },
+                { id: "last_seen", label: "Última vez", sortable: true },
+              ]}
+              sortKey={sort?.key}
+              sortDir={sort?.dir}
+              onSort={(id) => {
+                if (id === "sel") {
+                  return;
+                }
+                setSort((prev) => nextSort(prev, id));
+              }}
+            >
+              <tr className="border-t border-slate-800 bg-slate-900/40">
                 <td className="px-3 py-1.5">
                   <input
                     type="checkbox"
-                    checked={selectedIds.has(f.id)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onChange={() => {
-                      toggleOne(f.id);
-                    }}
-                    aria-label={`Selecionar ${f.title}`}
+                    disabled={!api.hasRole("auditor")}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Selecionar todos"
                     className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
                   />
                 </td>
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
-                  {f.finding_type}
-                </td>
-                <td className="px-3 py-1.5">
-                  <Badge tone={severityTone(f.severity)}>
-                    {labels.severity(f.severity)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5">
-                  <Badge tone={statusTone(f.status)}>
-                    {labels.findingStatus(f.status)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
-                  {f.object_key || "—"}
-                </td>
-                <td className="px-3 py-1.5 text-xs text-slate-400">
-                  {f.last_seen_at
-                    ? new Date(f.last_seen_at).toLocaleString()
-                    : "—"}
+                <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
+                  Selecionar todos na página ({sortedItems.length})
                 </td>
               </tr>
-            ))}
-          </Table>
+              {sortedItems.map((f) => (
+                <tr
+                  key={f.id}
+                  className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
+                  onClick={() => setSelected(f)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected(f);
+                    }
+                  }}
+                >
+                  <td className="px-3 py-1.5">
+                    <input
+                      type="checkbox"
+                      disabled={!api.hasRole("auditor")}
+                      checked={selectedIds.has(f.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onChange={() => {
+                        toggleOne(f.id);
+                      }}
+                      aria-label={`Selecionar ${f.title}`}
+                      className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
+                    {f.finding_type}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <Badge tone={severityTone(f.severity)}>
+                      {labels.severity(f.severity)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <Badge tone={statusTone(f.status)}>
+                      {labels.findingStatus(f.status)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
+                    {f.object_key || "—"}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs text-slate-400">
+                    {f.last_seen_at
+                      ? new Date(f.last_seen_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            <PaginationControls
+              total={total}
+              offset={pageSize === "all" ? 0 : offset}
+              size={pageSize}
+              onSizeChange={(next) => {
+                setPageSize(next);
+                setOffset(0);
+              }}
+              onOffsetChange={setOffset}
+              label="Findings"
+            />
+          </>
         ) : null}
 
         {selected ? (
@@ -607,42 +657,48 @@ export function FindingsPage() {
                 {JSON.stringify(selected.evidence, null, 2)}
               </pre>
             ) : null}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button onClick={() => void triage(selected.id, "acknowledged")}>
-                Reconhecer
-              </Button>
-              <Button onClick={() => void triage(selected.id, "resolved")}>
-                Resolver
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => void triage(selected.id, "open")}
-              >
-                Reabrir
-              </Button>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <input
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                aria-label="Motivo da supressão"
-                placeholder="Motivo da supressão"
-                value={suppressionReason}
-                onChange={(event) => setSuppressionReason(event.target.value)}
-              />
-              <input
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                aria-label="Validade da supressão"
-                type="datetime-local"
-                value={suppressedUntil}
-                onChange={(event) => setSuppressedUntil(event.target.value)}
-              />
-              <Button
-                disabled={!suppressionReason.trim() || !suppressedUntil}
-                onClick={() => void suppressSelected()}
-              >
-                Suprimir com validade
-              </Button>
-            </div>
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  onClick={() => void triage(selected.id, "acknowledged")}
+                >
+                  Reconhecer
+                </Button>
+                <Button onClick={() => void triage(selected.id, "resolved")}>
+                  Resolver
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void triage(selected.id, "open")}
+                >
+                  Reabrir
+                </Button>
+              </div>
+            ) : null}
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Motivo da supressão"
+                  placeholder="Motivo da supressão"
+                  value={suppressionReason}
+                  onChange={(event) => setSuppressionReason(event.target.value)}
+                />
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Validade da supressão"
+                  type="datetime-local"
+                  value={suppressedUntil}
+                  onChange={(event) => setSuppressedUntil(event.target.value)}
+                />
+                <Button
+                  disabled={!suppressionReason.trim() || !suppressedUntil}
+                  onClick={() => void suppressSelected()}
+                >
+                  Suprimir com validade
+                </Button>
+              </div>
+            ) : null}
             <h3 className="mt-5 text-sm font-semibold text-slate-200">
               Linha do tempo
             </h3>

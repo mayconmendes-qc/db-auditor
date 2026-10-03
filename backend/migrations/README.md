@@ -14,6 +14,7 @@ As migrations posteriores são incrementais e append-only:
 - `07_sprint17_assessment.sql`: comentários de coluna, grants efetivos, dependências e índices do assessment; separa policies RLS das policies TimescaleDB, que já usam `policy_snapshot`.
 - `08_sprint18_history.sql`: baseline auditável, comparação temporal, eventos imutáveis de findings e supressão com validade.
 - `09_sprint19_reports.sql`: fila persistente de relatórios e artefatos PDF com retenção.
+- `10_sprint20_identity.sql`: contas locais, sessões, trilha de operações e índices de paginação/inventário.
 
 Nunca altere uma migration que já possa ter sido aplicada.
 
@@ -37,3 +38,5 @@ Não reintroduza arquivos `.down.sql` neste diretório: o entrypoint do Postgres
 ### Volumes existentes e produção
 
 O entrypoint só executa scripts em volumes vazios. Em um volume existente, aplique somente a nova migration incremental por um processo controlado antes de subir a nova API. Nunca reaplique o baseline nem edite `01_baseline.sql` em uma instalação já provisionada.
+
+Para a Sprint 20, veja [o procedimento de migração, bootstrap e retenção](../../docs/sprint20-operations.md).

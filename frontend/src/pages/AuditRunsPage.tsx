@@ -11,9 +11,14 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import {
+  type PageSize,
+  PaginationControls,
+} from "../components/ui/PaginationControls";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
+import { fetchAllPages } from "../lib/pagination";
 import { api } from "../services/api";
 import type {
   AnalysisRun,
@@ -145,6 +150,9 @@ function CollectorProgress({
 export function AuditRunsPage() {
   const { environments, environmentId } = useApp();
   const [runs, setRuns] = useState<AuditRun[] | null>(null);
+  const [runTotal, setRunTotal] = useState(0);
+  const [runOffset, setRunOffset] = useState(0);
+  const [runPageSize, setRunPageSize] = useState<PageSize>(20);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [profileFilter, setProfileFilter] = useState("");
@@ -172,14 +180,30 @@ export function AuditRunsPage() {
 
   const loadRuns = useCallback(() => {
     setError(null);
-    return api
-      .auditRuns({
-        status: statusFilter || undefined,
-        profile: profileFilter || undefined,
-        environment_id: environmentId || undefined,
-      })
+    const filters = {
+      status: statusFilter || undefined,
+      profile: profileFilter || undefined,
+      environment_id: environmentId || undefined,
+    };
+    const request =
+      runPageSize === "all"
+        ? fetchAllPages((offset, limit) =>
+            api.auditRunsPage({ ...filters, offset, limit }),
+          ).then((items) => ({ items, total: items.length }))
+        : api
+            .auditRunsPage({
+              ...filters,
+              offset: runOffset,
+              limit: runPageSize,
+            })
+            .then((result) => ({
+              items: result.items,
+              total: result.page.total,
+            }));
+    return request
       .then((res) => {
         setRuns(res.items);
+        setRunTotal(res.total);
         return res.items;
       })
       .catch((err: unknown) => {
@@ -192,7 +216,7 @@ export function AuditRunsPage() {
         setRuns([]);
         return [] as AuditRun[];
       });
-  }, [statusFilter, profileFilter, environmentId]);
+  }, [statusFilter, profileFilter, environmentId, runOffset, runPageSize]);
 
   useEffect(() => {
     setRuns(null);
@@ -290,7 +314,7 @@ export function AuditRunsPage() {
   useEffect(() => {
     const listRunning = runs?.some((r) => r.status === "running") ?? false;
     const selectedRunning = selected?.status === "running";
-    if (!listRunning && !selectedRunning) {
+    if ((!listRunning && !selectedRunning) || runPageSize === "all") {
       setPolling(false);
       return;
     }
@@ -312,6 +336,7 @@ export function AuditRunsPage() {
     loadRuns,
     loadCollectors,
     loadRunDiagnostics,
+    runPageSize,
   ]);
 
   const triggerEnvName =
@@ -392,40 +417,48 @@ export function AuditRunsPage() {
       />
 
       <div className="mt-8 space-y-6">
-        <Card title="Disparo manual">
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <Select
-                label="Ambiente"
-                options={environments.map((e) => ({
-                  value: e.id,
-                  label: e.name,
-                }))}
-                value={triggerEnv}
-                onChange={(e) => setTriggerEnv(e.target.value)}
-              />
+        {api.hasRole("operator") ? (
+          <Card title="Disparo manual">
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1">
+                <Select
+                  label="Ambiente"
+                  options={environments.map((e) => ({
+                    value: e.id,
+                    label: e.name,
+                  }))}
+                  value={triggerEnv}
+                  onChange={(e) => setTriggerEnv(e.target.value)}
+                />
+              </div>
+              <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
+                {busy ? "Executando…" : "Executar agora"}
+              </Button>
             </div>
-            <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
-              {busy ? "Executando…" : "Executar agora"}
-            </Button>
-          </div>
-          {triggerMsg ? (
-            <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
-          ) : null}
-        </Card>
+            {triggerMsg ? (
+              <p className="mt-3 text-sm text-slate-300">{triggerMsg}</p>
+            ) : null}
+          </Card>
+        ) : null}
 
         <div className="grid w-full gap-3 sm:grid-cols-2">
           <Select
             label="Status"
             options={STATUS_OPTIONS}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setRunOffset(0);
+            }}
           />
           <Select
             label="Perfil"
             options={PROFILE_OPTIONS}
             value={profileFilter}
-            onChange={(e) => setProfileFilter(e.target.value)}
+            onChange={(e) => {
+              setProfileFilter(e.target.value);
+              setRunOffset(0);
+            }}
           />
         </div>
 
@@ -446,31 +479,48 @@ export function AuditRunsPage() {
             }
           />
         ) : (
-          <Table dense headers={["Perfil", "Status", "Duração", "Ambiente"]}>
-            {runs.map((r) => (
-              <tr
-                key={r.id}
-                className={`cursor-pointer border-t border-slate-800 hover:bg-slate-900/50 ${
-                  selectedId === r.id ? "bg-slate-900/80" : ""
-                }`}
-                onClick={() => setSelectedId(r.id)}
-              >
-                <td className="px-3 py-1.5 text-slate-100">{r.profile}</td>
-                <td className="px-3 py-1.5">
-                  <Badge tone={statusTone(r.status)}>
-                    {labels.runStatus(r.status)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5 text-xs text-slate-400">
-                  {durationLabel(r.started_at, r.finished_at)}
-                  <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
-                    {new Date(r.started_at).toLocaleString()}
-                  </span>
-                </td>
-                <td className="px-3 py-1.5 text-slate-200">{envLabel(r)}</td>
-              </tr>
-            ))}
-          </Table>
+          <>
+            <Table
+              dense
+              pagination={false}
+              headers={["Perfil", "Status", "Duração", "Ambiente"]}
+            >
+              {runs.map((r) => (
+                <tr
+                  key={r.id}
+                  className={`cursor-pointer border-t border-slate-800 hover:bg-slate-900/50 ${
+                    selectedId === r.id ? "bg-slate-900/80" : ""
+                  }`}
+                  onClick={() => setSelectedId(r.id)}
+                >
+                  <td className="px-3 py-1.5 text-slate-100">{r.profile}</td>
+                  <td className="px-3 py-1.5">
+                    <Badge tone={statusTone(r.status)}>
+                      {labels.runStatus(r.status)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5 text-xs text-slate-400">
+                    {durationLabel(r.started_at, r.finished_at)}
+                    <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
+                      {new Date(r.started_at).toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 text-slate-200">{envLabel(r)}</td>
+                </tr>
+              ))}
+            </Table>
+            <PaginationControls
+              total={runTotal}
+              offset={runPageSize === "all" ? 0 : runOffset}
+              size={runPageSize}
+              onSizeChange={(next) => {
+                setRunPageSize(next);
+                setRunOffset(0);
+              }}
+              onOffsetChange={setRunOffset}
+              label="Execuções"
+            />
+          </>
         )}
 
         {selected ? (
@@ -480,6 +530,26 @@ export function AuditRunsPage() {
               title={`${selected.profile} · ${labels.runStatus(selected.status)}`}
               subtitle={`${envLabel(selected)} · ${selected.id.slice(0, 8)}…`}
             >
+              {selected.status === "running" ? (
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    void api
+                      .cancelAuditRun(selected.id)
+                      .then(() => loadRuns())
+                      .catch((cause: unknown) =>
+                        setError(
+                          formatError(
+                            cause,
+                            "Não foi possível cancelar a execução",
+                          ),
+                        ),
+                      )
+                  }
+                >
+                  Cancelar execução
+                </Button>
+              ) : null}
               <ul className="mt-1 space-y-1 text-sm text-slate-300">
                 <li>
                   Início: {new Date(selected.started_at).toLocaleString()}
@@ -519,19 +589,21 @@ export function AuditRunsPage() {
                   A seleção é registrada no histórico e exige cobertura
                   completa.
                 </p>
-                <input
-                  aria-label="Token para aprovar baseline"
-                  type="password"
-                  autoComplete="off"
-                  placeholder="Token de operação protegida"
-                  value={baselineToken}
-                  onChange={(event) => setBaselineToken(event.target.value)}
-                  className="mt-2 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                />
+                {!api.hasSession() && (
+                  <input
+                    aria-label="Token para aprovar baseline"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="Token de operação protegida"
+                    value={baselineToken}
+                    onChange={(event) => setBaselineToken(event.target.value)}
+                    className="mt-2 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  />
+                )}
                 {selected.status === "success" ? (
                   <div className="mt-3">
                     <Button
-                      disabled={!baselineToken}
+                      disabled={!api.hasRole("operator") && !baselineToken}
                       onClick={() => void chooseBaseline()}
                     >
                       Aprovar esta execução
@@ -596,6 +668,56 @@ export function AuditRunsPage() {
                 </p>
               </Card>
             </div>
+
+            {coverage?.some((item) => item.database_name) ? (
+              <Card title="Progresso por database">
+                <Table
+                  dense
+                  headers={["Database", "Collector", "Estado", "Ação"]}
+                >
+                  {coverage
+                    .filter((item) => item.database_name)
+                    .map((item) => (
+                      <tr key={`${item.collector_name}:${item.database_name}`}>
+                        <td className="px-3 py-2">{item.database_name}</td>
+                        <td className="px-3 py-2">{item.collector_name}</td>
+                        <td className="px-3 py-2">{item.status}</td>
+                        <td className="px-3 py-2">
+                          {selected.status === "running" &&
+                          api.hasRole("operator") &&
+                          item.database_name &&
+                          item.status === "attempted" ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void api
+                                  .cancelAuditDatabase(
+                                    selected.id,
+                                    item.database_name ?? "",
+                                  )
+                                  .then(() => loadRunDiagnostics(selected.id))
+                                  .catch((cause: unknown) =>
+                                    setError(
+                                      formatError(
+                                        cause,
+                                        "Falha ao cancelar database",
+                                      ),
+                                    ),
+                                  )
+                              }
+                              className="text-rose-300 hover:underline"
+                            >
+                              Cancelar database
+                            </button>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                </Table>
+              </Card>
+            ) : null}
 
             {coverage?.some((item) => item.status === "failed") ? (
               <Card title="Falhas de cobertura">

@@ -8,6 +8,7 @@ import {
   YAxis,
 } from "recharts";
 import { DetailGrid, DetailSection } from "../components/ui/Sheet";
+import { Table } from "../components/ui/Table";
 import { formatBytes } from "../lib/format";
 import {
   relationClassBadgeClass,
@@ -119,34 +120,21 @@ export function TableDetail({
             . Lista detalhada indisponível para este objeto.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-slate-700">
-            <table className="min-w-full text-left text-xs text-slate-200">
-              <thead className="bg-slate-900/80 text-slate-400">
-                <tr>
-                  <th className="px-2 py-1.5">#</th>
-                  <th className="px-2 py-1.5">Nome</th>
-                  <th className="px-2 py-1.5">Tipo</th>
-                  <th className="px-2 py-1.5">Nullable</th>
-                  <th className="px-2 py-1.5">Default</th>
-                </tr>
-              </thead>
-              <tbody>
-                {columns.map((c) => (
-                  <tr key={c.id} className="border-t border-slate-800">
-                    <td className="px-2 py-1.5">{c.ordinal_position}</td>
-                    <td className="px-2 py-1.5 font-medium text-slate-100">
-                      {c.column_name}
-                    </td>
-                    <td className="px-2 py-1.5">{c.data_type}</td>
-                    <td className="px-2 py-1.5">{boolLabel(c.is_nullable)}</td>
-                    <td className="px-2 py-1.5 font-mono text-[11px] text-slate-400">
-                      {c.column_default ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table dense headers={["#", "Nome", "Tipo", "Nullable", "Default"]}>
+            {columns.map((c) => (
+              <tr key={c.id} className="border-t border-slate-800">
+                <td className="px-2 py-1.5">{c.ordinal_position}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-100">
+                  {c.column_name}
+                </td>
+                <td className="px-2 py-1.5">{c.data_type}</td>
+                <td className="px-2 py-1.5">{boolLabel(c.is_nullable)}</td>
+                <td className="px-2 py-1.5 font-mono text-[11px] text-slate-400">
+                  {c.column_default ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </Table>
         )}
       </DetailSection>
       <DetailSection title="Histórico (últimos 30 dias)">
@@ -224,36 +212,32 @@ export function TableDetail({
             Sem estatísticas agregadas. Nenhum valor bruto é coletado.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-md border border-slate-700">
-            <table className="min-w-full text-left text-xs text-slate-200">
-              <thead className="bg-slate-900/80 text-slate-400">
-                <tr>
-                  <th className="px-2 py-1.5">Coluna</th>
-                  <th className="px-2 py-1.5">Nulos</th>
-                  <th className="px-2 py-1.5">Distintos (est.)</th>
-                  <th className="px-2 py-1.5">Largura média</th>
-                  <th className="px-2 py-1.5">Qualidade</th>
-                </tr>
-              </thead>
-              <tbody>
-                {columnStats.map((s) => (
-                  <tr key={s.column_name} className="border-t border-slate-800">
-                    <td className="px-2 py-1.5 font-medium">{s.column_name}</td>
-                    <td className="px-2 py-1.5">
-                      {(s.null_fraction * 100).toFixed(1)}%
-                    </td>
-                    <td className="px-2 py-1.5">
-                      {formatNumber(s.distinct_estimate)}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      {formatNumber(s.average_width)} B
-                    </td>
-                    <td className="px-2 py-1.5">{s.quality}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            dense
+            headers={[
+              "Coluna",
+              "Nulos",
+              "Distintos (est.)",
+              "Largura média",
+              "Qualidade",
+            ]}
+          >
+            {columnStats.map((s) => (
+              <tr key={s.column_name} className="border-t border-slate-800">
+                <td className="px-2 py-1.5 font-medium">{s.column_name}</td>
+                <td className="px-2 py-1.5">
+                  {(s.null_fraction * 100).toFixed(1)}%
+                </td>
+                <td className="px-2 py-1.5">
+                  {formatNumber(s.distinct_estimate)}
+                </td>
+                <td className="px-2 py-1.5">
+                  {formatNumber(s.average_width)} B
+                </td>
+                <td className="px-2 py-1.5">{s.quality}</td>
+              </tr>
+            ))}
+          </Table>
         )}
       </DetailSection>
       <DetailSection title="Workload correlacionado">

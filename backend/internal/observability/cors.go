@@ -17,7 +17,7 @@ var defaultDevOrigins = []string{
 // CORS wraps next with Cross-Origin headers so the browser UI can call the API.
 //
 // Origins: AUDITOR_CORS_ORIGINS (comma-separated). Empty → default local dev
-// origins. "*" reflects the request Origin (required when credentials are used).
+// origins. Wildcards are intentionally rejected for authenticated routes.
 func CORS(next http.Handler) http.Handler {
 	allowed := parseCORSOrigins(os.Getenv("AUDITOR_CORS_ORIGINS"))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func parseCORSOrigins(raw string) []string {
 
 func originAllowed(origin string, allowed []string) bool {
 	for _, a := range allowed {
-		if a == "*" || strings.EqualFold(a, origin) {
+		if a != "*" && strings.EqualFold(a, origin) {
 			return true
 		}
 	}

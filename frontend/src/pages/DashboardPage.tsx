@@ -8,6 +8,7 @@ import {
   ErrorBanner,
   Skeleton,
   StoragePieChart,
+  Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
@@ -99,10 +100,6 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    setEnvironmentId(null);
-  }, [setEnvironmentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -283,6 +280,21 @@ export function DashboardPage() {
           </KpiGroup>
           <KpiGroup title="Capacidade">
             <Card
+              subtitle="Total de Databases"
+              title={kpis.databases == null ? "—" : String(kpis.databases)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card
+              subtitle="Total de Schemas"
+              title={kpis.schemas == null ? "—" : String(kpis.schemas)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card
+              subtitle="Total de Tabelas"
+              title={kpis.tables == null ? "—" : String(kpis.tables)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card
               subtitle="Storage total"
               title={formatBytes(kpis.total_storage_bytes)}
               onClick={() => setSection("Inventário")}
@@ -290,6 +302,13 @@ export function DashboardPage() {
             <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
             <Card subtitle="Policies" title={String(kpis.policies)} />
           </KpiGroup>
+          {kpis.inventory_status !== "complete" ? (
+            <p className="text-sm text-amber-300" role="status">
+              {kpis.inventory_status === "empty"
+                ? "Ainda não há inventário concluído para o ambiente selecionado."
+                : "Inventário parcial: os totais exibidos podem estar incompletos."}
+            </p>
+          ) : null}
           <KpiGroup title="Operação">
             <Card
               subtitle="Ambientes"
@@ -415,36 +434,28 @@ export function DashboardPage() {
               Execuções.
             </p>
           ) : (
-            <div className="mt-3 overflow-x-auto rounded-md border border-slate-800">
-              <table className="w-full min-w-[28rem] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-900/95 text-xs text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Ambiente</th>
-                    <th className="px-3 py-2 font-medium">Jobs</th>
-                    <th className="px-3 py-2 font-medium">Agendados</th>
-                    <th className="px-3 py-2 font-medium">Policies</th>
+            <div className="mt-3">
+              <Table
+                dense
+                headers={["Ambiente", "Jobs", "Agendados", "Policies"]}
+              >
+                {jobs.items.map((item) => (
+                  <tr key={item.environment_id}>
+                    <td className="px-3 py-2">
+                      {item.environment_name || item.environment_id.slice(0, 8)}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.jobs_total}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.jobs_scheduled}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.policies_total}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-300">
-                  {jobs.items.map((item) => (
-                    <tr key={item.environment_id}>
-                      <td className="px-3 py-2">
-                        {item.environment_name ||
-                          item.environment_id.slice(0, 8)}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.jobs_total}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.jobs_scheduled}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.policies_total}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </Table>
             </div>
           )}
         </section>

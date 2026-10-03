@@ -104,9 +104,9 @@ func inventoryWhereFor(f InventoryFilter, startArg int) (string, []any, int) {
   (SELECT id FROM audit_run
   WHERE environment_id = $%d::uuid
     AND status IN ('success', 'partial_success')
-  ORDER BY started_at DESC
+  ORDER BY started_at DESC,id DESC
   LIMIT 1
-)`, n, startArg))
+))`, n, startArg))
 	args = append(args, f.AuditRunID)
 	n++
 	if f.Database != "" {
@@ -154,7 +154,7 @@ SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema
   COALESCE(row_estimate,0), COALESCE(column_count,0), COALESCE(has_primary_key,false), collected_at
 FROM table_snapshot
 WHERE %s
-ORDER BY database_name, schema_name, table_name
+ORDER BY database_name, schema_name, table_name,id
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -200,7 +200,7 @@ SELECT id::text, database_name, schema_name, table_name, column_name,
   identity_generation, collation_name, column_comment, collected_at
 FROM column_snapshot
 WHERE %s
-ORDER BY database_name, schema_name, table_name, ordinal_position
+ORDER BY database_name, schema_name, table_name, ordinal_position,id
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -245,7 +245,7 @@ SELECT id::text, database_name, schema_name, table_name, index_name,
   COALESCE(size_bytes,0), COALESCE(idx_scan,0), collected_at
 FROM index_snapshot
 WHERE %s
-ORDER BY database_name, schema_name, index_name
+ORDER BY database_name, schema_name, index_name,id
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -289,7 +289,7 @@ SELECT id::text, database_name, schema_name, view_name, owner_name,
   COALESCE(relkind,''), COALESCE(size_bytes,0), collected_at
 FROM view_snapshot
 WHERE %s
-ORDER BY database_name, schema_name, view_name
+ORDER BY database_name, schema_name, view_name,id
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
@@ -332,7 +332,7 @@ SELECT id::text, database_name, schema_name, function_name, COALESCE(identity_ar
   owner_name, language_name, COALESCE(is_security_definer,false), kind, collected_at
 FROM function_snapshot
 WHERE %s
-ORDER BY database_name, schema_name, function_name
+ORDER BY database_name, schema_name, function_name,id
 LIMIT $%d OFFSET $%d
 `, where, next, next+1)
 	args = append(args, limit, offset)
