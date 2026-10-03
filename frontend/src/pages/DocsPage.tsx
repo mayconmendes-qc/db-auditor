@@ -398,7 +398,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           howTo={[
             "Verifique saúde da API, store interno e runs recentes.",
             "Após make up ou mudança de .env, confirme que API e conexões estão verdes.",
-            "Em produção, métricas Prometheus ficam em GET /metrics (fora desta UI).",
+            "Em produção, métricas Prometheus ficam na porta interna 9090, fora do site público.",
           ]}
           terms={[
             {
