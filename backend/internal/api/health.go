@@ -62,7 +62,6 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /ready", ready(store))
-	mux.HandleFunc("GET /metrics", observability.DefaultMetrics.Handler())
 	mux.HandleFunc("GET /api/v1/environments", listEnvironments(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/databases", listDatabases(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/schemas", listSchemas(store))
@@ -88,9 +87,9 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerConnectionRoutes(mux, store, opts.Targets)
 	if opts.Auth != nil {
 		registerAuthRoutes(mux, opts.Auth, &loginLimiter{byIP: make(map[string]attemptWindow)})
-		return observability.Middleware(authMiddleware(mux, opts.Auth))
+		return observability.Middleware(protectPublic(authMiddleware(mux, opts.Auth)))
 	}
-	return observability.Middleware(mux)
+	return observability.Middleware(protectPublic(mux))
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {

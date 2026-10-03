@@ -2,8 +2,9 @@
 
 O diretório tem dois scripts. O Postgres do Compose executa os `.sql` **somente na primeira inicialização** de um volume vazio, em ordem alfabética.
 
-- `01_baseline.sql`: schema completo. As migrations das sprints 13–20 foram incorporadas aqui e removidas.
-- `02_seed_demo.sql`: duas linhas locais de demonstração em `audit_environment`. Não contém host nem senha.
+- `01_baseline.sql`: schema completo. As migrations das sprints 13–20 foram incorporadas aqui.
+- `02_seed_demo.sql`: duas linhas locais de demonstração. A API não aplica este arquivo.
+- `03_audit_schedule.sql`: agenda persistente. A API aplica no boot se ainda não estiver registrada.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

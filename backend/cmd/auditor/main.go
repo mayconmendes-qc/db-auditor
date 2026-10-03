@@ -15,6 +15,7 @@ import (
 	"github.com/mayconmendes-qc/db-auditor/internal/audit"
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
 	"github.com/mayconmendes-qc/db-auditor/internal/database"
+	"github.com/mayconmendes-qc/db-auditor/internal/migrate"
 	"github.com/mayconmendes-qc/db-auditor/internal/observability"
 	"github.com/mayconmendes-qc/db-auditor/internal/reportworker"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
@@ -54,6 +55,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	if err := migrate.Apply(ctx, pool, os.Getenv("AUDITOR_MIGRATIONS_DIR")); err != nil {
+		slog.Error("could not apply snapshot store migrations", "error", err)
+		os.Exit(1)
+	}
 
 	store := repository.NewStore(pool)
 	if err := store.EnsureIdentitySchema(ctx); err != nil {
@@ -112,6 +118,11 @@ func main() {
 		AnalysisProcessor:        analysisService,
 	})
 	sch := scheduler.NewWithLimits(runner, cfg.MaxConcurrentRuns)
+	sch.UseStore(store)
+	if err := sch.Load(ctx); err != nil {
+		slog.Error("could not load schedules", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddress,
@@ -121,6 +132,16 @@ func main() {
 			Targets:  targets,
 			Auth:     store,
 		}),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
+	metricsAddr := os.Getenv("AUDITOR_METRICS_ADDRESS")
+	if metricsAddr == "" {
+		metricsAddr = ":9090"
+	}
+	metricsServer := &http.Server{
+		Addr:              metricsAddr,
+		Handler:           observability.DefaultMetrics.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -162,11 +183,21 @@ func main() {
 			stop()
 		}
 	}()
+	go func() {
+		slog.Info("metrics server listening", "address", metricsAddr)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("metrics server failed", "error", err)
+			stop()
+		}
+	}()
 
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("HTTP server shutdown failed", "error", err)
+		slog.Error("HTTP shutdown failed", "error", err)
+	}
+	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("metrics shutdown failed", "error", err)
 	}
 }

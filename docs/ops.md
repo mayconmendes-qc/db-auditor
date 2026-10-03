@@ -2,7 +2,17 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. As migrations incrementais das sprints 13–20 foram incorporadas no baseline.
+O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (hoje `03_audit_schedule.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir.
+
+## Produção
+
+Copie [deploy/env.prod.example](../deploy/env.prod.example) para `.env.prod` na raiz do repositório. Preencha a senha do snapshot store, a senha inicial do operador e os dois slots `AUDITOR_TARGET_1_*` e `AUDITOR_TARGET_2_*`.
+
+```bash
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
+```
+
+O compose falha se faltarem `POSTGRES_PASSWORD`, `AUDITOR_BOOTSTRAP_USER`, `AUDITOR_BOOTSTRAP_PASSWORD`, `AUDITOR_CORS_ORIGINS` ou `AUDITOR_TARGET_ALLOWED_HOSTS`. Os DSNs não entram no YAML. O Postgres interno não publica porta. `GET /metrics` não passa pelo Caddy; o scrape fica em `api:9090`, dentro da rede do compose.
 O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
 
 Após alterar o baseline em desenvolvimento:
@@ -22,7 +32,7 @@ Detalhes: `backend/migrations/README.md`.
 |----------|-----|
 | `GET /health` | Liveness |
 | `GET /ready` | Readiness (snapshot store) |
-| `GET /metrics` | Prometheus text exposition |
+| `GET /metrics` | Prometheus, só na porta interna 9090 |
 | `GET /api/v1/status` | Visão operacional (UI Status) |
 
 Logs da API são **JSON estruturados** por padrão (`AUDITOR_LOG_FORMAT=json`).  
@@ -53,7 +63,8 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 ```
 
 3. Caddy termina TLS (quando o domínio aponta para a VPS) e encaminha:
-   - `/api/*`, `/health`, `/ready`, `/metrics` → API
+   - `/api/*`, `/health`, `/ready` → API
+   - `/metrics` não é publicado; scrape em `api:9090`
    - resto → frontend estático
 
 ### Volumes e secrets
@@ -72,7 +83,7 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 
 1. `GET /health` → `ok`
 2. `GET /ready` → `ready`
-3. `GET /metrics` contém `auditor_up 1`
+3. `GET` na porta 9090 (`/metrics`) contém `auditor_up 1`. O mesmo caminho em 8080 responde 404.
 4. UI **Status** lista API, store e runs
 5. Logs JSON incluem `request_id` e `duration_ms`
 6. UI **Documentação** descreve o fluxo de configuração via `.env`
