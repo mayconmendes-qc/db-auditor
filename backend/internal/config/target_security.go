@@ -57,7 +57,7 @@ func ValidateTargetDSNs(targets map[string]string) error {
 		if sslmode != "verify-full" {
 			loopback := net.ParseIP(host)
 			local := host == "localhost" || loopback != nil && loopback.IsLoopback()
-			if !(local && os.Getenv("AUDITOR_ALLOW_INSECURE_LOCAL_TARGETS") == "true" && sslmode == "disable") {
+			if !local || os.Getenv("AUDITOR_ALLOW_INSECURE_LOCAL_TARGETS") != "true" || sslmode != "disable" {
 				return fmt.Errorf("target TLS must use sslmode=verify-full for environment %s", environmentID)
 			}
 		}
