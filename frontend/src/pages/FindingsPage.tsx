@@ -756,7 +756,9 @@ export function FindingsPage() {
               </p>
               <p>Categoria: {selected.category || "—"}</p>
               <p>Impacto: {selected.impact || "—"}</p>
-              <p>Risco/ressalva: {selected.risk || "revisão humana necessária"}</p>
+              <p>
+                Risco/ressalva: {selected.risk || "revisão humana necessária"}
+              </p>
               <p>Resumo original: {selected.summary}</p>
               <p>Recomendação original: {selected.recommendation || "—"}</p>
               <p>Validação original: {selected.validation || "—"}</p>
