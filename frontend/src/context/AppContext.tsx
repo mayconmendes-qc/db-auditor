@@ -143,6 +143,7 @@ export interface AppContextValue {
   openRun: (id: string) => void;
   openFinding: (id: string | null) => void;
   openInventory: (target: InventoryTarget, run?: string) => void;
+  closeInventory: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -275,6 +276,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const closeInventory = useCallback(() => {
+    setInventory(null);
+  }, []);
+
   const refreshEnvironments = useCallback(async () => {
     setEnvironmentsLoading(true);
     try {
@@ -323,6 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openRun,
       openFinding,
       openInventory,
+      closeInventory,
     }),
     [
       section,
@@ -341,6 +347,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openRun,
       openFinding,
       openInventory,
+      closeInventory,
     ],
   );
 
