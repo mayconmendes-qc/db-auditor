@@ -4,7 +4,8 @@ const guidance: Record<string, { meaning: string; next: string }> = {
     next: "Confirme como os registros são identificados e valide os dados antes de considerar uma chave primária.",
   },
   "integrity.fk_without_index": {
-    meaning: "Uma relação entre tabelas pode estar sem um índice útil para as consultas.",
+    meaning:
+      "Uma relação entre tabelas pode estar sem um índice útil para as consultas.",
     next: "Confira as consultas e seus planos de execução antes de avaliar um novo índice.",
   },
   "index.unused": {
@@ -12,7 +13,8 @@ const guidance: Record<string, { meaning: string; next: string }> = {
     next: "Confira o período das estatísticas e as consultas antes de decidir se o índice ainda é necessário.",
   },
   "security.auditor_not_readonly": {
-    meaning: "A conta usada para auditar o banco possui permissão de escrita ou privilégios elevados.",
+    meaning:
+      "A conta usada para auditar o banco possui permissão de escrita ou privilégios elevados.",
     next: "Peça ao administrador que revise as permissões e use uma conta de somente leitura para a coleta.",
   },
   "security.auditor_privilege_unknown": {
@@ -27,11 +29,13 @@ const byCategory: Record<string, { meaning: string; next: string }> = {
     next: "Confira os registros e os relacionamentos afetados antes de alterar a estrutura do banco.",
   },
   security: {
-    meaning: "Foi encontrado um ponto de atenção nas permissões ou na execução de código do banco.",
+    meaning:
+      "Foi encontrado um ponto de atenção nas permissões ou na execução de código do banco.",
     next: "Revise as evidências com o administrador e confirme a necessidade de cada privilégio antes de alterar acessos.",
   },
   performance: {
-    meaning: "Uma métrica sugere possível impacto no tempo das consultas ou gravações.",
+    meaning:
+      "Uma métrica sugere possível impacto no tempo das consultas ou gravações.",
     next: "Compare as métricas e os planos de consultas representativas antes de ajustar o banco.",
   },
   index: {
