@@ -182,6 +182,21 @@ type ChunkSnapshot struct {
 	AfterCompressionBytes  int64
 }
 
+type ChunkVacuumSample struct {
+	AuditRunID       pgtype.UUID
+	EnvironmentID    pgtype.UUID
+	DatabaseName     string
+	HypertableSchema string
+	HypertableName   string
+	ChunkSchema      string
+	ChunkName        string
+	NDeadTup         int64
+	NLiveTup         int64
+	LastAutovacuum   pgtype.Timestamptz
+	LastAnalyze      pgtype.Timestamptz
+	CollectedAt      pgtype.Timestamptz
+}
+
 type CollectorRun struct {
 	ID               pgtype.UUID
 	AuditRunID       pgtype.UUID
@@ -402,6 +417,7 @@ type FunctionSnapshot struct {
 	Kind               pgtype.Text
 	FunctionDefinition pgtype.Text
 	CollectedAt        pgtype.Timestamptz
+	Proconfig          string
 }
 
 type GrantSnapshot struct {
@@ -651,6 +667,7 @@ type SchemaSnapshot struct {
 	FunctionCount         int32
 	SizeBytes             int64
 	CollectedAt           pgtype.Timestamptz
+	Nspacl                string
 }
 
 type SequenceSnapshot struct {
@@ -669,6 +686,7 @@ type SequenceSnapshot struct {
 	OwnedByTable  pgtype.Text
 	OwnedByColumn pgtype.Text
 	CollectedAt   pgtype.Timestamptz
+	LastValue     pgtype.Numeric
 }
 
 type ServerSettingSnapshot struct {

@@ -228,5 +228,8 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 	if err = s.enrichP1Facts(ctx, environmentID, auditRunID, &f); err != nil {
 		return f, err
 	}
+	if err = s.enrichP2Facts(ctx, environmentID, auditRunID, &f); err != nil {
+		return f, err
+	}
 	return f, nil
 }

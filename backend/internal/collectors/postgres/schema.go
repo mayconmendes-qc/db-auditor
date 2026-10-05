@@ -29,6 +29,7 @@ func CollectSchemas(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]
 			&f.SequenceCount,
 			&f.FunctionCount,
 			&f.SizeBytes,
+			&f.ACL,
 		); err != nil {
 			return nil, fmt.Errorf("schema collector scan: %w", err)
 		}

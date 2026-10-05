@@ -51,15 +51,10 @@ func TestIndexAnalyzerUnusedNoDrop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(out) != 1 {
-		t.Fatalf("expected 1 unused index finding, got %d", len(out))
-	}
-	if out[0].FindingType != "index.unused" {
-		t.Fatalf("type = %s", out[0].FindingType)
-	}
-	note, _ := out[0].Evidence["note"].(string)
-	if note == "" {
-		t.Error("expected explicit no-DROP note in evidence")
+	for _, f := range out {
+		if f.FindingType == "index.unused" {
+			t.Fatalf("a single snapshot must not emit index.unused: %+v", f)
+		}
 	}
 }
 

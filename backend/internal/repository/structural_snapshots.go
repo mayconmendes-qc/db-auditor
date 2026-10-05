@@ -48,13 +48,13 @@ func (s *Store) SaveStructuralInventory(
 INSERT INTO sequence_snapshot (
   audit_run_id, environment_id, database_name, schema_name, sequence_name,
   data_type, start_value, increment_by, max_value, min_value, cycle,
-  owned_by_table, owned_by_column, collected_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+  owned_by_table, owned_by_column, last_value, collected_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
 ON CONFLICT (audit_run_id, database_name, schema_name, sequence_name) DO NOTHING
 `, auditRunID, environmentID, seq.DatabaseName, seq.SchemaName, seq.SequenceName,
 			nullStringPtr(seq.DataType), nullStringPtr(seq.StartValue), nullStringPtr(seq.IncrementBy),
 			nullStringPtr(seq.MaxValue), nullStringPtr(seq.MinValue), seq.Cycle,
-			nullStringPtr(seq.OwnedByTable), nullStringPtr(seq.OwnedByColumn))
+			nullStringPtr(seq.OwnedByTable), nullStringPtr(seq.OwnedByColumn), nullStringPtr(seq.LastValue))
 		if err != nil {
 			return fmt.Errorf("insert sequence_snapshot: %w", err)
 		}
@@ -86,53 +86,4 @@ ON CONFLICT (audit_run_id, database_name, schema_name, table_name, policy_name) 
 		}
 	}
 	return tx.Commit(ctx)
-}
-
-func (s *Store) ListConstraintSnapshots(ctx context.Context, f InventoryFilter) ([]ConstraintSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor(f, 1)
-	if f.Q != "" {
-		where += fmt.Sprintf(" AND (constraint_name ILIKE $%d OR table_name ILIKE $%d)", next, next)
-		args = append(args, "%"+f.Q+"%")
-		next++
-	}
-	var total int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM constraint_snapshot WHERE "+where, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-	limit, offset := f.Limit, f.Offset
-	if limit <= 0 {
-		limit = 50
-	}
-	query := fmt.Sprintf(`
-SELECT id::text, database_name, schema_name, table_name, constraint_name,
-  COALESCE(constraint_type,''), COALESCE(constraint_definition,''),
-  COALESCE(is_validated,false), COALESCE(is_deferrable,false), COALESCE(is_deferred,false),
-  COALESCE(constrained_columns, ARRAY[]::text[]),
-  referenced_schema_name, referenced_table_name,
-  COALESCE(referenced_columns, ARRAY[]::text[]),
-  fk_update_action, fk_delete_action, fk_match_type, collected_at
-FROM constraint_snapshot WHERE %s
-ORDER BY database_name, schema_name, table_name, constraint_name
-LIMIT $%d OFFSET $%d`, where, next, next+1)
-	args = append(args, limit, offset)
-	rows, err := s.pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-	out := make([]ConstraintSnapshotRow, 0)
-	for rows.Next() {
-		var r ConstraintSnapshotRow
-		if err := rows.Scan(
-			&r.ID, &r.DatabaseName, &r.SchemaName, &r.TableName, &r.ConstraintName,
-			&r.ConstraintType, &r.ConstraintDefinition,
-			&r.IsValidated, &r.IsDeferrable, &r.IsDeferred,
-			&r.ConstrainedColumns, &r.ReferencedSchema, &r.ReferencedTable,
-			&r.ReferencedColumns, &r.FKUpdateAction, &r.FKDeleteAction, &r.FKMatchType, &r.CollectedAt,
-		); err != nil {
-			return nil, 0, err
-		}
-		out = append(out, r)
-	}
-	return out, total, rows.Err()
 }

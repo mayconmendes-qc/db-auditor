@@ -204,6 +204,25 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			warnings = append(warnings, fmt.Sprintf("%s: %s", o.Name, o.Warning))
 		}
 	}
+	if profile == ProfileFast {
+		ran := map[string]bool{}
+		for _, o := range outcomes {
+			ran[o.Name] = true
+		}
+		for _, name := range []string{
+			"postgres.columns", "postgres.constraints", "postgres.indexes",
+			"postgres.functions", "postgres.views", "timescale.chunks",
+			"timescale.continuous_aggregates",
+		} {
+			if ran[name] {
+				continue
+			}
+			skipped++
+			if err := r.store.RecordCollectorCoverage(finalCtx, auditRunID, name, "", CollectorStatusSkipped, 0, "não coletado neste perfil", ""); err != nil {
+				errs = append(errs, fmt.Sprintf("%s coverage: %s", name, err))
+			}
+		}
+	}
 	status := AggregateRunStatus(success, failed, skipped, cancelled)
 	var analysis *AnalysisOutcome
 	if !cancelled && success > 0 && r.opts.AnalysisProcessor != nil {

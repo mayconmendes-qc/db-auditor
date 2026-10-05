@@ -32,6 +32,7 @@ func CollectFunctions(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 			&f.Volatility,
 			&f.ParallelSafety,
 			&f.Kind,
+			&f.Proconfig,
 			&definition,
 		); err != nil {
 			return nil, fmt.Errorf("function collector scan: %w", err)

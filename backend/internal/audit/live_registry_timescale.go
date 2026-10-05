@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/osmendes/db-auditor/internal/collectors/postgres"
 	"github.com/osmendes/db-auditor/internal/collectors/timescale"
 	"github.com/osmendes/db-auditor/internal/config"
@@ -248,6 +249,37 @@ func registerTimescaleCollectors(
 				Policies: all,
 			}); err != nil {
 				return 0, fmt.Errorf("persistir policies: %w", err)
+			}
+		}
+		return finishMulti(int64(len(all)), partial, nil)
+	})
+
+	must("timescale.chunk_dead_tuples", func(ctx context.Context) (int64, error) {
+		dsn, err := dsnFromContext(ctx, targets)
+		if err != nil {
+			return 0, err
+		}
+		var all []timescale.ChunkVacuumSample
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+			items, err := timescale.CollectChunkVacuumSamples(cctx, conn)
+			if err != nil {
+				return err
+			}
+			all = append(all, items...)
+			return nil
+		})
+		if hard != nil {
+			return 0, hard
+		}
+		if saver, ok := writer.(interface {
+			SaveChunkVacuumSamples(context.Context, pgtype.UUID, pgtype.UUID, []timescale.ChunkVacuumSample) error
+		}); ok && len(all) > 0 {
+			envID, runID, err := runIDs(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if err = saver.SaveChunkVacuumSamples(ctx, envID, runID, all); err != nil {
+				return 0, err
 			}
 		}
 		return finishMulti(int64(len(all)), partial, nil)

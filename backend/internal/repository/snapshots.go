@@ -100,12 +100,12 @@ ON CONFLICT (audit_run_id, database_name) DO NOTHING
 INSERT INTO schema_snapshot (
   audit_run_id, environment_id, database_name, schema_name, owner_name,
   table_count, view_count, materialized_view_count, sequence_count, function_count,
-  size_bytes, collected_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+  size_bytes, nspacl, collected_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())
 ON CONFLICT (audit_run_id, database_name, schema_name) DO NOTHING
 `, auditRunID, environmentID, sc.DatabaseName, sc.SchemaName, nullString(sc.Owner),
 			sc.TableCount, sc.ViewCount, sc.MaterializedViewCount, sc.SequenceCount, sc.FunctionCount,
-			sc.SizeBytes)
+			sc.SizeBytes, sc.ACL)
 		if err != nil {
 			return fmt.Errorf("insert schema_snapshot %s.%s: %w", sc.DatabaseName, sc.SchemaName, err)
 		}
