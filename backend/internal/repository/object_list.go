@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/osmendes/db-auditor/internal/database/sqlc"
 )
 
 type InventoryFilter struct {
@@ -133,50 +135,63 @@ func inventoryWhereFor(f InventoryFilter, startArg int) (string, []any, int) {
 }
 
 func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]TableSnapshotRow, int, error) {
-	where, args, next := inventoryWhereFor(f, 1)
-	if f.Q != "" {
-		where += fmt.Sprintf(" AND (table_name ILIKE $%d OR schema_name ILIKE $%d OR database_name ILIKE $%d)", next, next, next)
-		args = append(args, "%"+f.Q+"%")
-		next++
-	}
-	var total int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM table_snapshot WHERE "+where, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
 	limit, offset := f.Limit, f.Offset
 	if limit <= 0 {
 		limit = 50
 	}
-	query := fmt.Sprintf(`
-SELECT id::text, audit_run_id::text, environment_id::text, database_name, schema_name, table_name,
-  owner_name, COALESCE(relkind,''), COALESCE(relation_class,''), COALESCE(is_partition,false),
-  total_size_bytes, data_size_bytes, index_size_bytes,
-  COALESCE(row_estimate,0), COALESCE(column_count,0), COALESCE(has_primary_key,false), collected_at
-FROM table_snapshot
-WHERE %s
-ORDER BY database_name, schema_name, table_name,id
-LIMIT $%d OFFSET $%d
-`, where, next, next+1)
-	args = append(args, limit, offset)
-	rows, err := s.pool.Query(ctx, query, args...)
+	q := f.Q
+	if q != "" {
+		q = "%" + q + "%"
+	}
+	env, err := parseUUID(f.EnvironmentID)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
-	out := make([]TableSnapshotRow, 0)
-	for rows.Next() {
-		var r TableSnapshotRow
-		if err := rows.Scan(
-			&r.ID, &r.AuditRunID, &r.EnvironmentID, &r.DatabaseName, &r.SchemaName, &r.TableName,
-			&r.OwnerName, &r.Relkind, &r.RelationClass, &r.IsPartition,
-			&r.TotalSizeBytes, &r.DataSizeBytes, &r.IndexSizeBytes,
-			&r.RowEstimate, &r.ColumnCount, &r.HasPrimaryKey, &r.CollectedAt,
-		); err != nil {
-			return nil, 0, err
-		}
-		out = append(out, r)
+	total, err := s.q.CountTableSnapshots(ctx, sqlc.CountTableSnapshotsParams{
+		Column1: env,
+		Column2: f.AuditRunID,
+		Column3: f.Database,
+		Column4: f.Schema,
+		Column5: f.Table,
+		Column6: f.RelationClass,
+		Column7: q,
+	})
+	if err != nil {
+		return nil, 0, err
 	}
-	return out, total, rows.Err()
+	rows, err := s.q.ListTableSnapshotsFiltered(ctx, sqlc.ListTableSnapshotsFilteredParams{
+		Column1: env,
+		Column2: f.AuditRunID,
+		Column3: f.Database,
+		Column4: f.Schema,
+		Column5: f.Table,
+		Column6: f.RelationClass,
+		Column7: q,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]TableSnapshotRow, 0, len(rows))
+	for _, row := range rows {
+		item := TableSnapshotRow{
+			ID: row.ID, AuditRunID: row.AuditRunID, EnvironmentID: row.EnvironmentID,
+			DatabaseName: row.DatabaseName, SchemaName: row.SchemaName, TableName: row.TableName,
+			Relkind: row.Relkind, RelationClass: row.RelationClass, IsPartition: row.IsPartition,
+			TotalSizeBytes: row.TotalSizeBytes, DataSizeBytes: row.DataSizeBytes, IndexSizeBytes: row.IndexSizeBytes,
+			RowEstimate: row.RowEstimate, ColumnCount: int(row.ColumnCount), HasPrimaryKey: row.HasPrimaryKey,
+		}
+		if row.OwnerName.Valid {
+			owner := row.OwnerName.String
+			item.OwnerName = &owner
+		}
+		if row.CollectedAt.Valid {
+			item.CollectedAt = row.CollectedAt.Time
+		}
+		out = append(out, item)
+	}
+	return out, int(total), nil
 }
 
 func (s *Store) ListColumnSnapshots(ctx context.Context, f InventoryFilter) ([]ColumnSnapshotRow, int, error) {

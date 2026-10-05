@@ -1,4 +1,4 @@
-import { Children, type ReactNode, useState } from "react";
+import { Children, type ReactNode, useMemo, useState } from "react";
 import type { SortDir } from "../../lib/sort";
 import { type PageSize, PaginationControls } from "./PaginationControls";
 
@@ -20,7 +20,15 @@ export interface TableProps {
   sortDir?: SortDir;
   onSort?: (id: string) => void;
   pagination?: boolean;
+  /**
+   * When set, only this many rows are mounted. The page is still the server
+   * page already passed as children — virtualization does not fetch more.
+   */
+  virtualize?: boolean;
+  rowHeight?: number;
 }
+
+const DEFAULT_WINDOW = 30;
 
 function headerId(header: TableHeader, index: number): string {
   if (typeof header === "string") {
@@ -46,22 +54,52 @@ export function Table({
   sortDir,
   onSort,
   pagination = true,
+  virtualize = false,
+  rowHeight = 36,
 }: TableProps) {
   const thPad = dense ? "px-3 py-2" : "px-4 py-3";
   const [size, setSize] = useState<PageSize>(20);
   const [offset, setOffset] = useState(0);
+  const [windowStart, setWindowStart] = useState(0);
   const rows = Children.toArray(children);
   const safeOffset =
     size === "all"
       ? 0
       : Math.min(offset, Math.max(0, Math.ceil(rows.length / size) - 1) * size);
-  const visible =
+  const pageRows =
     !pagination || size === "all"
       ? rows
       : rows.slice(safeOffset, safeOffset + size);
+  const mounted = useMemo(() => {
+    if (!virtualize || pageRows.length <= DEFAULT_WINDOW) {
+      return { rows: pageRows, padBefore: 0, padAfter: 0 };
+    }
+    const start = Math.min(
+      windowStart,
+      Math.max(0, pageRows.length - DEFAULT_WINDOW),
+    );
+    const end = Math.min(pageRows.length, start + DEFAULT_WINDOW);
+    return {
+      rows: pageRows.slice(start, end),
+      padBefore: start * rowHeight,
+      padAfter: (pageRows.length - end) * rowHeight,
+    };
+  }, [pageRows, virtualize, windowStart, rowHeight]);
+
   return (
     <div className={className}>
-      <div className="overflow-x-auto rounded-lg border border-slate-700">
+      <div
+        className="overflow-x-auto rounded-lg border border-slate-700"
+        style={virtualize ? { maxHeight: 640, overflowY: "auto" } : undefined}
+        onScroll={
+          virtualize
+            ? (event) => {
+                const top = event.currentTarget.scrollTop;
+                setWindowStart(Math.max(0, Math.floor(top / rowHeight) - 5));
+              }
+            : undefined
+        }
+      >
         <table className="min-w-full text-left text-sm text-slate-200">
           <thead className="sticky top-0 z-10 bg-slate-900/95 text-slate-400 backdrop-blur-sm">
             <tr>
@@ -97,7 +135,19 @@ export function Table({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">{visible}</tbody>
+          <tbody className="divide-y divide-slate-800">
+            {mounted.padBefore > 0 ? (
+              <tr aria-hidden>
+                <td style={{ height: mounted.padBefore }} />
+              </tr>
+            ) : null}
+            {mounted.rows}
+            {mounted.padAfter > 0 ? (
+              <tr aria-hidden>
+                <td style={{ height: mounted.padAfter }} />
+              </tr>
+            ) : null}
+          </tbody>
         </table>
       </div>
       {pagination ? (
@@ -108,8 +158,12 @@ export function Table({
           onSizeChange={(next) => {
             setSize(next);
             setOffset(0);
+            setWindowStart(0);
           }}
-          onOffsetChange={setOffset}
+          onOffsetChange={(next) => {
+            setOffset(next);
+            setWindowStart(0);
+          }}
           label={headers.map(headerLabel).join(", ")}
         />
       ) : null}

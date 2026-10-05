@@ -1,5 +1,9 @@
 .PHONY: fmt test test-cover check staticcheck lint build sqlc
 
+VERSION ?= dev
+COMMIT ?= unknown
+DATE ?= unknown
+
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './internal/database/sqlc/*')
 
@@ -11,6 +15,7 @@ test-cover:
 	go tool cover -func=coverage.out
 
 check:
+	sqlc generate
 	go vet ./...
 
 staticcheck:
@@ -20,7 +25,7 @@ lint:
 	golangci-lint run
 
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/auditor ./cmd/auditor
+	CGO_ENABLED=0 go build -trimpath -ldflags='-s -w -X github.com/osmendes/db-auditor/internal/buildinfo.Version=$(VERSION) -X github.com/osmendes/db-auditor/internal/buildinfo.Commit=$(COMMIT) -X github.com/osmendes/db-auditor/internal/buildinfo.Date=$(DATE)' -o bin/auditor ./cmd/auditor
 
 sqlc:
 	sqlc generate

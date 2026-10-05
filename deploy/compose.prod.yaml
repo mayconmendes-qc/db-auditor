@@ -22,6 +22,30 @@ services:
       retries: 10
       start_period: 10s
 
+  snapshot-backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-auditor}
+      PGDATABASE: ${POSTGRES_DB:-db_auditor}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - snapshot-backup:/backup
+      - ./snapshot-backup.sh:/snapshot-backup.sh:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          sh /snapshot-backup.sh || true
+          sleep 86400
+        done
+    networks: [auditor]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ../backend
@@ -102,5 +126,6 @@ networks:
 
 volumes:
   snapshot-store:
+  snapshot-backup:
   caddy-data:
   caddy-config:

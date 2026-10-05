@@ -51,6 +51,9 @@ var ruleIDs = []string{
 	"policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "job.slo_exceeded", "job.workers_saturated",
 	"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "security.auditor_not_readonly",
 	"security.auditor_privilege_unknown", "config.version_drift", "config.extension_drift", "config.guc_drift",
+	"index.candidate", "sequence.near_limit", "security.definer_search_path",
+	"security.rls_disabled_hypothesis", "security.public_schema_create",
+	"replication.lag_high", "replication.archive_stalled", "timescale.chunk_dead_tuples",
 }
 
 // Catalog is the versioned, golden-tested source of rule metadata.
@@ -106,6 +109,9 @@ func Catalog() []RuleDefinition {
 			parameters["convention"] = "snake_case"
 		case "config.guc_drift":
 			parameters["numeric_tolerance"] = 0.0
+		case "sequence.near_limit":
+			parameters["sequence_near_limit_ratio"] = 0.70
+			parameters["sequence_integer_high_ratio"] = 0.80
 		}
 		version := "1.0.0"
 		switch id {
@@ -113,10 +119,13 @@ func Catalog() []RuleDefinition {
 			"policy.reorder_hypothesis", "job.slo_exceeded", "job.workers_saturated",
 			"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "chunk.inventory_truncated",
 			"security.auditor_not_readonly", "security.auditor_privilege_unknown",
-			"config.version_drift", "config.extension_drift", "config.guc_drift":
+			"config.version_drift", "config.extension_drift", "config.guc_drift",
+			"index.candidate", "sequence.near_limit", "security.definer_search_path",
+			"security.rls_disabled_hypothesis", "security.public_schema_create",
+			"replication.lag_high", "replication.archive_stalled", "timescale.chunk_dead_tuples":
 			version = "1.1.0"
 		}
-		if id == "policy.reorder_hypothesis" || id == "cagg.realtime_hypothesis" || id == "policy.compression_settings" {
+		if id == "policy.reorder_hypothesis" || id == "cagg.realtime_hypothesis" || id == "policy.compression_settings" || id == "index.candidate" || id == "security.rls_disabled_hypothesis" {
 			confidence = 0.4
 			risk = "hypothesis"
 		}

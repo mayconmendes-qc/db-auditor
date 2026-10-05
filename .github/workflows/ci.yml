@@ -41,7 +41,10 @@ jobs:
           fi
 
       - name: Vet
-        run: go vet ./...
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
+          sqlc generate
+          go vet ./...
 
       - name: Install staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@latest
