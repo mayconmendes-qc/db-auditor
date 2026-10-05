@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/collectors/postgres"
+	"github.com/mayconmendes-qc/db-auditor/internal/notify"
 )
 
 // RunStore persists audit_run and collector_run lifecycle events.
@@ -225,6 +227,9 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("reconcile completed run: %w", err)
 		}
 	}
+	if status == RunStatusFailed || status == RunStatusPartialSuccess {
+		notifyRun(finalCtx, r.store, environmentID, auditRunID, status)
+	}
 	return RunResult{
 		AuditRunID: auditRunID,
 		Status:     status,
@@ -303,7 +308,7 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 	errMsg := ""
 	if runErr != nil {
 		status = CollectorStatusFailed
-		errMsg = runErr.Error()
+		errMsg = classifyCollectorFailure(spec.Name, runErr)
 	}
 	finalCtx := context.WithoutCancel(ctx)
 	if ferr := r.store.FinishCollectorRun(finalCtx, collectorRunID, status, rows, warning, errMsg); ferr != nil && errMsg == "" {
@@ -315,7 +320,11 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 		status = CollectorStatusFailed
 	}
 	for _, failure := range failures {
-		_ = r.store.RecordCollectorCoverage(context.WithoutCancel(ctx), auditRunID, spec.Name, failure.Database, CollectorStatusFailed, 0, "", failure.Error)
+		msg := failure.Error
+		if msg != "" {
+			msg = classifyCollectorFailure(spec.Name, errors.New(msg))
+		}
+		_ = r.store.RecordCollectorCoverage(context.WithoutCancel(ctx), auditRunID, spec.Name, failure.Database, CollectorStatusFailed, 0, "", msg)
 	}
 	return CollectorOutcome{Name: spec.Name, Status: status, Rows: rows, Warning: warning, Error: errMsg}
 }
@@ -411,4 +420,41 @@ func (e *PartialWarning) Error() string {
 		return e.Warning
 	}
 	return "partial multi-database collection"
+}
+
+func notifyRun(ctx context.Context, store RunStore, environmentID, auditRunID, status string) {
+	cfg := notify.FromEnv()
+	if !cfg.Enabled() {
+		return
+	}
+	key := "run:" + status + ":" + auditRunID
+	if claim, ok := store.(interface {
+		ClaimAlert(context.Context, string, string) (bool, error)
+	}); ok {
+		fresh, err := claim.ClaimAlert(ctx, environmentID, key)
+		if err != nil || !fresh {
+			return
+		}
+	}
+	_ = cfg.Send(ctx, notify.Event{Kind: "audit_run", EnvironmentID: environmentID, DedupKey: key, Title: "Audit run " + status, Severity: status})
+}
+
+func classifyCollectorFailure(name string, err error) string {
+	kind := "error"
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		kind = "timeout"
+	case errors.Is(err, context.Canceled):
+		kind = "cancelled"
+	default:
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "permission denied") || strings.Contains(msg, "42501") {
+			kind = "permission"
+		} else if strings.Contains(msg, "statement timeout") || strings.Contains(msg, "57014") || strings.Contains(msg, "canceling statement") {
+			kind = "timeout"
+		} else if strings.Contains(msg, "context canceled") || strings.Contains(msg, "context cancelled") {
+			kind = "cancelled"
+		}
+	}
+	return fmt.Sprintf("%s: %s: %s", name, kind, err.Error())
 }

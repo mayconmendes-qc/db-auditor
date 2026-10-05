@@ -14,6 +14,7 @@ import {
   ReportsPage,
   SchemaDriftPage,
   SecurityPage,
+  ServerComparePage,
   StatusPage,
 } from "./pages";
 import { api } from "./services/api";
@@ -38,6 +39,8 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     content = <MappingsPage />;
   } else if (section === "Desvio de schema") {
     content = <SchemaDriftPage />;
+  } else if (section === "Comparar") {
+    content = <ServerComparePage />;
   } else if (section === "Findings") {
     content = <FindingsPage />;
   } else if (section === "Performance") {

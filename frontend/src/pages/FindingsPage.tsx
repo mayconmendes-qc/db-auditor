@@ -89,7 +89,14 @@ function FilterChip({
 }
 
 export function FindingsPage() {
-  const { environmentId, setSection } = useApp();
+  const {
+    environmentId,
+    setSection,
+    search,
+    setSearch,
+    findingId,
+    openFinding,
+  } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -121,8 +128,12 @@ export function FindingsPage() {
     };
   }, [selected?.id]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [severityFilter, setSeverityFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [severityFilter, setSeverityFilter] = useState(search.severity || "");
+  const [statusFilter, setStatusFilter] = useState(search.status ?? "open");
+  const [mine, setMine] = useState(search.mine === "1");
+  const [overdueOnly, setOverdueOnly] = useState(search.overdue === "1");
+  const [assignee, setAssignee] = useState("");
+  const [dueAt, setDueAt] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
 
   const load = useCallback(async () => {
@@ -133,6 +144,8 @@ export function FindingsPage() {
         severity: severityFilter || undefined,
         status: statusFilter || undefined,
         environment_id: environmentId || undefined,
+        assignee: mine ? "me" : undefined,
+        overdue: overdueOnly ? "1" : undefined,
       };
       if (pageSize === "all") {
         const rows = await fetchAllPages((pageOffset, limit) =>
@@ -156,11 +169,80 @@ export function FindingsPage() {
     } finally {
       setBusy(false);
     }
-  }, [severityFilter, statusFilter, environmentId, offset, pageSize]);
+  }, [
+    severityFilter,
+    statusFilter,
+    environmentId,
+    offset,
+    pageSize,
+    mine,
+    overdueOnly,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSearch({
+      severity: severityFilter || null,
+      status: statusFilter || null,
+      mine: mine ? "1" : null,
+      overdue: overdueOnly ? "1" : null,
+    });
+  }, [severityFilter, statusFilter, mine, overdueOnly, setSearch]);
+
+  useEffect(() => {
+    const nextSeverity = search.severity || "";
+    const nextStatus = search.status ?? "open";
+    const nextMine = search.mine === "1";
+    const nextOverdue = search.overdue === "1";
+    setSeverityFilter((current) =>
+      current === nextSeverity ? current : nextSeverity,
+    );
+    setStatusFilter((current) =>
+      current === nextStatus ? current : nextStatus,
+    );
+    setMine((current) => (current === nextMine ? current : nextMine));
+    setOverdueOnly((current) =>
+      current === nextOverdue ? current : nextOverdue,
+    );
+  }, [search.severity, search.status, search.mine, search.overdue]);
+
+  useEffect(() => {
+    if (!findingId) return;
+    let active = true;
+    void api
+      .finding(findingId)
+      .then((item) => {
+        if (active) setSelected(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [findingId]);
+
+  useEffect(() => {
+    setAssignee(selected?.assignee || "");
+    setDueAt(selected?.due_at ? selected.due_at.slice(0, 16) : "");
+  }, [selected]);
+
+  const saveWorkflow = async () => {
+    if (!selected) return;
+    try {
+      const due = dueAt ? new Date(dueAt).toISOString() : undefined;
+      const updated = await api.updateFindingWorkflow(
+        selected.id,
+        assignee.trim(),
+        due,
+      );
+      setItems((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      setSelected(updated);
+    } catch (err: unknown) {
+      setError(formatError(err, "Falha ao salvar responsável ou prazo"));
+    }
+  };
 
   const triage = async (id: string, status: string) => {
     try {
@@ -380,6 +462,47 @@ export function FindingsPage() {
           <Card title={String(health.inactivity)} subtitle="Inatividade" />
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={mine ? "primary" : "secondary"}
+            onClick={() => {
+              setMine((value) => !value);
+              setOffset(0);
+            }}
+          >
+            Meus
+          </Button>
+          <Button
+            variant={overdueOnly ? "primary" : "secondary"}
+            onClick={() => {
+              setOverdueOnly((value) => !value);
+              setOffset(0);
+            }}
+          >
+            Atrasados
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setSeverityFilter("critical");
+              setStatusFilter("open");
+              setOffset(0);
+            }}
+          >
+            Críticos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setStatusFilter("suppressed");
+              setSeverityFilter("");
+              setOffset(0);
+            }}
+          >
+            Suprimidos
+          </Button>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
             label="Severidade"
@@ -508,11 +631,15 @@ export function FindingsPage() {
                 <tr
                   key={f.id}
                   className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
-                  onClick={() => setSelected(f)}
+                  onClick={() => {
+                    setSelected(f);
+                    openFinding(f.id);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       setSelected(f);
+                      openFinding(f.id);
                     }
                   }}
                 >
@@ -673,6 +800,40 @@ export function FindingsPage() {
                 >
                   Reabrir
                 </Button>
+              </div>
+            ) : null}
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Responsável"
+                  placeholder="Responsável"
+                  value={assignee}
+                  onChange={(event) => setAssignee(event.target.value)}
+                />
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Prazo"
+                  type="datetime-local"
+                  value={dueAt}
+                  onChange={(event) => setDueAt(event.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    disabled={!assignee.trim() && !dueAt}
+                    onClick={() => void saveWorkflow()}
+                  >
+                    Salvar prazo
+                  </Button>
+                  {api.currentUser() ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setAssignee(api.currentUser())}
+                    >
+                      Eu
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {api.hasRole("auditor") ? (

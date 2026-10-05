@@ -197,7 +197,7 @@ SELECT f.id::text, f.environment_id::text, e.audit_run_id::text,
   f.object_type, f.object_key, e.database_name, e.schema_name, e.object_name,
   e.evidence, f.dedup_key, f.rule_id, e.rule_version, e.category, e.confidence, e.impact, e.risk,
   e.recommendation, e.validation, e.reference_urls, e.rule_parameters, f.first_seen_at, e.recorded_at, NULL::timestamptz, NULL::text,
-  f.created_at, e.recorded_at, 0, NULL::text, NULL::timestamptz, NULL::text
+  f.created_at, e.recorded_at, 0, NULL::text, NULL::timestamptz, NULL::text, f.assignee, f.due_at
 FROM finding_event e JOIN finding f ON f.id=e.finding_id
 WHERE f.environment_id=$1::uuid AND e.audit_run_id=$2::uuid AND e.event_type='observed' AND e.database_name=$3
   AND e.schema_name=$4 AND (e.object_name=$5 OR e.evidence->>'table'=$5 OR e.evidence->>'table_name'=$5)

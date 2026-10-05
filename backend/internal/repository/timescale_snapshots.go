@@ -83,16 +83,17 @@ ON CONFLICT (audit_run_id, database_name, schema_name, hypertable_name, dimensio
 INSERT INTO chunk_snapshot (
   audit_run_id, environment_id, database_name, schema_name, hypertable_name,
   chunk_schema, chunk_name, range_start, range_end, range_start_integer, range_end_integer,
-  is_compressed, chunk_tablespace, total_size_bytes, data_size_bytes, index_size_bytes, collected_at
+  is_compressed, chunk_tablespace, total_size_bytes, data_size_bytes, index_size_bytes,
+  before_compression_bytes, after_compression_bytes, collected_at
 ) VALUES (
   $1,$2,$3,$4,$5,
   $6,$7,$8,$9,$10,$11,
-  $12,$13,$14,$15,$16, now()
+  $12,$13,$14,$15,$16,$17,$18, now()
 )
 ON CONFLICT (audit_run_id, database_name, chunk_schema, chunk_name) DO NOTHING
 `, auditRunID, environmentID, c.DatabaseName, c.SchemaName, c.HypertableName,
 			c.ChunkSchema, c.ChunkName, c.RangeStart, c.RangeEnd, c.RangeStartInteger, c.RangeEndInteger,
-			c.IsCompressed, nullString(c.ChunkTablespace), c.TotalSizeBytes, c.DataSizeBytes, c.IndexSizeBytes)
+			c.IsCompressed, nullString(c.ChunkTablespace), c.TotalSizeBytes, c.DataSizeBytes, c.IndexSizeBytes, c.BeforeCompressionBytes, c.AfterCompressionBytes)
 		if err != nil {
 			return fmt.Errorf("insert chunk_snapshot %s.%s.%s: %w", c.DatabaseName, c.ChunkSchema, c.ChunkName, err)
 		}

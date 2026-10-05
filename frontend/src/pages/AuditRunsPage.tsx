@@ -27,6 +27,7 @@ import type {
   AuditRunCoverage,
   BaselineComparison,
   CollectorRun,
+  Finding,
   ScopeScore,
 } from "../types";
 
@@ -166,7 +167,7 @@ function CollectorProgress({
 }
 
 export function AuditRunsPage() {
-  const { environments, environmentId } = useApp();
+  const { environments, environmentId, runId, openRun, openFinding } = useApp();
   const [runs, setRuns] = useState<AuditRun[] | null>(null);
   const [runTotal, setRunTotal] = useState(0);
   const [runOffset, setRunOffset] = useState(0);
@@ -174,7 +175,11 @@ export function AuditRunsPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [profileFilter, setProfileFilter] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(runId);
+
+  useEffect(() => {
+    if (runId) setSelectedId(runId);
+  }, [runId]);
   const [collectors, setCollectors] = useState<CollectorRun[] | null>(null);
   const [coverage, setCoverage] = useState<AuditRunCoverage[] | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisRun | null>(null);
@@ -182,6 +187,7 @@ export function AuditRunsPage() {
   const [baselineToken, setBaselineToken] = useState("");
   const [comparison, setComparison] = useState<BaselineComparison | null>(null);
   const [scopeScore, setScopeScore] = useState<ScopeScore | null>(null);
+  const [runFindings, setRunFindings] = useState<Finding[] | null>(null);
   const [triggerEnv, setTriggerEnv] = useState("");
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -342,6 +348,34 @@ export function AuditRunsPage() {
     };
   }, [selected]);
 
+  useEffect(() => {
+    if (!selectedId) {
+      setRunFindings(null);
+      return;
+    }
+    let active = true;
+    setRunFindings(null);
+    void api
+      .runFindings(selectedId)
+      .then((result) => {
+        if (active) setRunFindings(result.items ?? []);
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          setRunFindings([]);
+          setError(
+            formatError(
+              cause,
+              "Não foi possível ler os findings desta execução",
+            ),
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedId]);
+
   const chooseBaseline = async () => {
     if (
       !selected ||
@@ -405,6 +439,7 @@ export function AuditRunsPage() {
         `Execução iniciada (${res.audit_run_id.slice(0, 8)}…) — ${labels.runStatus(res.status)}`,
       );
       setSelectedId(res.audit_run_id);
+      openRun(res.audit_run_id);
       await loadRuns();
       await loadCollectors(res.audit_run_id);
     } catch (err: unknown) {
@@ -599,7 +634,10 @@ export function AuditRunsPage() {
                   className={`cursor-pointer border-t border-slate-800 hover:bg-slate-900/50 ${
                     selectedId === r.id ? "bg-slate-900/80" : ""
                   }`}
-                  onClick={() => setSelectedId(r.id)}
+                  onClick={() => {
+                    setSelectedId(r.id);
+                    openRun(r.id);
+                  }}
                 >
                   <td className="px-3 py-1.5 text-slate-100">{r.profile}</td>
                   <td className="px-3 py-1.5">
@@ -845,6 +883,38 @@ export function AuditRunsPage() {
                 </ul>
               </Card>
             ) : null}
+
+            <Card
+              title="Findings desta execução"
+              subtitle="O conjunto observado neste run, não a fila de hoje"
+            >
+              {runFindings === null ? (
+                <Skeleton className="mt-2 h-16 w-full" />
+              ) : runFindings.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-400">
+                  Nenhum finding foi observado nesta execução.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                  {runFindings.slice(0, 30).map((finding) => (
+                    <li key={finding.id}>
+                      <button
+                        type="button"
+                        className="text-left hover:underline"
+                        onClick={() => openFinding(finding.id)}
+                      >
+                        {finding.severity} · {finding.title}
+                      </button>
+                    </li>
+                  ))}
+                  {runFindings.length > 30 ? (
+                    <li className="text-xs text-slate-500">
+                      {runFindings.length - 30} a mais nesta execução.
+                    </li>
+                  ) : null}
+                </ul>
+              )}
+            </Card>
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">

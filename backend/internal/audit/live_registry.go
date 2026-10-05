@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -131,6 +132,34 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		defer func() { _ = conn.Close(ctx) }()
 		if _, err := postgres.CollectServer(ctx, conn); err != nil {
 			return 0, err
+		}
+		role, err := postgres.CollectAuditorRole(ctx, conn)
+		if err != nil {
+			return 0, err
+		}
+		if saver, ok := writer.(interface {
+			SaveAuditorPrivilege(context.Context, pgtype.UUID, pgtype.UUID, postgres.AuditorRole) error
+		}); ok {
+			envID, runID, err := runIDs(ctx)
+			if err != nil {
+				return 0, err
+			}
+			if err = saver.SaveAuditorPrivilege(ctx, envID, runID, role); err != nil {
+				return 0, err
+			}
+		}
+		if settings, err := postgres.CollectClosedSettings(ctx, conn); err == nil && len(settings) > 0 {
+			if saver, ok := writer.(interface {
+				SaveServerSettings(context.Context, pgtype.UUID, pgtype.UUID, string, map[string]string) error
+			}); ok {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return 0, err
+				}
+				if err = saver.SaveServerSettings(ctx, envID, runID, role.Database, settings); err != nil {
+					return 0, err
+				}
+			}
 		}
 		return 1, nil
 	})
@@ -498,14 +527,19 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 			return 0, err
 		}
 		var all []timescale.ChunkFacts
+		var truncated []postgres.PartialError
 		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
 			items, err := timescale.CollectChunks(cctx, conn, scope)
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "chunk inventory truncated") {
 				return err
+			}
+			if err != nil {
+				truncated = append(truncated, postgres.PartialError{Database: "chunks", Op: "chunks", Message: "timescale.chunks: truncated: chunk inventory over the 2000 row cap; coverage is incomplete"})
 			}
 			all = append(all, items...)
 			return nil
 		})
+		partial = append(partial, truncated...)
 		if hard != nil {
 			return 0, hard
 		}
