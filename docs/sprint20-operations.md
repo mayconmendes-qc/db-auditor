@@ -35,9 +35,29 @@ O `operator` pode criar outras contas pela rota administrativa
 `POST /api/v1/auth/users` com `username`, `password` (mínimo 16 caracteres),
 `role` (`viewer`, `auditor`, `operator`) e `environments` (lista de UUIDs).
 Não-operadores precisam de ambientes explicitamente atribuídos. Sessões são
-temporárias e revogáveis; o frontend as guarda somente na memória da aba.
+temporárias e revogáveis; o frontend guarda o token em `sessionStorage` para
+restaurar a sessão após um reload na mesma aba. A API valida o token em
+`GET /api/v1/auth/me`; logout ou resposta 401 remove o token da aba. Use HTTPS
+e evite scripts de terceiros na interface, pois JavaScript da mesma origem pode
+ler `sessionStorage`.
 Somente HTTPS deve ser exposto publicamente; a API não termina TLS por conta
 própria, então use um proxy HTTPS confiável.
+
+### Login após reload e limite de requisições
+
+O reload restaura o token da mesma aba e consulta `GET /api/v1/auth/me`.
+Se a API responder 401, a sessão expirou ou foi revogada e é preciso entrar
+novamente. Se responder 429 ou estiver indisponível, a tela oferece uma nova
+tentativa sem apagar o token; aguarde um minuto antes de tentar de novo.
+
+A API limita o login a 10 tentativas por minuto por endereço remoto e as
+requisições autenticadas a 600 por minuto por usuário. Para investigar um 429,
+veja no painel Network do navegador qual rota respondeu 429 e quantas vezes
+ela foi chamada no minuto. A opção **Todas** em listas grandes busca lotes de
+500 linhas e pode atingir o limite; use filtros ou 20, 50 ou 100 linhas por
+página. Se vários navegadores ou integrações usam a mesma conta, as chamadas
+deles também compartilham o limite desse usuário. Não aumente o limite antes
+de identificar a origem das chamadas.
 
 Cada destino auditado exige `sslmode=verify-full` e host exato em
 `AUDITOR_TARGET_ALLOWED_HOSTS`. Certificados devem encadear para uma CA
