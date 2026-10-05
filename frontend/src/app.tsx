@@ -1,7 +1,8 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { navigationSections, Shell } from "./components/layout/Shell";
 import { AppProvider, useApp } from "./context/AppContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { formatError } from "./lib/errors";
 import {
   AuditRunsPage,
   DashboardPage,
@@ -69,6 +70,24 @@ export function App() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [restoring, setRestoring] = useState(true);
+  const [restoreError, setRestoreError] = useState("");
+  const restore = useCallback(async () => {
+    setRestoring(true);
+    setRestoreError("");
+    try {
+      setUser(await api.restoreSession());
+    } catch (cause) {
+      setRestoreError(
+        formatError(cause, "Não foi possível verificar a sessão."),
+      );
+    } finally {
+      setRestoring(false);
+    }
+  }, []);
+  useEffect(() => {
+    void restore();
+  }, [restore]);
   useEffect(() => {
     const expire = () => setUser(null);
     window.addEventListener("auditor:session-expired", expire);
@@ -81,12 +100,37 @@ export function App() {
     try {
       setUser(await api.login(username, password));
       setPassword("");
-    } catch {
-      setError("Não foi possível entrar. Confira usuário e senha.");
+    } catch (cause) {
+      setError(formatError(cause, "Não foi possível entrar."));
     } finally {
       setBusy(false);
     }
   };
+  if (restoring || restoreError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
+        <div className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7">
+          <h1 className="text-xl font-semibold">DB Auditor</h1>
+          {restoreError ? (
+            <>
+              <p role="alert" className="text-sm text-rose-300">
+                {restoreError}
+              </p>
+              <button
+                type="button"
+                onClick={() => void restore()}
+                className="rounded bg-cyan-600 px-4 py-2 font-medium"
+              >
+                Tentar novamente
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-slate-400">Verificando sessão…</p>
+          )}
+        </div>
+      </main>
+    );
+  }
   if (!user) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
@@ -96,7 +140,8 @@ export function App() {
         >
           <h1 className="text-xl font-semibold">Entrar no DB Auditor</h1>
           <p className="text-sm text-slate-400">
-            Sua sessão permanece apenas nesta aba.
+            Sua sessão permanece nesta aba por até 8 horas, inclusive após
+            recarregar a página.
           </p>
           <label className="block text-sm">
             Usuário
