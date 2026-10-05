@@ -20,6 +20,7 @@ type Metrics struct {
 
 	auditRunsTotal  atomic.Uint64
 	auditRunsFailed atomic.Uint64
+	backupAge       atomic.Uint64 // seconds; 0 means not yet observed
 }
 
 // DefaultMetrics is the process-wide registry.
@@ -50,7 +51,10 @@ func (m *Metrics) ObserveHTTP(method, path string, status int, d time.Duration) 
 	m.incMap(&m.httpDurationN, durKey)
 }
 
-// IncAuditRun increments audit run counters.
+// SetSnapshotBackupAge records seconds since the last successful snapshot dump.
+func (m *Metrics) SetSnapshotBackupAge(seconds uint64) {
+	m.backupAge.Store(seconds)
+}
 func (m *Metrics) IncAuditRun(failed bool) {
 	m.auditRunsTotal.Add(1)
 	if failed {
@@ -95,6 +99,9 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# HELP auditor_up Always 1 while process is alive.\n")
 		b.WriteString("# TYPE auditor_up gauge\n")
 		b.WriteString("auditor_up 1\n")
+		b.WriteString("# HELP auditor_snapshot_backup_age_seconds Seconds since the last successful snapshot-store dump. Grows when the job does not run.\n")
+		b.WriteString("# TYPE auditor_snapshot_backup_age_seconds gauge\n")
+		fmt.Fprintf(&b, "auditor_snapshot_backup_age_seconds %d\n", m.backupAge.Load())
 		b.WriteString("# HELP auditor_process_start_time_seconds Process start time.\n")
 		b.WriteString("# TYPE auditor_process_start_time_seconds gauge\n")
 		fmt.Fprintf(&b, "auditor_process_start_time_seconds %d\n", m.startedAt.Unix())

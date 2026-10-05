@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/collectors/postgres"
-	"github.com/mayconmendes-qc/db-auditor/internal/notify"
+	"github.com/osmendes/db-auditor/internal/collectors/postgres"
+	"github.com/osmendes/db-auditor/internal/notify"
 )
 
 // RunStore persists audit_run and collector_run lifecycle events.
@@ -202,6 +202,25 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 		}
 		if o.Warning != "" {
 			warnings = append(warnings, fmt.Sprintf("%s: %s", o.Name, o.Warning))
+		}
+	}
+	if profile == ProfileFast {
+		ran := map[string]bool{}
+		for _, o := range outcomes {
+			ran[o.Name] = true
+		}
+		for _, name := range []string{
+			"postgres.columns", "postgres.constraints", "postgres.indexes",
+			"postgres.functions", "postgres.views", "timescale.chunks",
+			"timescale.continuous_aggregates",
+		} {
+			if ran[name] {
+				continue
+			}
+			skipped++
+			if err := r.store.RecordCollectorCoverage(finalCtx, auditRunID, name, "", CollectorStatusSkipped, 0, "não coletado neste perfil", ""); err != nil {
+				errs = append(errs, fmt.Sprintf("%s coverage: %s", name, err))
+			}
 		}
 	}
 	status := AggregateRunStatus(success, failed, skipped, cancelled)

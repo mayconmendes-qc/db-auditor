@@ -81,7 +81,22 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 - `restart: unless-stopped` em todos os serviços long-running.
 - Healthchecks de Postgres e API controlam dependências de startup.
 
-## Checklist rápido de homologação
+## Backup do snapshot store
+
+O serviço `snapshot-backup` do compose de produção roda `pg_dump -Fc` uma vez por dia para o volume `snapshot-backup`, separado de `snapshot-store`. A retenção padrão é 14 dias (`BACKUP_RETENTION_DAYS`). Os DSNs dos Timescale auditados não entram no dump: ficam só no ambiente da API.
+
+Cada sucesso grava `snapshot_backup.last_success_at`. A métrica `auditor_snapshot_backup_age_seconds` é a idade dessa marca. Sem nenhum sucesso a idade parte do epoch e continua crescendo, então um job parado não aparece como saudável.
+
+Restore curto, com a API parada:
+
+```bash
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod stop api
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod exec -T postgres \
+  pg_restore -d "$POSTGRES_DB" --clean --if-exists /dev/stdin < /caminho/do.dump
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod start api
+```
+
+O dump não contém senha de alvo. Confira o `.env.prod` à parte antes de subir de novo.
 
 1. `GET /health` → `ok`
 2. `GET /ready` → `ready`

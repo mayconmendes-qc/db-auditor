@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/mayconmendes-qc/db-auditor/internal/collectors/postgres"
+	"github.com/osmendes/db-auditor/internal/collectors/postgres"
 )
 
 // SaveExtendedObjectInventory persists constraint/view/function/extension facts.
@@ -60,12 +60,12 @@ ON CONFLICT (audit_run_id, database_name, schema_name, view_name) DO NOTHING
 INSERT INTO function_snapshot (
   audit_run_id, environment_id, database_name, schema_name, function_name, identity_arguments,
   owner_name, language_name, is_security_definer, volatility, parallel_safety, kind,
-  function_definition, collected_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+  function_definition, proconfig, collected_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
 ON CONFLICT (audit_run_id, database_name, schema_name, function_name, identity_arguments) DO NOTHING
 `, auditRunID, environmentID, f.DatabaseName, f.SchemaName, f.FunctionName, f.IdentityArguments,
 			nullString(f.Owner), nullString(f.LanguageName), f.IsSecurityDefiner, nullString(f.Volatility),
-			nullString(f.ParallelSafety), nullString(f.Kind), nullString(f.FunctionDefinition))
+			nullString(f.ParallelSafety), nullString(f.Kind), nullString(f.FunctionDefinition), nullString(f.Proconfig))
 		if err != nil {
 			return fmt.Errorf("insert function_snapshot %s.%s.%s: %w", f.DatabaseName, f.SchemaName, f.FunctionName, err)
 		}

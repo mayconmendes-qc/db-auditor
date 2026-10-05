@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 )
-
-const minimumIndexObservation = 30 * 24 * time.Hour
 
 // IndexAnalyzer detects possibly unused indexes. It never recommends DROP.
 type IndexAnalyzer struct{}
@@ -17,44 +14,8 @@ func (IndexAnalyzer) Name() string { return "index" }
 
 func (IndexAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, error) {
 	out := make([]Finding, 0)
-	for _, idx := range facts.Indexes {
-		if idx.IsPrimary || idx.IsUnique {
-			continue
-		}
-		if idx.IdxScan > 0 {
-			continue
-		}
-		if idx.StatsReset == nil || idx.CollectedAt.IsZero() || idx.CollectedAt.Sub(*idx.StatsReset) < minimumIndexObservation {
-			continue
-		}
-		key := fmt.Sprintf("%s.%s.%s", idx.Database, idx.Schema, idx.IndexName)
-		title := fmt.Sprintf("Possibly unused index: %s", key)
-		f := Finding{
-			EnvironmentID: facts.EnvironmentID,
-			AuditRunID:    facts.AuditRunID,
-			FindingType:   "index.unused",
-			Severity:      SeverityMedium,
-			Status:        StatusOpen,
-			Title:         title,
-			Summary:       "Index reports idx_scan=0. Manual review required; no automatic DROP is suggested.",
-			ObjectType:    "index",
-			ObjectKey:     key,
-			DatabaseName:  idx.Database,
-			SchemaName:    idx.Schema,
-			ObjectName:    idx.IndexName,
-			Evidence: map[string]any{
-				"table_name":       idx.TableName,
-				"idx_scan":         idx.IdxScan,
-				"size_bytes":       idx.SizeBytes,
-				"observation_days": int(idx.CollectedAt.Sub(*idx.StatsReset).Hours() / 24),
-				"stats_reset":      idx.StatsReset.UTC().Format(time.RFC3339),
-				"note":             "Never recommend DROP automatically",
-			},
-			DedupKey: DedupKey("index.unused", key, title),
-		}
-		out = append(out, f)
-	}
-	// Duplicate detection compares the indexed structure, excluding the index name.
+	// index.unused is a two-collection comparison in P2Analyzer. A single
+	// snapshot, including one taken on the day of stats_reset, is not enough.
 	byDef := map[string][]IndexFact{}
 	for _, idx := range facts.Indexes {
 		if idx.HasValidity && (!idx.IsValid || !idx.IsReady) {

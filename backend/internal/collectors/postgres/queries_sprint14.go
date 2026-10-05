@@ -12,10 +12,12 @@ SELECT
   s.seqmin::text AS min_value,
   s.seqcycle AS cycle,
   CASE WHEN t.relname IS NOT NULL THEN tn.nspname || '.' || t.relname ELSE NULL END AS owned_by_table,
-  a.attname AS owned_by_column
+  a.attname AS owned_by_column,
+  ps.last_value::text AS last_value
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_sequence s ON s.seqrelid = c.oid
+LEFT JOIN pg_sequences ps ON ps.schemaname = n.nspname AND ps.sequencename = c.relname
 LEFT JOIN pg_depend d
   ON d.objid = c.oid AND d.deptype IN ('a', 'i') AND d.classid = 'pg_class'::regclass
 LEFT JOIN pg_class t ON t.oid = d.refobjid

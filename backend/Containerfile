@@ -1,9 +1,12 @@
 FROM golang:1.27-alpine AS build
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/auditor ./cmd/auditor
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/osmendes/db-auditor/internal/buildinfo.Version=${VERSION:-dev} -X github.com/osmendes/db-auditor/internal/buildinfo.Commit=${COMMIT:-unknown} -X github.com/osmendes/db-auditor/internal/buildinfo.Date=${DATE:-unknown}" -o /out/auditor ./cmd/auditor
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/auditor /auditor

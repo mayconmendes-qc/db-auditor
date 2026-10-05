@@ -11,6 +11,7 @@ export type NavigationSection =
   | "Findings"
   | "Performance"
   | "Segurança"
+  | "Regras"
   | "Status";
 
 export interface HealthResponse {
@@ -535,6 +536,26 @@ export interface BaselineComparison {
   added_tables: number;
   removed_tables: number;
   changed_tables: number;
+}
+
+export interface ScopeAggregate {
+  database_name: string;
+  schema_name?: string;
+  status: string;
+  score: number | null;
+  confidence: number;
+  tables: number;
+  missing_collectors: string[];
+}
+
+export interface EffectiveRule {
+  rule_id: string;
+  rule_version: string;
+  category: string;
+  enabled: boolean;
+  confidence: number;
+  effective_parameters: Record<string, unknown>;
+  default_parameters: Record<string, unknown>;
 }
 
 export interface ScopeScore {

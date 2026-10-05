@@ -12,6 +12,7 @@ import {
   MappingsPage,
   PerformancePage,
   ReportsPage,
+  RulesPage,
   SchemaDriftPage,
   SecurityPage,
   ServerComparePage,
@@ -47,6 +48,8 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     content = <PerformancePage />;
   } else if (section === "Segurança") {
     content = <SecurityPage />;
+  } else if (section === "Regras") {
+    content = <RulesPage />;
   } else if (section === "Status") {
     content = <StatusPage />;
   }

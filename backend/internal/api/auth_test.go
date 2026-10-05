@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 type fakeAuthStore struct {
