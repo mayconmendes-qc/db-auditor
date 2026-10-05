@@ -104,11 +104,16 @@ func BuildLines(d Document) []Line {
 	})
 	sort.Slice(d.Findings, func(i, j int) bool {
 		a, b := d.Findings[i], d.Findings[j]
+		if severityRank(a.Severity) != severityRank(b.Severity) {
+			return severityRank(a.Severity) < severityRank(b.Severity)
+		}
 		return a.Severity+a.Category+a.Database+a.Schema+a.Object+a.Title < b.Severity+b.Category+b.Database+b.Schema+b.Object+b.Title
 	})
-	lines := []Line{{"DB Auditor - Relatorio " + strings.ToUpper(d.Type), "title"}, {"Ambiente: " + d.Environment, "body"}, {"Execucao: " + d.RunID, "body"}, {"Inicio: " + d.RunStarted.UTC().Format(time.RFC3339) + " | Estado: " + d.RunStatus, "body"}, {"Versao do servico: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
+	lines := []Line{{"DB Auditor - Relatório " + reportTypeLabel(d.Type), "title"}, {"Ambiente: " + d.Environment, "body"}, {"Execução: " + d.RunID, "body"}, {"Início: " + d.RunStarted.UTC().Format(time.RFC3339) + " | Estado: " + d.RunStatus, "body"}, {"Versão do serviço: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
 	critical, high := 0, 0
+	severityCounts := map[string]int{}
 	for _, f := range d.Findings {
+		severityCounts[strings.ToLower(f.Severity)]++
 		if f.Severity == "critical" {
 			critical++
 		}
@@ -116,12 +121,16 @@ func BuildLines(d Document) []Line {
 			high++
 		}
 	}
-	lines = append(lines, Line{fmt.Sprintf("%d bancos | %d tabelas | %d findings (%d criticos, %d altos)", len(d.Databases), d.TotalTables, d.TotalFindings, critical, high), "body"})
-	lines = append(lines, Line{"Cobertura: " + d.Coverage, "body"})
+	lines = append(lines, Line{fmt.Sprintf("%d bancos | %d tabelas | %d %s (%d %s, %d %s)", len(d.Databases), d.TotalTables, d.TotalFindings, plural(d.TotalFindings, "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), "body"})
+	lines = append(lines, Line{Text: "Achados por severidade (itens incluídos no PDF)", Style: "subheading"})
+	for _, severity := range []struct{ key, label string }{{"critical", "Críticos"}, {"high", "Altos"}, {"medium", "Médios"}, {"low", "Baixos"}, {"info", "Informativos"}} {
+		lines = append(lines, Line{Text: fmt.Sprintf("%s|%d|%d", severity.label, severityCounts[severity.key], len(d.Findings)), Style: "bar"})
+	}
+	lines = append(lines, Line{"Cobertura: " + coverageLabel(d.Coverage), "body"})
 	if d.Score != nil {
-		lines = append(lines, Line{fmt.Sprintf("Score: %d/100 | confianca %.0f%%", *d.Score, d.ScoreConfidence*100), "body"})
+		lines = append(lines, Line{fmt.Sprintf("Índice: %d/100 | confiança %.0f%%", *d.Score, d.ScoreConfidence*100), "body"})
 	} else {
-		lines = append(lines, Line{fmt.Sprintf("Score indisponivel | confianca %.0f%%", d.ScoreConfidence*100), "body"})
+		lines = append(lines, Line{fmt.Sprintf("Índice indisponível | confiança %.0f%%", d.ScoreConfidence*100), "body"})
 	}
 	for _, c := range d.ScoreCategories {
 		lines = append(lines, Line{fmt.Sprintf("%s: %d/100 (%d findings, penalidade %d)", c.Category, c.Score, c.Findings, c.Penalty), "body"})
@@ -147,19 +156,104 @@ func BuildLines(d Document) []Line {
 			lines = append(lines, Line{fmt.Sprintf("Banco %s: %d schemas, %d tabelas, %d bytes", db.Name, db.Schemas, db.Tables, db.SizeBytes), "body"})
 		}
 		for _, table := range d.Tables {
-			lines = append(lines, Line{fmt.Sprintf("%s.%s.%s | %d bytes | %d linhas estimadas | PK %t", table.Database, table.Schema, table.Name, table.SizeBytes, table.Rows, table.HasPrimaryKey), "body"})
+			primaryKey := "Não"
+			if table.HasPrimaryKey {
+				primaryKey = "Sim"
+			}
+			lines = append(lines, Line{fmt.Sprintf("%s.%s.%s | %d bytes | %d linhas estimadas | PK: %s", table.Database, table.Schema, table.Name, table.SizeBytes, table.Rows, primaryKey), "body"})
 		}
 	}
 	lines = append(lines, Line{"Riscos e prioridades", "heading"})
 	if len(d.Findings) == 0 {
-		lines = append(lines, Line{"Nenhum finding observado neste escopo da execucao.", "body"})
+		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
 	}
 	for _, f := range d.Findings {
 		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(f.Severity), f.Title, f.Database, f.Schema, f.Object), "subheading"})
-		lines = append(lines, Line{"Evidencia: " + f.Evidence, "body"}, Line{"Analise: " + f.Summary, "body"}, Line{"Recomendacao: " + f.Recommendation, "body"}, Line{fmt.Sprintf("Confianca: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
+		lines = append(lines, Line{"Evidência: " + f.Evidence, "body"}, Line{"Análise técnica: " + f.Summary, "body"}, Line{"Recomendação técnica: " + f.Recommendation, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
 	}
-	lines = append(lines, Line{"Metodologia e glossario", "heading"}, Line{"Somente snapshots e observacoes da execucao informada foram usados.", "body"}, Line{"Finding: sinal diagnostico, nao uma ordem de alteracao automatica.", "body"}, Line{"Baseline: execucao aprovada para comparacao temporal.", "body"}, Line{"Cobertura parcial impede conclusoes sobre ausencia de objetos e findings.", "body"})
+	lines = append(lines, Line{Text: "Análise final e próximos passos", Style: "heading"})
+	if len(d.Findings) == 0 {
+		lines = append(lines, Line{Text: "Não há achados neste recorte. Confira a cobertura antes de concluir que o ambiente não possui riscos.", Style: "body"})
+	} else {
+		observation := "Foram observados"
+		if len(d.Findings) == 1 {
+			observation = "Foi observado"
+		}
+		lines = append(lines, Line{Text: fmt.Sprintf("%s %d %s neste recorte, incluindo %d %s e %d %s. Priorize a validação dos itens de maior severidade com a equipe responsável pelo banco.", observation, len(d.Findings), plural(len(d.Findings), "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), Style: "body"})
+		for index, f := range d.Findings {
+			if index >= 5 {
+				break
+			}
+			lines = append(lines, Line{Text: fmt.Sprintf("Prioridade %d (%s): %s em %s.%s.%s. Próximo passo: %s", index+1, severityLabel(f.Severity), f.Title, f.Database, f.Schema, f.Object, f.Recommendation), Style: "body"})
+		}
+	}
+	if d.Truncated || d.Coverage != "complete" {
+		lines = append(lines, Line{Text: "A cobertura é parcial ou o conteúdo foi limitado. Execute uma coleta completa antes de decidir alterações com base na ausência de achados.", Style: "body"})
+	}
+	lines = append(lines, Line{Text: "Valide cada recomendação com métricas, plano de execução e teste em ambiente controlado. O auditor não aplica mudanças no banco auditado.", Style: "body"})
+	lines = append(lines, Line{"Metodologia e glossário", "heading"}, Line{"Somente dados e observações da execução informada foram usados.", "body"}, Line{"Achado: sinal de diagnóstico que exige validação humana.", "body"}, Line{"Baseline: execução aprovada para comparação temporal.", "body"}, Line{"Cobertura parcial impede conclusões sobre ausência de objetos e achados.", "body"})
 	return lines
+}
+
+func reportTypeLabel(kind string) string {
+	switch kind {
+	case "executive":
+		return "executivo"
+	case "technical":
+		return "técnico"
+	case "table":
+		return "de tabela"
+	default:
+		return kind
+	}
+}
+
+func plural(count int, singular, many string) string {
+	if count == 1 {
+		return singular
+	}
+	return many
+}
+
+func coverageLabel(value string) string {
+	switch value {
+	case "complete":
+		return "completa"
+	case "partial":
+		return "parcial"
+	default:
+		return value
+	}
+}
+
+func severityRank(severity string) int {
+	switch strings.ToLower(severity) {
+	case "critical":
+		return 0
+	case "high":
+		return 1
+	case "medium":
+		return 2
+	case "low":
+		return 3
+	default:
+		return 4
+	}
+}
+
+func severityLabel(severity string) string {
+	switch strings.ToLower(severity) {
+	case "critical":
+		return "crítica"
+	case "high":
+		return "alta"
+	case "medium":
+		return "média"
+	case "low":
+		return "baixa"
+	default:
+		return severity
+	}
 }
 
 func scope(d Document) string {

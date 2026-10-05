@@ -67,9 +67,24 @@ func TestReportContentGolden(t *testing.T) {
 	for _, line := range lines {
 		joined += line.Text + "\n"
 	}
-	for _, want := range []string{"DB Auditor - Relatorio EXECUTIVE", "4 tabelas | 1 findings", "Cobertura: partial", "Score indisponivel", "Baseline base", "Evolucao de armazenamento", "Evidencia: proof", "Recomendacao: validate", "Metodologia e glossario"} {
+	for _, want := range []string{"DB Auditor - Relatório executivo", "4 tabelas | 1 achado", "Cobertura: parcial", "Índice indisponível", "Baseline base", "Evolucao de armazenamento", "Evidência: proof", "Recomendação técnica: validate", "Metodologia e glossário"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("report missing %q", want)
 		}
 	}
+	if !strings.Contains(joined, "Análise final e próximos passos") || !strings.Contains(joined, "Prioridade 1 (crítica): risk") {
+		t.Fatal("report is missing its final analysis")
+	}
+	if !strings.Contains(string(mustRenderPDF(t, d)), " re f ") {
+		t.Fatal("report is missing vector chart bars")
+	}
+}
+
+func mustRenderPDF(t *testing.T, d Document) []byte {
+	t.Helper()
+	pdf, err := RenderPDF(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pdf
 }
