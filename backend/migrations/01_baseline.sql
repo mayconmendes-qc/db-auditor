@@ -1,5 +1,7 @@
--- DB Auditor — snapshot store baseline (MVP 0.12+)
--- Applied once by Postgres docker-entrypoint-initdb.d on empty volume.
+-- DB Auditor — snapshot store baseline
+-- Applied once by Postgres docker-entrypoint-initdb.d on an empty volume.
+-- Sprints 13–20 were folded into this file. Do not add another incremental
+-- chain here: a new install is this file plus 02_seed_demo.sql.
 -- After changing this file in development: make reset-volume && make up
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -450,3 +452,440 @@ CREATE INDEX finding_env_status_idx ON finding (environment_id, status);
 CREATE INDEX finding_type_idx ON finding (finding_type);
 CREATE INDEX finding_severity_idx ON finding (severity);
 CREATE INDEX finding_last_seen_idx ON finding (last_seen_at DESC);
+
+-- Folded from sprints 13–20. Columns below used to be later ALTER TABLE statements.
+
+ALTER TABLE index_snapshot ADD COLUMN stats_reset timestamptz;
+ALTER TABLE table_snapshot ADD COLUMN stats_reset timestamptz;
+ALTER TABLE job_snapshot ADD COLUMN last_run_status text;
+ALTER TABLE job_snapshot ADD COLUMN total_failures bigint NOT NULL DEFAULT 0;
+ALTER TABLE continuous_aggregate_snapshot ADD COLUMN view_definition text NOT NULL DEFAULT '';
+
+CREATE TABLE audit_run_coverage (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  collector_name text NOT NULL,
+  database_name text NOT NULL DEFAULT '',
+  status text NOT NULL CHECK (status IN ('attempted', 'success', 'skipped', 'failed')),
+  rows_collected bigint NOT NULL DEFAULT 0,
+  warning text,
+  error text,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, collector_name, database_name)
+);
+
+CREATE INDEX audit_run_coverage_run_idx
+  ON audit_run_coverage (audit_run_id, collector_name, database_name);
+
+CREATE TABLE analysis_run (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  status text NOT NULL CHECK (status IN ('running', 'success', 'failed')),
+  analyzer_version text NOT NULL,
+  findings_produced integer NOT NULL DEFAULT 0,
+  findings_saved integer NOT NULL DEFAULT 0,
+  error text,
+  started_at timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  rule_manifest_hash text NOT NULL DEFAULT '',
+  UNIQUE (audit_run_id)
+);
+
+CREATE INDEX analysis_run_environment_started_idx
+  ON analysis_run (environment_id, started_at DESC);
+
+ALTER TABLE table_snapshot
+  ADD COLUMN relation_class text,
+  ADD COLUMN is_partition boolean NOT NULL DEFAULT false,
+  ADD COLUMN parent_schema_name text,
+  ADD COLUMN parent_table_name text,
+  ADD COLUMN partition_bound text,
+  ADD COLUMN tablespace_name text,
+  ADD COLUMN relpersistence text,
+  ADD COLUMN relrowsecurity boolean,
+  ADD COLUMN relforcerowsecurity boolean,
+  ADD COLUMN table_comment text,
+  ADD COLUMN storage_parameters text[] NOT NULL DEFAULT ARRAY[]::text[];
+
+ALTER TABLE constraint_snapshot
+  ADD COLUMN constrained_columns text[],
+  ADD COLUMN referenced_schema_name text,
+  ADD COLUMN referenced_table_name text,
+  ADD COLUMN referenced_columns text[],
+  ADD COLUMN fk_update_action text,
+  ADD COLUMN fk_delete_action text,
+  ADD COLUMN fk_match_type text;
+
+-- policy_snapshot already exists above and belongs to TimescaleDB jobs.
+-- Row-level security policies use rls_policy_snapshot, created later.
+
+CREATE TABLE sequence_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL,
+  database_name text NOT NULL,
+  schema_name text NOT NULL,
+  sequence_name text NOT NULL,
+  data_type text,
+  start_value numeric,
+  increment_by numeric,
+  max_value numeric,
+  min_value numeric,
+  cycle boolean,
+  owned_by_table text,
+  owned_by_column text,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, sequence_name)
+);
+
+CREATE TABLE trigger_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL,
+  database_name text NOT NULL,
+  schema_name text NOT NULL,
+  table_name text NOT NULL,
+  trigger_name text NOT NULL,
+  enabled text,
+  timing text,
+  event_manipulation text,
+  action_statement text,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, table_name, trigger_name)
+);
+
+CREATE INDEX idx_table_snapshot_relation_class
+  ON table_snapshot (environment_id, relation_class);
+
+CREATE INDEX idx_constraint_snapshot_type
+  ON constraint_snapshot (environment_id, constraint_type);
+
+CREATE INDEX table_snapshot_history_idx
+  ON table_snapshot (environment_id, database_name, schema_name, table_name, collected_at DESC);
+
+CREATE INDEX table_snapshot_run_history_idx
+  ON table_snapshot (environment_id, audit_run_id, collected_at DESC);
+
+CREATE TABLE column_stat_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  schema_name text NOT NULL,
+  table_name text NOT NULL,
+  column_name text NOT NULL,
+  null_fraction double precision NOT NULL DEFAULT 0,
+  distinct_estimate double precision NOT NULL DEFAULT 0,
+  average_width integer NOT NULL DEFAULT 0,
+  correlation double precision,
+  source text NOT NULL DEFAULT 'pg_stats',
+  quality text NOT NULL DEFAULT 'estimate',
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, table_name, column_name)
+);
+
+CREATE INDEX column_stat_snapshot_object_idx
+  ON column_stat_snapshot (environment_id, database_name, schema_name, table_name, collected_at DESC);
+
+CREATE TABLE workload_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  query_fingerprint text NOT NULL,
+  query_id text NOT NULL DEFAULT '',
+  calls bigint NOT NULL DEFAULT 0,
+  total_exec_time_ms double precision NOT NULL DEFAULT 0,
+  mean_exec_time_ms double precision NOT NULL DEFAULT 0,
+  rows_total bigint NOT NULL DEFAULT 0,
+  shared_blocks_read bigint NOT NULL DEFAULT 0,
+  shared_blocks_hit bigint NOT NULL DEFAULT 0,
+  referenced_objects text[] NOT NULL DEFAULT '{}',
+  stats_reset timestamptz,
+  source text NOT NULL DEFAULT 'pg_stat_statements',
+  evidence_quality text NOT NULL DEFAULT 'aggregate',
+  extension_version text NOT NULL DEFAULT '',
+  query_kind text NOT NULL DEFAULT 'other',
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, query_fingerprint)
+);
+
+CREATE INDEX workload_snapshot_object_idx
+  ON workload_snapshot USING gin (referenced_objects);
+
+CREATE INDEX workload_snapshot_history_idx
+  ON workload_snapshot (environment_id, database_name, collected_at DESC);
+
+ALTER TABLE index_snapshot
+  ADD COLUMN is_valid boolean NOT NULL DEFAULT true,
+  ADD COLUMN is_ready boolean NOT NULL DEFAULT true,
+  ADD COLUMN key_columns text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN predicate text NOT NULL DEFAULT '';
+
+CREATE TABLE rule_catalog (
+  rule_id text NOT NULL,
+  rule_version text NOT NULL,
+  category text NOT NULL,
+  confidence numeric(4,3) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+  impact text NOT NULL,
+  risk text NOT NULL,
+  recommendation text NOT NULL,
+  validation text NOT NULL,
+  references_json jsonb NOT NULL DEFAULT '[]'::jsonb,
+  default_parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (rule_id, rule_version)
+);
+
+CREATE TABLE rule_policy (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  schema_name text NOT NULL DEFAULT '',
+  rule_id text NOT NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (environment_id, schema_name, rule_id)
+);
+
+CREATE INDEX rule_policy_env_scope_idx ON rule_policy(environment_id, schema_name);
+
+ALTER TABLE finding
+  ADD COLUMN rule_id text NOT NULL DEFAULT '',
+  ADD COLUMN rule_version text NOT NULL DEFAULT '',
+  ADD COLUMN category text NOT NULL DEFAULT '',
+  ADD COLUMN confidence numeric(4,3) NOT NULL DEFAULT 0,
+  ADD COLUMN impact text NOT NULL DEFAULT '',
+  ADD COLUMN risk text NOT NULL DEFAULT '',
+  ADD COLUMN recommendation text NOT NULL DEFAULT '',
+  ADD COLUMN validation text NOT NULL DEFAULT '',
+  ADD COLUMN reference_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN rule_parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN recurrence_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN suppression_reason text,
+  ADD COLUMN suppressed_until timestamptz,
+  ADD COLUMN superseded_by uuid REFERENCES finding(id);
+
+ALTER TABLE column_snapshot ADD COLUMN column_comment text;
+
+CREATE TABLE rls_policy_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  schema_name text NOT NULL,
+  table_name text NOT NULL,
+  policy_name text NOT NULL,
+  permissive text,
+  roles text[],
+  cmd text,
+  qual text,
+  with_check text,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, table_name, policy_name)
+);
+
+CREATE TABLE grant_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  schema_name text NOT NULL,
+  table_name text NOT NULL,
+  grantee text NOT NULL,
+  privileges text[] NOT NULL,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, table_name, grantee)
+);
+
+CREATE TABLE object_dependency_snapshot (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  source_schema text NOT NULL,
+  source_name text NOT NULL,
+  source_kind text NOT NULL,
+  target_schema text NOT NULL,
+  target_name text NOT NULL,
+  target_kind text NOT NULL,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, source_schema, source_name, source_kind,
+          target_schema, target_name, target_kind)
+);
+
+CREATE INDEX idx_assessment_table_scope
+  ON table_snapshot (environment_id, audit_run_id, database_name, schema_name, table_name);
+CREATE INDEX idx_assessment_fk_target
+  ON constraint_snapshot (environment_id, audit_run_id, database_name, referenced_schema_name, referenced_table_name)
+  WHERE constraint_type = 'f';
+CREATE INDEX idx_assessment_findings
+  ON finding (environment_id, audit_run_id, database_name, schema_name, object_name);
+CREATE INDEX idx_assessment_grants
+  ON grant_snapshot (environment_id, audit_run_id, database_name, schema_name, table_name);
+CREATE INDEX idx_assessment_dependencies
+  ON object_dependency_snapshot (environment_id, audit_run_id, database_name, target_schema, target_name);
+CREATE INDEX idx_assessment_dependencies_source
+  ON object_dependency_snapshot (environment_id, audit_run_id, database_name, source_schema, source_name);
+CREATE INDEX idx_assessment_rls_policies
+  ON rls_policy_snapshot (environment_id, audit_run_id, database_name, schema_name, table_name);
+
+CREATE TABLE audit_baseline (
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL DEFAULT '',
+  schema_name text NOT NULL DEFAULT '',
+  table_name text NOT NULL DEFAULT '',
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id),
+  selected_at timestamptz NOT NULL DEFAULT now(),
+  selected_by text NOT NULL DEFAULT 'local',
+  PRIMARY KEY (environment_id, database_name, schema_name, table_name)
+);
+
+CREATE TABLE baseline_selection_event (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL DEFAULT '',
+  schema_name text NOT NULL DEFAULT '',
+  table_name text NOT NULL DEFAULT '',
+  previous_run_id uuid REFERENCES audit_run(id),
+  selected_run_id uuid NOT NULL REFERENCES audit_run(id),
+  selected_by text NOT NULL DEFAULT 'local',
+  selected_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE baseline_comparison (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL DEFAULT '',
+  schema_name text NOT NULL DEFAULT '',
+  table_name text NOT NULL DEFAULT '',
+  baseline_run_id uuid NOT NULL REFERENCES audit_run(id),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  status text NOT NULL CHECK (status IN ('complete','partial','incompatible')),
+  added_tables integer NOT NULL DEFAULT 0,
+  removed_tables integer NOT NULL DEFAULT 0,
+  changed_tables integer NOT NULL DEFAULT 0,
+  compared_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (audit_run_id, database_name, schema_name, table_name)
+);
+
+CREATE TABLE finding_event (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  finding_id uuid NOT NULL REFERENCES finding(id) ON DELETE CASCADE,
+  audit_run_id uuid REFERENCES audit_run(id) ON DELETE CASCADE,
+  event_type text NOT NULL CHECK (event_type IN ('observed','resolved','reopened','suppressed','acknowledged','superseded')),
+  reason text NOT NULL DEFAULT '',
+  category text NOT NULL DEFAULT '',
+  severity text NOT NULL DEFAULT '',
+  database_name text NOT NULL DEFAULT '',
+  schema_name text NOT NULL DEFAULT '',
+  object_name text NOT NULL DEFAULT '',
+  rule_version text NOT NULL DEFAULT '',
+  title text NOT NULL DEFAULT '',
+  summary text NOT NULL DEFAULT '',
+  recommendation text NOT NULL DEFAULT '',
+  finding_status text NOT NULL DEFAULT 'open',
+  impact text NOT NULL DEFAULT '',
+  risk text NOT NULL DEFAULT '',
+  validation text NOT NULL DEFAULT '',
+  reference_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+  rule_parameters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  confidence numeric(4,3) NOT NULL DEFAULT 0,
+  evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (finding_id, audit_run_id, event_type)
+);
+CREATE INDEX finding_event_timeline_idx ON finding_event (finding_id, recorded_at, id);
+
+CREATE TABLE report_job (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id),
+  report_type text NOT NULL CHECK (report_type IN ('executive','technical','table')),
+  filters jsonb NOT NULL DEFAULT '{}'::jsonb,
+  requested_by text NOT NULL DEFAULT 'local',
+  rule_version text NOT NULL DEFAULT '',
+  status text NOT NULL CHECK (status IN ('queued','running','success','failed','cancelled')) DEFAULT 'queued',
+  attempts integer NOT NULL DEFAULT 0,
+  idempotency_key text NOT NULL,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '30 days'),
+  UNIQUE (environment_id, idempotency_key)
+);
+CREATE INDEX report_job_queue_idx ON report_job (status, created_at);
+CREATE INDEX report_job_env_created_idx ON report_job (environment_id, created_at DESC);
+
+CREATE TABLE report_artifact (
+  report_job_id uuid PRIMARY KEY REFERENCES report_job(id) ON DELETE CASCADE,
+  content bytea NOT NULL,
+  sha256 text NOT NULL,
+  size_bytes bigint NOT NULL,
+  filename text NOT NULL,
+  content_type text NOT NULL CHECK (content_type='application/pdf'),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE auditor_user (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  username text NOT NULL UNIQUE CHECK (username ~ '^[a-zA-Z0-9_.-]{3,64}$'),
+  password_hash text NOT NULL,
+  role text NOT NULL CHECK (role IN ('viewer', 'auditor', 'operator')),
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE auditor_user_environment (
+  user_id uuid NOT NULL REFERENCES auditor_user(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, environment_id)
+);
+
+CREATE TABLE auditor_session (
+  token_hash bytea PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auditor_user(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX auditor_session_user_idx ON auditor_session (user_id);
+CREATE INDEX auditor_session_expiry_idx ON auditor_session (expires_at);
+
+CREATE TABLE auditor_operation_log (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id uuid REFERENCES auditor_user(id) ON DELETE SET NULL,
+  username text NOT NULL,
+  action text NOT NULL,
+  environment_id uuid REFERENCES audit_environment(id) ON DELETE SET NULL,
+  resource_id text,
+  result text NOT NULL CHECK (result IN ('success', 'denied', 'failed')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX auditor_operation_log_created_idx ON auditor_operation_log (created_at DESC);
+CREATE INDEX auditor_operation_log_env_created_idx ON auditor_operation_log (environment_id, created_at DESC);
+
+CREATE INDEX table_snapshot_page_idx ON table_snapshot (environment_id,audit_run_id,database_name,schema_name,table_name,id);
+CREATE INDEX column_snapshot_page_idx ON column_snapshot (environment_id,audit_run_id,database_name,schema_name,table_name,ordinal_position,id);
+CREATE INDEX index_snapshot_page_idx ON index_snapshot (environment_id,audit_run_id,database_name,schema_name,index_name,id);
+CREATE INDEX view_snapshot_page_idx ON view_snapshot (environment_id,audit_run_id,database_name,schema_name,view_name,id);
+CREATE INDEX function_snapshot_page_idx ON function_snapshot (environment_id,audit_run_id,database_name,schema_name,function_name,id);
+CREATE INDEX audit_run_latest_idx ON audit_run (environment_id,started_at DESC,id DESC) WHERE status IN ('success','partial_success');
+
+DROP INDEX finding_dedup_idx;
+CREATE UNIQUE INDEX finding_dedup_version_idx ON finding (environment_id, dedup_key, rule_version);
+
+CREATE TABLE audit_schedule (
+  environment_id uuid NOT NULL REFERENCES audit_environment(id) ON DELETE CASCADE,
+  profile text NOT NULL CHECK (profile IN ('fast', 'daily', 'weekly', 'monthly')),
+  enabled boolean NOT NULL DEFAULT true,
+  next_run_at timestamptz NOT NULL,
+  last_status text,
+  last_run_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (environment_id, profile)
+);
+

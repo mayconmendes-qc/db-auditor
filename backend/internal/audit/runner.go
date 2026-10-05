@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/osmendes/db-auditor/internal/collectors/postgres"
+	"github.com/osmendes/db-auditor/internal/notify"
 )
 
 // RunStore persists audit_run and collector_run lifecycle events.
@@ -30,13 +34,15 @@ type CompletedRunReconciler interface {
 
 // RunnerOptions configures timeouts, retries and concurrency.
 type RunnerOptions struct {
-	ServiceVersion    string
-	CollectorVersion  string
-	CollectorTimeout  time.Duration
-	MaxRetries        int
-	RetryBackoff      time.Duration
-	MaxWorkers        int
-	AnalysisProcessor AnalysisProcessor
+	ServiceVersion           string
+	CollectorVersion         string
+	CollectorTimeout         time.Duration
+	MaxRetries               int
+	RetryBackoff             time.Duration
+	MaxWorkers               int
+	MaxDatabaseConnections   int
+	OptionalCollectorTimeout time.Duration
+	AnalysisProcessor        AnalysisProcessor
 }
 
 func (o RunnerOptions) withDefaults() RunnerOptions {
@@ -58,6 +64,12 @@ func (o RunnerOptions) withDefaults() RunnerOptions {
 	}
 	if o.MaxWorkers <= 0 {
 		o.MaxWorkers = 4
+	}
+	if o.MaxDatabaseConnections <= 0 {
+		o.MaxDatabaseConnections = 4
+	}
+	if o.OptionalCollectorTimeout <= 0 {
+		o.OptionalCollectorTimeout = 2 * time.Minute
 	}
 	return o
 }
@@ -90,17 +102,26 @@ type AnalysisOutcome struct {
 
 // Runner executes registered collectors for an environment and profile.
 type Runner struct {
-	registry *Registry
-	store    RunStore
-	opts     RunnerOptions
+	registry    *Registry
+	store       RunStore
+	opts        RunnerOptions
+	databaseSem chan struct{}
+	dbMu        sync.Mutex
+	dbSkips     map[string]map[string]bool
+	dbActive    map[string]map[string]map[int]context.CancelFunc
+	dbNextID    int
 }
 
 // NewRunner builds an AuditRunner.
 func NewRunner(registry *Registry, store RunStore, opts RunnerOptions) *Runner {
+	opts = opts.withDefaults()
 	return &Runner{
-		registry: registry,
-		store:    store,
-		opts:     opts.withDefaults(),
+		registry:    registry,
+		store:       store,
+		opts:        opts,
+		databaseSem: make(chan struct{}, opts.MaxDatabaseConnections),
+		dbSkips:     make(map[string]map[string]bool),
+		dbActive:    make(map[string]map[string]map[int]context.CancelFunc),
 	}
 }
 
@@ -123,6 +144,16 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	}
 
 	ctx = WithRunMeta(ctx, RunMeta{EnvironmentID: environmentID, AuditRunID: auditRunID})
+	r.dbMu.Lock()
+	r.dbSkips[environmentID] = make(map[string]bool)
+	r.dbActive[environmentID] = make(map[string]map[int]context.CancelFunc)
+	r.dbMu.Unlock()
+	defer func() {
+		r.dbMu.Lock()
+		delete(r.dbSkips, environmentID)
+		delete(r.dbActive, environmentID)
+		r.dbMu.Unlock()
+	}()
 
 	outcomes := make([]CollectorOutcome, len(collectors))
 	var (
@@ -173,6 +204,25 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			warnings = append(warnings, fmt.Sprintf("%s: %s", o.Name, o.Warning))
 		}
 	}
+	if profile == ProfileFast {
+		ran := map[string]bool{}
+		for _, o := range outcomes {
+			ran[o.Name] = true
+		}
+		for _, name := range []string{
+			"postgres.columns", "postgres.constraints", "postgres.indexes",
+			"postgres.functions", "postgres.views", "timescale.chunks",
+			"timescale.continuous_aggregates",
+		} {
+			if ran[name] {
+				continue
+			}
+			skipped++
+			if err := r.store.RecordCollectorCoverage(finalCtx, auditRunID, name, "", CollectorStatusSkipped, 0, "não coletado neste perfil", ""); err != nil {
+				errs = append(errs, fmt.Sprintf("%s coverage: %s", name, err))
+			}
+		}
+	}
 	status := AggregateRunStatus(success, failed, skipped, cancelled)
 	var analysis *AnalysisOutcome
 	if !cancelled && success > 0 && r.opts.AnalysisProcessor != nil {
@@ -196,6 +246,9 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("reconcile completed run: %w", err)
 		}
 	}
+	if status == RunStatusFailed || status == RunStatusPartialSuccess {
+		notifyRun(finalCtx, r.store, environmentID, auditRunID, status)
+	}
 	return RunResult{
 		AuditRunID: auditRunID,
 		Status:     status,
@@ -207,6 +260,7 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 }
 
 func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSpec) CollectorOutcome {
+	meta, _ := RunMetaFromContext(ctx)
 	collectorRunID, err := r.store.StartCollectorRun(ctx, auditRunID, spec.Name, spec.Version)
 	if err != nil {
 		return CollectorOutcome{Name: spec.Name, Status: CollectorStatusFailed, Error: err.Error()}
@@ -224,7 +278,23 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 			runErr = ctx.Err()
 			break
 		}
-		cctx, cancel := context.WithTimeout(ctx, r.opts.CollectorTimeout)
+		timeout := r.opts.CollectorTimeout
+		if spec.Name == "postgres.column_stats" || spec.Name == "postgres.workload" {
+			if r.opts.OptionalCollectorTimeout < timeout {
+				timeout = r.opts.OptionalCollectorTimeout
+			}
+		}
+		cctx, cancel := context.WithTimeout(ctx, timeout)
+		cctx = postgres.WithDatabaseHooks(cctx, postgres.DatabaseHooks{
+			Semaphore:  r.databaseSem,
+			ShouldSkip: func(databaseName string) bool { return r.databaseSkipped(meta.EnvironmentID, databaseName) },
+			OnStart: func(databaseName string, cancel context.CancelFunc) func() {
+				return r.trackDatabase(meta.EnvironmentID, databaseName, cancel)
+			},
+			Progress: func(databaseName, status, message string) {
+				_ = r.store.RecordCollectorCoverage(context.WithoutCancel(cctx), auditRunID, spec.Name, databaseName, status, 0, "", message)
+			},
+		})
 		rows, runErr = spec.Run(cctx)
 		cancel()
 		if runErr == nil {
@@ -257,20 +327,70 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 	errMsg := ""
 	if runErr != nil {
 		status = CollectorStatusFailed
-		errMsg = runErr.Error()
+		errMsg = classifyCollectorFailure(spec.Name, runErr)
 	}
-	if ferr := r.store.FinishCollectorRun(ctx, collectorRunID, status, rows, warning, errMsg); ferr != nil && errMsg == "" {
+	finalCtx := context.WithoutCancel(ctx)
+	if ferr := r.store.FinishCollectorRun(finalCtx, collectorRunID, status, rows, warning, errMsg); ferr != nil && errMsg == "" {
 		errMsg = ferr.Error()
 		status = CollectorStatusFailed
 	}
-	if cerr := r.store.RecordCollectorCoverage(ctx, auditRunID, spec.Name, "", status, rows, warning, errMsg); cerr != nil && errMsg == "" {
+	if cerr := r.store.RecordCollectorCoverage(finalCtx, auditRunID, spec.Name, "", status, rows, warning, errMsg); cerr != nil && errMsg == "" {
 		errMsg = cerr.Error()
 		status = CollectorStatusFailed
 	}
 	for _, failure := range failures {
-		_ = r.store.RecordCollectorCoverage(context.WithoutCancel(ctx), auditRunID, spec.Name, failure.Database, CollectorStatusFailed, 0, "", failure.Error)
+		msg := failure.Error
+		if msg != "" {
+			msg = classifyCollectorFailure(spec.Name, errors.New(msg))
+		}
+		_ = r.store.RecordCollectorCoverage(context.WithoutCancel(ctx), auditRunID, spec.Name, failure.Database, CollectorStatusFailed, 0, "", msg)
 	}
 	return CollectorOutcome{Name: spec.Name, Status: status, Rows: rows, Warning: warning, Error: errMsg}
+}
+
+func (r *Runner) databaseSkipped(environmentID, databaseName string) bool {
+	r.dbMu.Lock()
+	defer r.dbMu.Unlock()
+	return r.dbSkips[environmentID][databaseName]
+}
+
+func (r *Runner) trackDatabase(environmentID, databaseName string, cancel context.CancelFunc) func() {
+	r.dbMu.Lock()
+	r.dbNextID++
+	id := r.dbNextID
+	if r.dbActive[environmentID] == nil {
+		r.dbActive[environmentID] = make(map[string]map[int]context.CancelFunc)
+	}
+	if r.dbActive[environmentID][databaseName] == nil {
+		r.dbActive[environmentID][databaseName] = make(map[int]context.CancelFunc)
+	}
+	r.dbActive[environmentID][databaseName][id] = cancel
+	skipped := r.dbSkips[environmentID][databaseName]
+	r.dbMu.Unlock()
+	if skipped {
+		cancel()
+	}
+	return func() { r.dbMu.Lock(); delete(r.dbActive[environmentID][databaseName], id); r.dbMu.Unlock() }
+}
+
+// SkipDatabase cancels active collection for one database and excludes it from
+// remaining collectors in the current run. Coverage records the partial result.
+func (r *Runner) SkipDatabase(environmentID, databaseName string) bool {
+	r.dbMu.Lock()
+	if r.dbSkips[environmentID] == nil {
+		r.dbMu.Unlock()
+		return false
+	}
+	r.dbSkips[environmentID][databaseName] = true
+	cancels := make([]context.CancelFunc, 0, len(r.dbActive[environmentID][databaseName]))
+	for _, cancel := range r.dbActive[environmentID][databaseName] {
+		cancels = append(cancels, cancel)
+	}
+	r.dbMu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	return true
 }
 
 func isRetryable(err error) bool {
@@ -319,4 +439,41 @@ func (e *PartialWarning) Error() string {
 		return e.Warning
 	}
 	return "partial multi-database collection"
+}
+
+func notifyRun(ctx context.Context, store RunStore, environmentID, auditRunID, status string) {
+	cfg := notify.FromEnv()
+	if !cfg.Enabled() {
+		return
+	}
+	key := "run:" + status + ":" + auditRunID
+	if claim, ok := store.(interface {
+		ClaimAlert(context.Context, string, string) (bool, error)
+	}); ok {
+		fresh, err := claim.ClaimAlert(ctx, environmentID, key)
+		if err != nil || !fresh {
+			return
+		}
+	}
+	_ = cfg.Send(ctx, notify.Event{Kind: "audit_run", EnvironmentID: environmentID, DedupKey: key, Title: "Audit run " + status, Severity: status})
+}
+
+func classifyCollectorFailure(name string, err error) string {
+	kind := "error"
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		kind = "timeout"
+	case errors.Is(err, context.Canceled):
+		kind = "cancelled"
+	default:
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "permission denied") || strings.Contains(msg, "42501") {
+			kind = "permission"
+		} else if strings.Contains(msg, "statement timeout") || strings.Contains(msg, "57014") || strings.Contains(msg, "canceling statement") {
+			kind = "timeout"
+		} else if strings.Contains(msg, "context canceled") || strings.Contains(msg, "context cancelled") {
+			kind = "cancelled"
+		}
+	}
+	return fmt.Sprintf("%s: %s: %s", name, kind, err.Error())
 }

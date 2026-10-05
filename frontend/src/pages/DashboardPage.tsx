@@ -8,6 +8,7 @@ import {
   ErrorBanner,
   Skeleton,
   StoragePieChart,
+  Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
@@ -18,6 +19,7 @@ import type {
   DashboardKPIs,
   FindingsTrendResponse,
   JobHealthResponse,
+  ScopeAggregate,
   StorageGrowthResponse,
 } from "../types";
 
@@ -96,13 +98,10 @@ export function DashboardPage() {
   const [connections, setConnections] = useState<ConnectionStatus[] | null>(
     null,
   );
+  const [scores, setScores] = useState<ScopeAggregate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    setEnvironmentId(null);
-  }, [setEnvironmentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +125,21 @@ export function DashboardPage() {
           setTrends(t);
           setJobs(j);
           setConnections(c.items);
+        }
+        if (environmentId) {
+          const runs = await api.auditRuns({
+            environment_id: environmentId,
+            status: "success",
+          });
+          const run = runs.items[0];
+          if (run && !cancelled) {
+            const agg = await api.scopeScores(environmentId, run.id);
+            if (!cancelled) setScores(agg.items);
+          } else if (!cancelled) {
+            setScores([]);
+          }
+        } else if (!cancelled) {
+          setScores([]);
         }
       } catch (e) {
         if (!cancelled) {
@@ -281,7 +295,37 @@ export function DashboardPage() {
               onClick={() => setSection("Execuções")}
             />
           </KpiGroup>
+          {scores.length > 0 ? (
+            <KpiGroup title="Score por schema">
+              {scores.slice(0, 6).map((item) => (
+                <Card
+                  key={`${item.database_name}.${item.schema_name ?? ""}`}
+                  subtitle={`${item.database_name}.${item.schema_name ?? ""} · ${item.tables} tabelas`}
+                  title={
+                    item.score == null
+                      ? "cobertura insuficiente"
+                      : `${item.score}/100`
+                  }
+                />
+              ))}
+            </KpiGroup>
+          ) : null}
           <KpiGroup title="Capacidade">
+            <Card
+              subtitle="Total de Databases"
+              title={kpis.databases == null ? "—" : String(kpis.databases)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card
+              subtitle="Total de Schemas"
+              title={kpis.schemas == null ? "—" : String(kpis.schemas)}
+              onClick={() => setSection("Inventário")}
+            />
+            <Card
+              subtitle="Total de Tabelas"
+              title={kpis.tables == null ? "—" : String(kpis.tables)}
+              onClick={() => setSection("Inventário")}
+            />
             <Card
               subtitle="Storage total"
               title={formatBytes(kpis.total_storage_bytes)}
@@ -290,6 +334,13 @@ export function DashboardPage() {
             <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
             <Card subtitle="Policies" title={String(kpis.policies)} />
           </KpiGroup>
+          {kpis.inventory_status !== "complete" ? (
+            <p className="text-sm text-amber-300" role="status">
+              {kpis.inventory_status === "empty"
+                ? "Ainda não há inventário concluído para o ambiente selecionado."
+                : "Inventário parcial: os totais exibidos podem estar incompletos."}
+            </p>
+          ) : null}
           <KpiGroup title="Operação">
             <Card
               subtitle="Ambientes"
@@ -415,36 +466,28 @@ export function DashboardPage() {
               Execuções.
             </p>
           ) : (
-            <div className="mt-3 overflow-x-auto rounded-md border border-slate-800">
-              <table className="w-full min-w-[28rem] text-left text-sm">
-                <thead className="sticky top-0 bg-slate-900/95 text-xs text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Ambiente</th>
-                    <th className="px-3 py-2 font-medium">Jobs</th>
-                    <th className="px-3 py-2 font-medium">Agendados</th>
-                    <th className="px-3 py-2 font-medium">Policies</th>
+            <div className="mt-3">
+              <Table
+                dense
+                headers={["Ambiente", "Jobs", "Agendados", "Policies"]}
+              >
+                {jobs.items.map((item) => (
+                  <tr key={item.environment_id}>
+                    <td className="px-3 py-2">
+                      {item.environment_name || item.environment_id.slice(0, 8)}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.jobs_total}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.jobs_scheduled}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {item.policies_total}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-300">
-                  {jobs.items.map((item) => (
-                    <tr key={item.environment_id}>
-                      <td className="px-3 py-2">
-                        {item.environment_name ||
-                          item.environment_id.slice(0, 8)}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.jobs_total}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.jobs_scheduled}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {item.policies_total}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              </Table>
             </div>
           )}
         </section>

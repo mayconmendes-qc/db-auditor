@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/mayconmendes-qc/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/config"
 )
 
 // CollectSequences lists user sequences and optional identity/default ownership.
@@ -19,7 +19,7 @@ func CollectSequences(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 	out := make([]SequenceFacts, 0)
 	for rows.Next() {
 		var f SequenceFacts
-		var dataType, start, inc, maxV, minV, ownedTable, ownedCol *string
+		var dataType, start, inc, maxV, minV, ownedTable, ownedCol, lastValue *string
 		if err := rows.Scan(
 			&f.DatabaseName,
 			&f.SchemaName,
@@ -32,6 +32,7 @@ func CollectSequences(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 			&f.Cycle,
 			&ownedTable,
 			&ownedCol,
+			&lastValue,
 		); err != nil {
 			return nil, fmt.Errorf("sequence collector scan: %w", err)
 		}
@@ -42,6 +43,7 @@ func CollectSequences(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 		f.MinValue = minV
 		f.OwnedByTable = ownedTable
 		f.OwnedByColumn = ownedCol
+		f.LastValue = lastValue
 		if !scope.AllowsSchema(f.SchemaName) {
 			continue
 		}

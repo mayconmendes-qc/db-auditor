@@ -66,20 +66,31 @@ type Finding struct {
 
 // SnapshotFacts is the read-only input analyzers consume.
 type SnapshotFacts struct {
-	EnvironmentID string
-	AuditRunID    string
-	RulePolicies  []RulePolicy
-	Tables        []TableFact
-	Columns       []ColumnFact
-	Constraints   []ConstraintFact
-	Sequences     []SequenceFact
-	Indexes       []IndexFact
-	Hypertables   []HypertableFact
-	Chunks        []ChunkFact
-	CAGGs         []CAGGFact
-	Policies      []PolicyFact
-	Jobs          []JobFact
-	Activity      []ActivityFact
+	EnvironmentID      string
+	AuditRunID         string
+	RulePolicies       []RulePolicy
+	Tables             []TableFact
+	Columns            []ColumnFact
+	Constraints        []ConstraintFact
+	Sequences          []SequenceFact
+	Indexes            []IndexFact
+	PreviousIndexes    []IndexFact
+	Fingerprints       []FingerprintFact
+	Schemas            []SchemaACLFact
+	ExpectsReplica     bool
+	ReplayLagBytes     *int64
+	LastArchived       *time.Time
+	LastFailedArchive  *time.Time
+	ArchiveFailedCount int64
+	Hypertables        []HypertableFact
+	Chunks             []ChunkFact
+	ChunkStats         []ChunkStat
+	ChunkVacuum        []ChunkVacuumFact
+	ChunksTruncated    bool
+	CAGGs              []CAGGFact
+	Policies           []PolicyFact
+	Jobs               []JobFact
+	Activity           []ActivityFact
 	// Sprint 9 — performance & security facts (demo or collector-fed).
 	Vacuum      []VacuumFact
 	Locks       []LockFact
@@ -88,27 +99,34 @@ type SnapshotFacts struct {
 	Roles       []RoleFact
 	Grants      []GrantFact
 	Functions   []FunctionSecurityFact
+	// P1 — snapshot-only drift inputs. Peers are other environments' latest success runs.
+	ServerVersion    string
+	TimescaleVersion string
+	Extensions       []ExtensionFact
+	Settings         map[string]string
+	Peers            []ServerSide
 }
 
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {
-	Database      string     `json:"database"`
-	Schema        string     `json:"schema"`
-	Name          string     `json:"name"`
-	SizeBytes     int64      `json:"size_bytes"`
-	RowEstimate   int64      `json:"row_estimate"`
-	ColumnCount   int        `json:"column_count"`
-	HasPrimaryKey bool       `json:"has_primary_key"`
-	IsPartition   bool       `json:"is_partition"`
-	RelationClass string     `json:"relation_class"`
-	Comment       string     `json:"comment,omitempty"`
-	SeqScan       int64      `json:"seq_scan"`
-	NTupIns       int64      `json:"n_tup_ins"`
-	NTupUpd       int64      `json:"n_tup_upd"`
-	NTupDel       int64      `json:"n_tup_del"`
-	LastAnalyze   *time.Time `json:"last_analyze,omitempty"`
-	StatsReset    *time.Time `json:"stats_reset,omitempty"`
-	CollectedAt   time.Time  `json:"collected_at,omitempty"`
+	Database       string     `json:"database"`
+	Schema         string     `json:"schema"`
+	Name           string     `json:"name"`
+	SizeBytes      int64      `json:"size_bytes"`
+	RowEstimate    int64      `json:"row_estimate"`
+	ColumnCount    int        `json:"column_count"`
+	HasPrimaryKey  bool       `json:"has_primary_key"`
+	IsPartition    bool       `json:"is_partition"`
+	RelationClass  string     `json:"relation_class"`
+	Comment        string     `json:"comment,omitempty"`
+	SeqScan        int64      `json:"seq_scan"`
+	NTupIns        int64      `json:"n_tup_ins"`
+	NTupUpd        int64      `json:"n_tup_upd"`
+	NTupDel        int64      `json:"n_tup_del"`
+	LastAnalyze    *time.Time `json:"last_analyze,omitempty"`
+	StatsReset     *time.Time `json:"stats_reset,omitempty"`
+	CollectedAt    time.Time  `json:"collected_at,omitempty"`
+	RelRowSecurity bool       `json:"relrowsecurity"`
 }
 
 type ColumnFact struct {
@@ -139,8 +157,23 @@ type SequenceFact struct {
 	Database      string `json:"database"`
 	Schema        string `json:"schema"`
 	Name          string `json:"name"`
+	DataType      string `json:"data_type,omitempty"`
 	OwnedByTable  string `json:"owned_by_table,omitempty"`
 	OwnedByColumn string `json:"owned_by_column,omitempty"`
+	// LastValue is pg_sequences.last_value. Nil when the sequence was never used.
+	LastValue *int64 `json:"last_value,omitempty"`
+	MaxValue  *int64 `json:"max_value,omitempty"`
+}
+
+type FingerprintFact struct {
+	Hash string
+	Text string
+}
+
+type SchemaACLFact struct {
+	Database string
+	Name     string
+	ACLs     []string
 }
 
 // IndexFact carries scan counters when available.
@@ -165,11 +198,34 @@ type IndexFact struct {
 
 // HypertableFact summarizes chunk topology.
 type HypertableFact struct {
-	Database  string `json:"database"`
-	Schema    string `json:"schema"`
-	Name      string `json:"name"`
-	NumChunks int    `json:"num_chunks"`
-	SizeBytes int64  `json:"size_bytes"`
+	Database                 string `json:"database"`
+	Schema                   string `json:"schema"`
+	Name                     string `json:"name"`
+	NumChunks                int    `json:"num_chunks"`
+	SizeBytes                int64  `json:"size_bytes"`
+	ChunkInterval            string `json:"chunk_interval,omitempty"`
+	UncompressedClosedChunks int    `json:"uncompressed_closed_chunks,omitempty"`
+	ReadsOutsideTime         bool   `json:"reads_outside_time,omitempty"`
+}
+
+// ChunkVacuumFact is a capped sample of one chunk, not the whole hypertable.
+type ChunkVacuumFact struct {
+	Database       string     `json:"database"`
+	Schema         string     `json:"schema"`
+	Hypertable     string     `json:"hypertable"`
+	Chunk          string     `json:"chunk"`
+	DeadTuples     int64      `json:"dead_tuples"`
+	LiveTuples     int64      `json:"live_tuples"`
+	LastAutovacuum *time.Time `json:"last_autovacuum,omitempty"`
+	LastAnalyze    *time.Time `json:"last_analyze,omitempty"`
+}
+type ChunkStat struct {
+	Database       string `json:"database"`
+	Schema         string `json:"schema"`
+	HypertableName string `json:"hypertable_name"`
+	Count          int    `json:"count"`
+	MaxBytes       int64  `json:"max_bytes"`
+	SumBytes       int64  `json:"sum_bytes"`
 }
 
 // ChunkFact is a single chunk size observation.
@@ -191,31 +247,42 @@ type CAGGFact struct {
 	MaterializedOnly          bool   `json:"materialized_only"`
 	HasRefreshPolicy          bool   `json:"has_refresh_policy"`
 	ViewDefinition            string `json:"view_definition"`
+	Lag                       string `json:"lag,omitempty"`
+	Hierarchical              bool   `json:"hierarchical,omitempty"`
+	Realtime                  bool   `json:"realtime,omitempty"`
 }
 
 // PolicyFact describes a Timescale retention/compression/refresh policy.
 type PolicyFact struct {
-	Database         string `json:"database"`
-	JobID            int64  `json:"job_id"`
-	PolicyType       string `json:"policy_type"` // retention, compression, refresh, reorder
-	ProcName         string `json:"proc_name"`
-	HypertableSchema string `json:"hypertable_schema"`
-	HypertableName   string `json:"hypertable_name"`
-	ScheduleInterval string `json:"schedule_interval"`
-	Config           string `json:"config"`
-	Scheduled        bool   `json:"scheduled"`
-	LastRunStatus    string `json:"last_run_status"`
+	Database         string  `json:"database"`
+	JobID            int64   `json:"job_id"`
+	PolicyType       string  `json:"policy_type"` // retention, compression, refresh, reorder
+	ProcName         string  `json:"proc_name"`
+	HypertableSchema string  `json:"hypertable_schema"`
+	HypertableName   string  `json:"hypertable_name"`
+	ScheduleInterval string  `json:"schedule_interval"`
+	Config           string  `json:"config"`
+	Scheduled        bool    `json:"scheduled"`
+	LastRunStatus    string  `json:"last_run_status"`
+	CompressionRatio float64 `json:"compression_ratio,omitempty"`
+	SegmentBy        string  `json:"segmentby,omitempty"`
+	OrderBy          string  `json:"orderby,omitempty"`
 }
 
 // JobFact describes a background job.
 type JobFact struct {
-	Database      string `json:"database"`
-	JobID         int64  `json:"job_id"`
-	Application   string `json:"application_name"`
-	ProcName      string `json:"proc_name"`
-	Scheduled     bool   `json:"scheduled"`
-	LastRunStatus string `json:"last_run_status"`
-	TotalFailures int64  `json:"total_failures"`
+	Database             string `json:"database"`
+	JobID                int64  `json:"job_id"`
+	Application          string `json:"application_name"`
+	ProcName             string `json:"proc_name"`
+	Scheduled            bool   `json:"scheduled"`
+	LastRunStatus        string `json:"last_run_status"`
+	TotalFailures        int64  `json:"total_failures"`
+	ScheduleInterval     string `json:"schedule_interval,omitempty"`
+	LastRunDuration      string `json:"last_run_duration,omitempty"`
+	NextStart            string `json:"next_start,omitempty"`
+	MaxBackgroundWorkers int    `json:"max_background_workers,omitempty"`
+	ScheduledJobCount    int    `json:"scheduled_job_count,omitempty"`
 }
 
 // ActivityFact carries DML / temporal signals for inactivity analysis.
@@ -285,14 +352,17 @@ type QueryStatFact struct {
 
 // RoleFact describes a database role for privilege review.
 type RoleFact struct {
-	Database    string `json:"database"`
-	RoleName    string `json:"role_name"`
-	Superuser   bool   `json:"superuser"`
-	CreateDB    bool   `json:"createrole,omitempty"`
-	CreateRole  bool   `json:"create_role,omitempty"`
-	Login       bool   `json:"login"`
-	Replication bool   `json:"replication"`
-	BypassRLS   bool   `json:"bypass_rls"`
+	Database             string `json:"database"`
+	RoleName             string `json:"role_name"`
+	Superuser            bool   `json:"superuser"`
+	CreateDB             bool   `json:"createrole,omitempty"`
+	CreateRole           bool   `json:"create_role,omitempty"`
+	Login                bool   `json:"login"`
+	Replication          bool   `json:"replication"`
+	BypassRLS            bool   `json:"bypass_rls"`
+	Current              bool   `json:"current,omitempty"`
+	CanWrite             bool   `json:"can_write,omitempty"`
+	PrivilegeCheckFailed bool   `json:"privilege_check_failed,omitempty"`
 }
 
 // GrantFact is an ACL entry for review (no automatic REVOKE).
@@ -307,14 +377,19 @@ type GrantFact struct {
 }
 
 // FunctionSecurityFact flags SECURITY DEFINER routines for manual review.
+// SearchPathPinned is true when proconfig contains search_path= or the stored
+// definition contains SET search_path. DefaultParameters are not used here.
 type FunctionSecurityFact struct {
-	Database          string `json:"database"`
-	Schema            string `json:"schema"`
-	FunctionName      string `json:"function_name"`
-	IdentityArgs      string `json:"identity_arguments,omitempty"`
-	IsSecurityDefiner bool   `json:"is_security_definer"`
-	Owner             string `json:"owner,omitempty"`
-	Language          string `json:"language,omitempty"`
+	Database           string `json:"database"`
+	Schema             string `json:"schema"`
+	FunctionName       string `json:"function_name"`
+	IdentityArgs       string `json:"identity_arguments,omitempty"`
+	IsSecurityDefiner  bool   `json:"is_security_definer"`
+	Owner              string `json:"owner,omitempty"`
+	Language           string `json:"language,omitempty"`
+	FunctionDefinition string `json:"function_definition,omitempty"`
+	Config             string `json:"config,omitempty"`
+	SearchPathPinned   bool   `json:"search_path_pinned,omitempty"`
 }
 
 // Analyzer produces findings from snapshot facts.

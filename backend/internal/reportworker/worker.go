@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/report"
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/notify"
+	"github.com/osmendes/db-auditor/internal/report"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 type Worker struct{ Store *repository.Store }
@@ -25,6 +27,11 @@ func (w Worker) Run(ctx context.Context) {
 	defer cleanup.Stop()
 	recovery := time.NewTicker(30 * time.Second)
 	defer recovery.Stop()
+	schedule := time.NewTicker(time.Minute)
+	defer schedule.Stop()
+	if err := w.Store.EnqueueDueExecutiveReports(ctx); err != nil {
+		slog.Error("executive schedule", "error", err)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -41,6 +48,10 @@ func (w Worker) Run(ctx context.Context) {
 			if err := w.Store.RequeueInterruptedReports(ctx); err != nil {
 				slog.Error("report recovery", "error", err)
 			}
+		case <-schedule.C:
+			if err := w.Store.EnqueueDueExecutiveReports(ctx); err != nil {
+				slog.Error("executive schedule", "error", err)
+			}
 		}
 	}
 }
@@ -56,6 +67,7 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)
 	}
+	document.RedactMetadata(os.Getenv("AUDITOR_REPORT_REDACT_METADATA"))
 	pdf, err := report.RenderPDF(document)
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)
@@ -76,7 +88,17 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	if errors.Is(err, repository.ErrReportConflict) {
 		return nil
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	_ = notify.FromEnv().Send(workCtx, notify.Event{
+		Kind:          "report_ready",
+		EnvironmentID: job.EnvironmentID,
+		DedupKey:      "report:" + job.ID,
+		Title:         "Executive report ready",
+		Severity:      "info",
+	})
+	return nil
 }
 
 func (w Worker) fail(ctx context.Context, id string, cause error) error {

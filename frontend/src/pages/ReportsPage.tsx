@@ -82,7 +82,7 @@ export function ReportsPage() {
   }, [env]);
 
   const refresh = useCallback(async () => {
-    if (!env || !token) return;
+    if (!env || (!token && !api.hasSession())) return;
     api.setReportToken(token);
     try {
       setJobs((await api.reportJobs(env)).items);
@@ -113,7 +113,16 @@ export function ReportsPage() {
       table: table.trim() || undefined,
       severity: severity || undefined,
     };
-    if (!reportFormReady(env, runId, token, kind, filters)) return;
+    if (
+      !reportFormReady(
+        env,
+        runId,
+        token || (api.hasSession() ? "session" : ""),
+        kind,
+        filters,
+      )
+    )
+      return;
     setBusy(true);
     try {
       api.setReportToken(token);
@@ -153,7 +162,7 @@ export function ReportsPage() {
       <PageHeader
         eyebrow="Relatórios"
         title="Relatórios PDF"
-        description="Gere relatórios versionados a partir de uma execução específica. O token permanece somente nesta sessão."
+        description="Gere relatórios versionados a partir de uma execução específica. Acesso controlado pela conta local."
       />
       <div className="mt-8 space-y-5">
         <Card
@@ -229,26 +238,34 @@ export function ReportsPage() {
               onChange={(event) => setTable(event.target.value)}
               className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
-            <input
-              aria-label="Token de relatórios"
-              type="password"
-              autoComplete="off"
-              placeholder="Token de relatórios"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-            />
+            {!api.hasSession() && (
+              <input
+                aria-label="Token de relatórios"
+                type="password"
+                autoComplete="off"
+                placeholder="Token de relatórios"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              />
+            )}
           </div>
           <div className="mt-4 flex gap-2">
             <Button
               disabled={
                 busy ||
-                !reportFormReady(env, runId, token, kind, {
-                  database,
-                  schema,
-                  table,
-                  severity,
-                })
+                !reportFormReady(
+                  env,
+                  runId,
+                  token || (api.hasSession() ? "session" : ""),
+                  kind,
+                  {
+                    database,
+                    schema,
+                    table,
+                    severity,
+                  },
+                )
               }
               onClick={() => void request()}
             >
@@ -256,7 +273,7 @@ export function ReportsPage() {
             </Button>
             <Button
               variant="secondary"
-              disabled={busy || !env || !token}
+              disabled={busy || !env || (!token && !api.hasSession())}
               onClick={() => void refresh()}
             >
               Atualizar histórico
@@ -269,7 +286,7 @@ export function ReportsPage() {
         {jobs.length === 0 ? (
           <EmptyState
             title="Sem relatórios"
-            description="Selecione o ambiente, informe o token e solicite o primeiro PDF."
+            description="Selecione o ambiente e solicite o primeiro PDF."
           />
         ) : null}
         {jobs.map((job) => (

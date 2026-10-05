@@ -42,6 +42,7 @@ type SchemaFacts struct {
 	SequenceCount         int    `json:"sequence_count"`
 	FunctionCount         int    `json:"function_count"`
 	SizeBytes             int64  `json:"size_bytes"`
+	ACL                   string `json:"acl,omitempty"`
 }
 
 // TableFacts is one row from the table collector (current database).
@@ -197,6 +198,7 @@ type FunctionFacts struct {
 	ParallelSafety     string `json:"parallel_safety"`
 	Kind               string `json:"kind"`
 	FunctionDefinition string `json:"function_definition"`
+	Proconfig          string `json:"proconfig,omitempty"`
 }
 
 // ExtensionFacts is one row from the extension collector.
@@ -221,6 +223,7 @@ type SequenceFacts struct {
 	Cycle         bool    `json:"cycle"`
 	OwnedByTable  *string `json:"owned_by_table,omitempty"`
 	OwnedByColumn *string `json:"owned_by_column,omitempty"`
+	LastValue     *string `json:"last_value,omitempty"`
 }
 
 // TriggerFacts is one row from the trigger collector (US-052).

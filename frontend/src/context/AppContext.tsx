@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { api } from "../services/api";
@@ -19,9 +20,11 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Inventário: "inventory",
   Mapeamentos: "mappings",
   "Desvio de schema": "schema-drift",
+  Comparar: "compare",
   Findings: "findings",
   Performance: "performance",
   Segurança: "security",
+  Regras: "rules",
   Status: "status",
 };
 
@@ -29,39 +32,98 @@ const SLUG_TO_SECTION = Object.fromEntries(
   Object.entries(SECTION_SLUGS).map(([k, v]) => [v, k]),
 ) as Record<string, NavigationSection>;
 
-function parseHash(): { section: NavigationSection; env: string | null } {
-  const raw = window.location.hash.replace(/^#\/?/, "");
-  const [pathPart, queryPart] = raw.split("?");
-  const slug = pathPart || "dashboard";
-  // Legacy bookmark #/overview → Dashboard
-  const section =
-    slug === "overview" ? "Dashboard" : (SLUG_TO_SECTION[slug] ?? "Dashboard");
-  let env: string | null = null;
-  if (queryPart) {
-    const params = new URLSearchParams(queryPart);
-    env = params.get("env");
-  }
-  return { section, env };
+export interface InventoryTarget {
+  database: string;
+  schema: string;
+  table: string;
 }
 
-function writeHash(section: NavigationSection, envId: string | null) {
-  const slug = SECTION_SLUGS[section];
-  let next = `#/${slug}`;
-  const query = new URLSearchParams();
-  if (envId) query.set("env", envId);
-  if (slug === "inventory" && window.location.hash.startsWith("#/inventory?")) {
-    const current = new URLSearchParams(window.location.hash.split("?")[1]);
-    if (envId && current.get("env") === envId) {
-      for (const field of ["run", "database", "schema", "table"]) {
-        const value = current.get(field);
-        if (value) query.set(field, value);
-      }
+interface LocationState {
+  section: NavigationSection;
+  env: string | null;
+  runId: string | null;
+  findingId: string | null;
+  inventory: InventoryTarget | null;
+  search: Record<string, string>;
+}
+
+function parseLocation(): LocationState {
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const [pathPart, queryPart] = raw.split("?");
+  const parts = pathPart.split("/").filter(Boolean);
+  const params = new URLSearchParams(queryPart || "");
+  const search: Record<string, string> = {};
+  params.forEach((value, key) => {
+    if (key !== "env" && value) search[key] = value;
+  });
+  const head = parts[0] || "dashboard";
+  let section: NavigationSection = "Dashboard";
+  let runId: string | null = null;
+  let findingId: string | null = null;
+  let inventory: InventoryTarget | null = null;
+  if (head === "runs" && parts[1]) {
+    section = "Execuções";
+    runId = decodeURIComponent(parts[1]);
+  } else if (head === "findings" && parts[1]) {
+    section = "Findings";
+    findingId = decodeURIComponent(parts[1]);
+  } else if (head === "inventory" && parts.length >= 4) {
+    section = "Inventário";
+    inventory = {
+      database: decodeURIComponent(parts[1]),
+      schema: decodeURIComponent(parts[2]),
+      table: decodeURIComponent(parts[3]),
+    };
+  } else if (head === "inventory") {
+    section = "Inventário";
+    const database = params.get("database");
+    const schema = params.get("schema");
+    const table = params.get("table");
+    if (database && schema && table) {
+      inventory = { database, schema, table };
     }
+  } else if (head === "compare") {
+    section = "Comparar";
+  } else if (head === "overview") {
+    section = "Dashboard";
+  } else {
+    section = SLUG_TO_SECTION[head] ?? "Dashboard";
   }
-  if (query.size) next += `?${query}`;
-  if (window.location.hash !== next) {
-    window.history.replaceState(null, "", next);
+  return {
+    section,
+    env: params.get("env"),
+    runId,
+    findingId,
+    inventory,
+    search,
+  };
+}
+
+function formatLocation(state: LocationState): string {
+  let path = SECTION_SLUGS[state.section];
+  if (state.section === "Execuções" && state.runId) {
+    path = `runs/${encodeURIComponent(state.runId)}`;
+  } else if (state.section === "Findings" && state.findingId) {
+    path = `findings/${encodeURIComponent(state.findingId)}`;
+  } else if (state.section === "Inventário" && state.inventory) {
+    const item = state.inventory;
+    path = `inventory/${encodeURIComponent(item.database)}/${encodeURIComponent(item.schema)}/${encodeURIComponent(item.table)}`;
   }
+  const query = new URLSearchParams();
+  if (state.env) query.set("env", state.env);
+  for (const [key, value] of Object.entries(state.search)) {
+    if (value) query.set(key, value);
+  }
+  const suffix = query.size ? `?${query}` : "";
+  return `#/${path}${suffix}`;
+}
+
+function sameSearch(a: Record<string, string>, b: Record<string, string>) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if ((a[key] || "") !== (b[key] || "")) return false;
+  }
+  return true;
 }
 
 export interface AppContextValue {
@@ -73,6 +135,14 @@ export interface AppContextValue {
   setEnvironmentId: (id: string | null) => void;
   selectedEnvironment: Environment | null;
   refreshEnvironments: () => Promise<void>;
+  runId: string | null;
+  findingId: string | null;
+  inventory: InventoryTarget | null;
+  search: Record<string, string>;
+  setSearch: (patch: Record<string, string | null>) => void;
+  openRun: (id: string) => void;
+  openFinding: (id: string | null) => void;
+  openInventory: (target: InventoryTarget, run?: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -80,8 +150,15 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const initial =
     typeof window !== "undefined"
-      ? parseHash()
-      : { section: "Dashboard" as NavigationSection, env: null };
+      ? parseLocation()
+      : {
+          section: "Dashboard" as NavigationSection,
+          env: null,
+          runId: null,
+          findingId: null,
+          inventory: null,
+          search: {},
+        };
 
   const [section, setSectionState] = useState<NavigationSection>(
     initial.section,
@@ -91,42 +168,111 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [environmentId, setEnvironmentIdState] = useState<string | null>(
     initial.env,
   );
-
-  const setSection = useCallback(
-    (next: NavigationSection) => {
-      setSectionState(next);
-      // Dashboard sempre abre com filtro "Todos" (todos os ambientes).
-      if (next === "Dashboard") {
-        setEnvironmentIdState(null);
-        writeHash(next, null);
-        return;
-      }
-      writeHash(next, environmentId);
-    },
-    [environmentId],
+  const [runId, setRunId] = useState<string | null>(initial.runId);
+  const [findingId, setFindingId] = useState<string | null>(initial.findingId);
+  const [inventory, setInventory] = useState<InventoryTarget | null>(
+    initial.inventory,
   );
+  const [search, setSearchState] = useState<Record<string, string>>(
+    initial.search,
+  );
+  const fromHistory = useRef(false);
+  const boot = useRef(true);
 
-  const setEnvironmentId = useCallback(
-    (id: string | null) => {
-      setEnvironmentIdState(id);
-      writeHash(section, id);
-    },
-    [section],
+  const snapshot = useCallback(
+    (): LocationState => ({
+      section,
+      env: environmentId,
+      runId,
+      findingId,
+      inventory,
+      search,
+    }),
+    [section, environmentId, runId, findingId, inventory, search],
   );
 
   useEffect(() => {
-    const onHash = () => {
-      const parsed = parseHash();
+    if (fromHistory.current) {
+      fromHistory.current = false;
+      return;
+    }
+    const next = formatLocation(snapshot());
+    if (window.location.hash === next) {
+      boot.current = false;
+      return;
+    }
+    if (boot.current) {
+      window.history.replaceState(null, "", next);
+      boot.current = false;
+      return;
+    }
+    window.history.pushState(null, "", next);
+  }, [snapshot]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const parsed = parseLocation();
+      fromHistory.current = true;
       setSectionState(parsed.section);
-      if (parsed.env !== undefined) {
-        setEnvironmentIdState(parsed.env);
-      }
+      setEnvironmentIdState(parsed.env);
+      setRunId(parsed.runId);
+      setFindingId(parsed.findingId);
+      setInventory(parsed.inventory);
+      setSearchState(parsed.search);
     };
-    window.addEventListener("hashchange", onHash);
-    writeHash(section, environmentId);
-    return () => window.removeEventListener("hashchange", onHash);
-    // only on mount for hash listener
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    window.addEventListener("hashchange", onPop);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("hashchange", onPop);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, []);
+
+  const setSection = useCallback((next: NavigationSection) => {
+    setSectionState(next);
+    setRunId(null);
+    setFindingId(null);
+    setInventory(null);
+    setSearchState({});
+  }, []);
+
+  const setEnvironmentId = useCallback((id: string | null) => {
+    setEnvironmentIdState(id);
+  }, []);
+
+  const setSearch = useCallback((patch: Record<string, string | null>) => {
+    setSearchState((prev) => {
+      const next = { ...prev };
+      for (const [key, value] of Object.entries(patch)) {
+        if (!value) delete next[key];
+        else next[key] = value;
+      }
+      return sameSearch(prev, next) ? prev : next;
+    });
+  }, []);
+
+  const openRun = useCallback((id: string) => {
+    setSectionState("Execuções");
+    setRunId(id);
+    setFindingId(null);
+    setInventory(null);
+  }, []);
+
+  const openFinding = useCallback((id: string | null) => {
+    setSectionState("Findings");
+    setFindingId(id);
+    setRunId(null);
+    setInventory(null);
+  }, []);
+
+  const openInventory = useCallback((target: InventoryTarget, run?: string) => {
+    setSectionState("Inventário");
+    setInventory(target);
+    setRunId(null);
+    setFindingId(null);
+    if (run) {
+      setSearchState((prev) => (prev.run === run ? prev : { ...prev, run }));
+    }
   }, []);
 
   const refreshEnvironments = useCallback(async () => {
@@ -134,10 +280,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.environments();
       setEnvironments(res.items);
-      // Preserva null ("Todos") e IDs ainda válidos; não força o primeiro ambiente.
       setEnvironmentIdState((prev) => {
         if (prev == null) {
-          return null;
+          return api.hasRole("operator") ? null : (res.items[0]?.id ?? null);
         }
         if (res.items.some((e) => e.id === prev)) {
           return prev;
@@ -155,10 +300,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void refreshEnvironments();
   }, [refreshEnvironments]);
 
-  useEffect(() => {
-    writeHash(section, environmentId);
-  }, [section, environmentId]);
-
   const selectedEnvironment = useMemo(
     () => environments.find((e) => e.id === environmentId) ?? null,
     [environments, environmentId],
@@ -174,6 +315,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEnvironmentId,
       selectedEnvironment,
       refreshEnvironments,
+      runId,
+      findingId,
+      inventory,
+      search,
+      setSearch,
+      openRun,
+      openFinding,
+      openInventory,
     }),
     [
       section,
@@ -184,6 +333,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEnvironmentId,
       selectedEnvironment,
       refreshEnvironments,
+      runId,
+      findingId,
+      inventory,
+      search,
+      setSearch,
+      openRun,
+      openFinding,
+      openInventory,
     ],
   );
 

@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/observability"
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/buildinfo"
+	"github.com/osmendes/db-auditor/internal/observability"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 type readinessChecker interface {
@@ -51,6 +52,7 @@ type HandlerOptions struct {
 	Runner   ManualRunner
 	Analysis AnalysisRunner
 	Targets  map[string]string
+	Auth     AuthStore
 }
 
 func NewHandler(store InventoryStore) http.Handler {
@@ -61,7 +63,6 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /ready", ready(store))
-	mux.HandleFunc("GET /metrics", observability.DefaultMetrics.Handler())
 	mux.HandleFunc("GET /api/v1/environments", listEnvironments(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/databases", listDatabases(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/schemas", listSchemas(store))
@@ -81,15 +82,20 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerRunRoutes(mux, store, opts.Runner, opts.Analysis)
 	registerMappingRoutes(mux, store)
 	registerCompareRoutes(mux)
+	registerServerCompare(mux, store)
 	registerFindingRoutes(mux, store, opts.Analysis)
 	registerStatusRoutes(mux, store)
 	registerAnalyticsRoutes(mux, store)
 	registerConnectionRoutes(mux, store, opts.Targets)
-	return observability.Middleware(mux)
+	if opts.Auth != nil {
+		registerAuthRoutes(mux, opts.Auth, &loginLimiter{byIP: make(map[string]attemptWindow)})
+		return observability.Middleware(protectPublic(authMiddleware(mux, opts.Auth)))
+	}
+	return observability.Middleware(protectPublic(mux))
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": buildinfo.String()})
 }
 
 func ready(store readinessChecker) http.HandlerFunc {
@@ -113,6 +119,15 @@ func listEnvironments(store InventoryStore) http.HandlerFunc {
 		}
 		if items == nil {
 			items = []repository.Environment{}
+		}
+		if user := requestIdentity(r); user != nil && user.Role != "operator" {
+			visible := make([]repository.Environment, 0, len(items))
+			for _, item := range items {
+				if hasEnvironment(user, item.ID) {
+					visible = append(visible, item)
+				}
+			}
+			items = visible
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	}

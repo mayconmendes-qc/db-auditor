@@ -27,3 +27,18 @@ func TestScopeScoreGolden(t *testing.T) {
 		})
 	}
 }
+
+func TestAggregateNullsScoreWhenIndexesMissing(t *testing.T) {
+	got := AggregateScopeScores("db", "public", [][2]string{{"security", "low"}}, 3, true, false)
+	if got.Score != nil || got.Status != "insufficient_coverage" {
+		t.Fatalf("missing indexes must not look like 100: %+v", got)
+	}
+	ok := AggregateScopeScores("db", "public", nil, 2, false, true)
+	if ok.Score == nil || *ok.Score != 100 || ok.Confidence != 0.75 {
+		t.Fatalf("covered partial score: %+v", ok)
+	}
+	empty := AggregateScopeScores("db", "", nil, 0, false, false)
+	if empty.Score != nil {
+		t.Fatalf("no tables must not score 100")
+	}
+}

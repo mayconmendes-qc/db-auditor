@@ -7,9 +7,11 @@ export type NavigationSection =
   | "Inventário"
   | "Mapeamentos"
   | "Desvio de schema"
+  | "Comparar"
   | "Findings"
   | "Performance"
   | "Segurança"
+  | "Regras"
   | "Status";
 
 export interface HealthResponse {
@@ -57,6 +59,10 @@ export interface DashboardKPIs {
   failed_runs_recent: number;
   successful_runs_recent: number;
   total_storage_bytes: number;
+  databases: number | null;
+  schemas: number | null;
+  tables: number | null;
+  inventory_status: "complete" | "partial" | "empty";
   hypertables: number;
   jobs_scheduled: number;
   policies: number;
@@ -532,6 +538,26 @@ export interface BaselineComparison {
   changed_tables: number;
 }
 
+export interface ScopeAggregate {
+  database_name: string;
+  schema_name?: string;
+  status: string;
+  score: number | null;
+  confidence: number;
+  tables: number;
+  missing_collectors: string[];
+}
+
+export interface EffectiveRule {
+  rule_id: string;
+  rule_version: string;
+  category: string;
+  enabled: boolean;
+  confidence: number;
+  effective_parameters: Record<string, unknown>;
+  default_parameters: Record<string, unknown>;
+}
+
 export interface ScopeScore {
   version: string;
   status: string;
@@ -679,6 +705,22 @@ export interface CompareSummary {
   total: number;
 }
 
+export interface ServerCompareRow {
+  kind: string;
+  name: string;
+  left: string;
+  right: string;
+  status: string;
+  informational: boolean;
+  detail?: string;
+}
+
+export interface ServerCompareReport {
+  left_run_id: string;
+  right_run_id: string;
+  rows: ServerCompareRow[];
+}
+
 export interface CompareResult {
   source_run_id?: string;
   target_run_id?: string;
@@ -718,6 +760,8 @@ export interface Finding {
   recurrence_count?: number;
   suppression_reason?: string | null;
   suppressed_until?: string | null;
+  assignee?: string;
+  due_at?: string | null;
   superseded_by?: string | null;
   notes?: string | null;
   created_at: string;

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/mayconmendes-qc/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/config"
 )
 
 // CollectSchemas lists schemas in the current database and applies schema scope filters.
@@ -29,6 +29,7 @@ func CollectSchemas(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]
 			&f.SequenceCount,
 			&f.FunctionCount,
 			&f.SizeBytes,
+			&f.ACL,
 		); err != nil {
 			return nil, fmt.Errorf("schema collector scan: %w", err)
 		}
