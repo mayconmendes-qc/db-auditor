@@ -142,6 +142,7 @@ export function Shell({
   const [dsnDown, setDsnDown] = useState(0);
   const [openFindings, setOpenFindings] = useState(0);
   const [query, setQuery] = useState("");
+  const [runningRuns, setRunningRuns] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
