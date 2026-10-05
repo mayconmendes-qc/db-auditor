@@ -23,7 +23,7 @@ func (s *Store) ListFindingsCategoryPage(ctx context.Context, environmentID, cat
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 FROM finding `+where+` ORDER BY last_seen_at DESC,id DESC LIMIT $4 OFFSET $5`, environmentID, status, category, limit, offset)
 	if err != nil {
 		return nil, 0, err

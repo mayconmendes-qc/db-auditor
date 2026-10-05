@@ -43,6 +43,8 @@ type Finding struct {
 	SuppressionReason *string         `json:"suppression_reason,omitempty"`
 	SuppressedUntil   *time.Time      `json:"suppressed_until,omitempty"`
 	SupersededBy      *string         `json:"superseded_by,omitempty"`
+	Assignee          string          `json:"assignee,omitempty"`
+	DueAt             *time.Time      `json:"due_at,omitempty"`
 	Notes             *string         `json:"notes,omitempty"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
@@ -117,7 +119,7 @@ RETURNING id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 `
 
 // UpsertFinding inserts a new open finding or refreshes last_seen on match.
@@ -152,7 +154,7 @@ func (s *Store) ListFindings(ctx context.Context, environmentID, findingType, se
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	return s.listFindings(ctx, environmentID, findingType, severity, status, limit, 0)
+	return s.listFindings(ctx, environmentID, findingType, severity, status, "", false, limit, 0)
 }
 
 func (s *Store) ListFindingsPage(ctx context.Context, environmentID, findingType, severity, status string, limit, offset int) ([]Finding, int, error) {
@@ -160,30 +162,56 @@ func (s *Store) ListFindingsPage(ctx context.Context, environmentID, findingType
 		return nil, 0, fmt.Errorf("invalid pagination")
 	}
 	var total int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM finding WHERE ($1='' OR environment_id=$1::uuid) AND ($2='' OR finding_type=$2) AND ($3='' OR severity=$3) AND ($4='' OR status=$4)`, environmentID, findingType, severity, status).Scan(&total)
+	err := s.pool.QueryRow(ctx, findingQueueCount, environmentID, findingType, severity, status, "", false).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
-	items, err := s.listFindings(ctx, environmentID, findingType, severity, status, limit, offset)
+	items, err := s.listFindings(ctx, environmentID, findingType, severity, status, "", false, limit, offset)
 	return items, total, err
 }
 
-func (s *Store) listFindings(ctx context.Context, environmentID, findingType, severity, status string, limit, offset int) ([]Finding, error) {
+// ListFindingsQueue applies the open-queue rules plus assignee and overdue filters.
+func (s *Store) ListFindingsQueue(ctx context.Context, environmentID, findingType, severity, status, assignee string, overdue bool, limit, offset int) ([]Finding, int, error) {
+	if limit < 1 || limit > 500 || offset < 0 {
+		return nil, 0, fmt.Errorf("invalid pagination")
+	}
+	var total int
+	err := s.pool.QueryRow(ctx, findingQueueCount, environmentID, findingType, severity, status, assignee, overdue).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err := s.listFindings(ctx, environmentID, findingType, severity, status, assignee, overdue, limit, offset)
+	return items, total, err
+}
+
+const findingQueueWhere = `
+($1 = '' OR environment_id = $1::uuid)
+  AND ($2 = '' OR finding_type = $2)
+  AND ($3 = '' OR severity = $3)
+  AND (
+    $4 = ''
+    OR ($4 = 'open' AND (status = 'open' OR (status = 'suppressed' AND suppressed_until <= now())))
+    OR ($4 = 'suppressed' AND status = 'suppressed' AND (suppressed_until IS NULL OR suppressed_until > now()))
+    OR ($4 NOT IN ('', 'open', 'suppressed') AND status = $4)
+  )
+  AND ($5 = '' OR assignee = $5)
+  AND ($6 = false OR (due_at IS NOT NULL AND due_at < now() AND status IN ('open', 'acknowledged')))`
+
+const findingQueueCount = `SELECT count(*) FROM finding WHERE ` + findingQueueWhere
+
+func (s *Store) listFindings(ctx context.Context, environmentID, findingType, severity, status, assignee string, overdue bool, limit, offset int) ([]Finding, error) {
 	rows, err := s.pool.Query(ctx, `
 SELECT id::text, environment_id::text, audit_run_id::text,
   finding_type, severity, status, title, summary,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 FROM finding
-WHERE ($1 = '' OR environment_id = $1::uuid)
-  AND ($2 = '' OR finding_type = $2)
-  AND ($3 = '' OR severity = $3)
-  AND ($4 = '' OR status = $4)
+WHERE `+findingQueueWhere+`
 ORDER BY last_seen_at DESC,id DESC
-LIMIT $5 OFFSET $6
-`, environmentID, findingType, severity, status, limit, offset)
+LIMIT $7 OFFSET $8
+`, environmentID, findingType, severity, status, assignee, overdue, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +235,7 @@ SELECT id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 FROM finding WHERE id = $1::uuid
 `, id)
 	return scanFinding(row)
@@ -227,7 +255,7 @@ RETURNING id::text, environment_id::text, audit_run_id::text,
   object_type, object_key, database_name, schema_name, object_name,
   evidence, dedup_key, rule_id, rule_version, category, confidence, impact, risk,
   recommendation, validation, reference_urls, rule_parameters, first_seen_at, last_seen_at, resolved_at, notes,
-  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text
+  created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 `, id, status, notes)
 	f, err := scanFinding(row)
 	if err != nil {
@@ -247,8 +275,8 @@ RETURNING id::text, environment_id::text, audit_run_id::text,
 
 func scanFinding(row scannable) (*Finding, error) {
 	var f Finding
-	var auditRun, notes, suppressionReason, supersededBy pgtype.Text
-	var resolvedAt, suppressedUntil pgtype.Timestamptz
+	var auditRun, notes, suppressionReason, supersededBy, assignee pgtype.Text
+	var resolvedAt, suppressedUntil, dueAt pgtype.Timestamptz
 	var evidence []byte
 	if err := row.Scan(
 		&f.ID, &f.EnvironmentID, &auditRun,
@@ -258,6 +286,7 @@ func scanFinding(row scannable) (*Finding, error) {
 		&f.Recommendation, &f.Validation, &f.References, &f.RuleParameters,
 		&f.FirstSeenAt, &f.LastSeenAt, &resolvedAt, &notes,
 		&f.CreatedAt, &f.UpdatedAt, &f.RecurrenceCount, &suppressionReason, &suppressedUntil, &supersededBy,
+		&assignee, &dueAt,
 	); err != nil {
 		return nil, err
 	}
@@ -282,6 +311,13 @@ func scanFinding(row scannable) (*Finding, error) {
 	}
 	if supersededBy.Valid {
 		f.SupersededBy = &supersededBy.String
+	}
+	if assignee.Valid {
+		f.Assignee = assignee.String
+	}
+	if dueAt.Valid {
+		t := dueAt.Time
+		f.DueAt = &t
 	}
 	if len(evidence) == 0 {
 		f.Evidence = json.RawMessage("{}")

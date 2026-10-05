@@ -47,6 +47,10 @@ var ruleIDs = []string{
 	"model.wide_table", "model.repeated_columns", "model.duplicate_entity",
 	"model.implicit_relationship", "model.naming_inconsistent", "model.undocumented_critical",
 	"model.type_review", "model.jsonb_critical",
+	"chunk.inventory_truncated", "policy.retention_chunk_mismatch", "policy.reorder_hypothesis",
+	"policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "job.slo_exceeded", "job.workers_saturated",
+	"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "security.auditor_not_readonly",
+	"security.auditor_privilege_unknown", "config.version_drift", "config.extension_drift", "config.guc_drift",
 }
 
 // Catalog is the versioned, golden-tested source of rule metadata.
@@ -100,9 +104,24 @@ func Catalog() []RuleDefinition {
 			parameters["check_status_text"] = true
 		case "model.naming_inconsistent":
 			parameters["convention"] = "snake_case"
+		case "config.guc_drift":
+			parameters["numeric_tolerance"] = 0.0
+		}
+		version := "1.0.0"
+		switch id {
+		case "policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "policy.retention_chunk_mismatch",
+			"policy.reorder_hypothesis", "job.slo_exceeded", "job.workers_saturated",
+			"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "chunk.inventory_truncated",
+			"security.auditor_not_readonly", "security.auditor_privilege_unknown",
+			"config.version_drift", "config.extension_drift", "config.guc_drift":
+			version = "1.1.0"
+		}
+		if id == "policy.reorder_hypothesis" || id == "cagg.realtime_hypothesis" || id == "policy.compression_settings" {
+			confidence = 0.4
+			risk = "hypothesis"
 		}
 		out = append(out, RuleDefinition{
-			ID: id, Version: "1.0.0", Category: category, Confidence: confidence,
+			ID: id, Version: version, Category: category, Confidence: confidence,
 			Impact: impact, Risk: risk,
 			Recommendation: ruleRecommendation(id),
 			Validation:     ruleValidation(id),

@@ -42,6 +42,7 @@ import type {
   SchemaSnapshot,
   ScopeHistoryPoint,
   ScopeScore,
+  ServerCompareReport,
   SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
@@ -60,6 +61,7 @@ const API_BASE = (
 let reportToken = "";
 let sessionToken = "";
 let sessionRole = "";
+let sessionUser = "";
 
 function authHeaders(): Record<string, string> {
   return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
@@ -73,6 +75,7 @@ function handleSessionExpiry(response: Response, path: string): void {
   ) {
     sessionToken = "";
     sessionRole = "";
+    sessionUser = "";
     window.dispatchEvent(new Event("auditor:session-expired"));
   }
 }
@@ -218,6 +221,7 @@ export type TableScopeParams = {
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   hasSession: () => Boolean(sessionToken),
+  currentUser: () => sessionUser,
   hasRole: (minimum: "auditor" | "operator") =>
     ({ viewer: 1, auditor: 2, operator: 3 })[
       sessionRole as "viewer" | "auditor" | "operator"
@@ -229,6 +233,7 @@ export const api = {
     }>("/api/v1/auth/login", { username, password });
     sessionToken = result.token;
     sessionRole = result.user.role;
+    sessionUser = result.user.username;
     return result.user;
   },
   logout: async () => {
@@ -237,6 +242,7 @@ export const api = {
     } finally {
       sessionToken = "";
       sessionRole = "";
+      sessionUser = "";
       reportToken = "";
     }
   },
@@ -623,6 +629,10 @@ export const api = {
     statuses?: string[];
     object_type?: string;
   }) => postJSON<CompareResult>("/api/v1/compare", body),
+  serverCompare: (left: string, right: string) =>
+    getJSON<ServerCompareReport>(
+      `/api/v1/server-compare${qs({ left, right })}`,
+    ),
   findings: (params?: {
     environment_id?: string;
     finding_type?: string;
@@ -651,11 +661,17 @@ export const api = {
       `/api/v1/findings${s ? `?${s}` : ""}`,
     );
   },
+  runFindings: (auditRunId: string) =>
+    getJSON<ItemsResponse<Finding>>(
+      `/api/v1/findings?audit_run_id=${encodeURIComponent(auditRunId)}`,
+    ),
   findingsPage: (params: {
     environment_id?: string;
     finding_type?: string;
     severity?: string;
     status?: string;
+    assignee?: string;
+    overdue?: string;
     limit: number;
     offset: number;
   }) => getJSON<PagedResponse<Finding>>(`/api/v1/findings${qs(params)}`),
@@ -682,6 +698,11 @@ export const api = {
     }),
   updateFindingStatus: (id: string, status: string, notes?: string) =>
     patchJSON<Finding>(`/api/v1/findings/${id}`, { status, notes }),
+  updateFindingWorkflow: (id: string, assignee: string, dueAt?: string) =>
+    patchJSON<Finding>(`/api/v1/findings/${id}`, {
+      assignee,
+      due_at: dueAt,
+    }),
   analyzeFindings: (body: {
     environment_id: string;
     audit_run_id?: string;

@@ -13,7 +13,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 	f := analyzer.SnapshotFacts{EnvironmentID: environmentID, AuditRunID: auditRunID}
 	queries := []func() error{
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,total_size_bytes,collected_at,n_live_tup,n_dead_tup,COALESCE(last_vacuum::text,''),COALESCE(last_autovacuum::text,''),n_tup_ins,n_tup_upd,n_tup_del,stats_reset,row_estimate,column_count,has_primary_key,COALESCE(table_comment,''),seq_scan,last_analyze,is_partition,COALESCE(relation_class,'') FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,total_size_bytes,collected_at,n_live_tup,n_dead_tup,COALESCE(last_vacuum::text,''),COALESCE(last_autovacuum::text,''),n_tup_ins,n_tup_upd,n_tup_del,stats_reset,row_estimate,column_count,has_primary_key,COALESCE(table_comment,''),seq_scan,last_analyze,is_partition,COALESCE(relation_class,'') FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND schema_name <> '_timescaledb_internal'`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
@@ -39,7 +39,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,index_name,idx_scan,size_bytes,is_primary,is_unique,index_definition,collected_at,stats_reset,is_valid,is_ready,key_columns,predicate FROM index_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,index_name,idx_scan,size_bytes,is_primary,is_unique,index_definition,collected_at,stats_reset,is_valid,is_ready,key_columns,predicate FROM index_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND schema_name <> '_timescaledb_internal'`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
@@ -55,7 +55,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,column_name,data_type,is_nullable,COALESCE(column_default,'') FROM column_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,column_name,data_type,is_nullable,COALESCE(column_default,'') FROM column_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND schema_name <> '_timescaledb_internal'`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
@@ -70,7 +70,7 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,constraint_name,constraint_type,is_validated,COALESCE(constrained_columns,'{}'::text[]),COALESCE(referenced_schema_name,''),COALESCE(referenced_table_name,''),COALESCE(referenced_columns,'{}'::text[]) FROM constraint_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,constraint_name,constraint_type,is_validated,COALESCE(constrained_columns,'{}'::text[]),COALESCE(referenced_schema_name,''),COALESCE(referenced_table_name,''),COALESCE(referenced_columns,'{}'::text[]) FROM constraint_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND schema_name <> '_timescaledb_internal'`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
@@ -100,14 +100,17 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,hypertable_name,num_chunks,total_size_bytes FROM hypertable_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT h.database_name,h.schema_name,h.hypertable_name,h.num_chunks,h.total_size_bytes,
+COALESCE((SELECT d.time_interval FROM dimension_snapshot d WHERE d.audit_run_id=h.audit_run_id AND d.database_name=h.database_name AND d.schema_name=h.schema_name AND d.hypertable_name=h.hypertable_name AND COALESCE(d.time_interval,'')<>'' ORDER BY d.dimension_number LIMIT 1), ''),
+(SELECT count(*) FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND NOT c.is_compressed AND c.range_end IS NOT NULL AND c.range_end < now() - interval '1 day')
+FROM hypertable_snapshot h WHERE h.environment_id=$1::uuid AND h.audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.HypertableFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.Name, &x.NumChunks, &x.SizeBytes); err != nil {
+				if err := rows.Scan(&x.Database, &x.Schema, &x.Name, &x.NumChunks, &x.SizeBytes, &x.ChunkInterval, &x.UncompressedClosedChunks); err != nil {
 					return err
 				}
 				f.Hypertables = append(f.Hypertables, x)
@@ -115,29 +118,32 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,hypertable_name,chunk_name,total_size_bytes FROM chunk_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,hypertable_name,count(*)::int,max(total_size_bytes),coalesce(sum(total_size_bytes),0) FROM chunk_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid GROUP BY 1,2,3`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
-				var x analyzer.ChunkFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.HypertableName, &x.ChunkName, &x.SizeBytes); err != nil {
+				var x analyzer.ChunkStat
+				if err := rows.Scan(&x.Database, &x.Schema, &x.HypertableName, &x.Count, &x.MaxBytes, &x.SumBytes); err != nil {
 					return err
 				}
-				f.Chunks = append(f.Chunks, x)
+				f.ChunkStats = append(f.ChunkStats, x)
 			}
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return err
+			}
+			return s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM audit_run_coverage WHERE audit_run_id=$1::uuid AND warning ILIKE '%truncated%')`, auditRunID).Scan(&f.ChunksTruncated)
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT c.database_name,c.schema_name,c.view_name,COALESCE(c.materialization_schema,''),COALESCE(c.materialization_hypertable,''),c.materialized_only,EXISTS(SELECT 1 FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh' AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable))),c.view_definition FROM continuous_aggregate_snapshot c WHERE c.environment_id=$1::uuid AND c.audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT c.database_name,c.schema_name,c.view_name,COALESCE(c.materialization_schema,''),COALESCE(c.materialization_hypertable,''),c.materialized_only,EXISTS(SELECT 1 FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh' AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable))),c.view_definition,COALESCE(c.lag_interval,'') FROM continuous_aggregate_snapshot c WHERE c.environment_id=$1::uuid AND c.audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.CAGGFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.ViewName, &x.MaterializationSchema, &x.MaterializationHypertable, &x.MaterializedOnly, &x.HasRefreshPolicy, &x.ViewDefinition); err != nil {
+				if err := rows.Scan(&x.Database, &x.Schema, &x.ViewName, &x.MaterializationSchema, &x.MaterializationHypertable, &x.MaterializedOnly, &x.HasRefreshPolicy, &x.ViewDefinition, &x.Lag); err != nil {
 					return err
 				}
 				f.CAGGs = append(f.CAGGs, x)
@@ -160,14 +166,14 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 			return rows.Err()
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT database_name,job_id,COALESCE(application_name,''),COALESCE(proc_name,''),scheduled,COALESCE(last_run_status,''),total_failures FROM job_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT database_name,job_id,COALESCE(application_name,''),COALESCE(proc_name,''),scheduled,COALESCE(last_run_status,''),total_failures,COALESCE(schedule_interval,''),COALESCE(last_run_duration,''),COALESCE(next_start::text,''),max_background_workers FROM job_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.JobFact
-				if err := rows.Scan(&x.Database, &x.JobID, &x.Application, &x.ProcName, &x.Scheduled, &x.LastRunStatus, &x.TotalFailures); err != nil {
+				if err := rows.Scan(&x.Database, &x.JobID, &x.Application, &x.ProcName, &x.Scheduled, &x.LastRunStatus, &x.TotalFailures, &x.ScheduleInterval, &x.LastRunDuration, &x.NextStart, &x.MaxBackgroundWorkers); err != nil {
 					return err
 				}
 				f.Jobs = append(f.Jobs, x)
@@ -219,5 +225,8 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 		return f, fmt.Errorf("load rule policies: %w", err)
 	}
 	f.RulePolicies = policies
+	if err = s.enrichP1Facts(ctx, environmentID, auditRunID, &f); err != nil {
+		return f, err
+	}
 	return f, nil
 }

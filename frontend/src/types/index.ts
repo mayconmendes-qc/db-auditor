@@ -7,6 +7,7 @@ export type NavigationSection =
   | "Inventário"
   | "Mapeamentos"
   | "Desvio de schema"
+  | "Comparar"
   | "Findings"
   | "Performance"
   | "Segurança"
@@ -683,6 +684,22 @@ export interface CompareSummary {
   total: number;
 }
 
+export interface ServerCompareRow {
+  kind: string;
+  name: string;
+  left: string;
+  right: string;
+  status: string;
+  informational: boolean;
+  detail?: string;
+}
+
+export interface ServerCompareReport {
+  left_run_id: string;
+  right_run_id: string;
+  rows: ServerCompareRow[];
+}
+
 export interface CompareResult {
   source_run_id?: string;
   target_run_id?: string;
@@ -722,6 +739,8 @@ export interface Finding {
   recurrence_count?: number;
   suppression_reason?: string | null;
   suppressed_until?: string | null;
+  assignee?: string;
+  due_at?: string | null;
   superseded_by?: string | null;
   notes?: string | null;
   created_at: string;

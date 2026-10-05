@@ -73,7 +73,9 @@ SELECT
   COALESCE(c.chunk_tablespace, '') AS chunk_tablespace,
   COALESCE(pg_total_relation_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS total_size_bytes,
   COALESCE(pg_relation_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS data_size_bytes,
-  COALESCE(pg_indexes_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS index_size_bytes
+  COALESCE(pg_indexes_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS index_size_bytes,
+  COALESCE((to_jsonb(c)->>'before_compression_total_bytes')::bigint, 0) AS before_compression_bytes,
+  COALESCE((to_jsonb(c)->>'after_compression_total_bytes')::bigint, 0) AS after_compression_bytes
 FROM timescaledb_information.chunks c
 ORDER BY c.hypertable_schema, c.hypertable_name, c.chunk_name
 `
