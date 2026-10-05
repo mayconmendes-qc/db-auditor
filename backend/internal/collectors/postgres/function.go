@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/mayconmendes-qc/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/config"
 )
 
 // CollectFunctions lists functions and procedures in the current database.
@@ -32,6 +32,7 @@ func CollectFunctions(ctx context.Context, conn *pgx.Conn, scope config.Scope) (
 			&f.Volatility,
 			&f.ParallelSafety,
 			&f.Kind,
+			&f.Proconfig,
 			&definition,
 		); err != nil {
 			return nil, fmt.Errorf("function collector scan: %w", err)

@@ -594,6 +594,7 @@ export function FindingsPage() {
             <Table
               dense
               pagination={false}
+              virtualize
               headers={[
                 { id: "sel", label: "Sel." },
                 { id: "type", label: "Tipo", sortable: true },

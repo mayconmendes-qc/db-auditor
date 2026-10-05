@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/observability"
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/buildinfo"
+	"github.com/osmendes/db-auditor/internal/observability"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 type readinessChecker interface {
@@ -94,7 +95,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 }
 
 func health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": buildinfo.String()})
 }
 
 func ready(store readinessChecker) http.HandlerFunc {

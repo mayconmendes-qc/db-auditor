@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"time"
+
+	"github.com/osmendes/db-auditor/internal/buildinfo"
 )
 
 // StatusResponse is the operational snapshot for the Status page.
@@ -38,7 +40,7 @@ func getStatus(store InventoryStore) http.HandlerFunc {
 		ctx := r.Context()
 		res := StatusResponse{
 			Service: "timescale-auditor",
-			Version: "0.10.0",
+			Version: buildinfo.String(),
 			TimeUTC: time.Now().UTC(),
 			API:     "ok",
 		}

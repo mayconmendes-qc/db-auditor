@@ -10,16 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
-	"github.com/mayconmendes-qc/db-auditor/internal/api"
-	"github.com/mayconmendes-qc/db-auditor/internal/audit"
-	"github.com/mayconmendes-qc/db-auditor/internal/config"
-	"github.com/mayconmendes-qc/db-auditor/internal/database"
-	"github.com/mayconmendes-qc/db-auditor/internal/migrate"
-	"github.com/mayconmendes-qc/db-auditor/internal/observability"
-	"github.com/mayconmendes-qc/db-auditor/internal/reportworker"
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
-	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
+	"github.com/osmendes/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/api"
+	"github.com/osmendes/db-auditor/internal/audit"
+	"github.com/osmendes/db-auditor/internal/buildinfo"
+	"github.com/osmendes/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/database"
+	"github.com/osmendes/db-auditor/internal/migrate"
+	"github.com/osmendes/db-auditor/internal/observability"
+	"github.com/osmendes/db-auditor/internal/reportworker"
+	"github.com/osmendes/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/scheduler"
 )
 
 func main() {
@@ -99,6 +100,7 @@ func main() {
 		os.Exit(1)
 	}
 	go (reportworker.Worker{Store: store}).Run(ctx)
+	go observeBackupAge(ctx, store)
 	runStore := &repository.AuditRunStore{Store: store}
 	liveOpts := audit.LiveRegistryOptions{
 		Targets: targets,
@@ -110,7 +112,7 @@ func main() {
 	audit.AttachStructuralCollectors(registry, liveOpts)
 	analysisService := analyzer.NewService(store, store, "1.0.0")
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:           "0.14.0",
+		ServiceVersion:           buildinfo.String(),
 		CollectorVersion:         "1.1.0",
 		MaxWorkers:               cfg.MaxCollectorWorkers,
 		MaxDatabaseConnections:   cfg.MaxDatabaseConnections,
@@ -199,5 +201,30 @@ func main() {
 	}
 	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("metrics shutdown failed", "error", err)
+	}
+}
+
+func observeBackupAge(ctx context.Context, store *repository.Store) {
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	sample := func() {
+		age, err := store.SnapshotBackupAgeSeconds(ctx, time.Now().UTC())
+		if err != nil {
+			slog.Warn("snapshot backup age", "error", err)
+			return
+		}
+		if age < 0 {
+			age = 0
+		}
+		observability.DefaultMetrics.SetSnapshotBackupAge(uint64(age))
+	}
+	sample()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			sample()
+		}
 	}
 }

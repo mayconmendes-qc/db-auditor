@@ -16,6 +16,7 @@ describe("navigationSections", () => {
       "Findings",
       "Performance",
       "Segurança",
+      "Regras",
       "Status",
     ]);
   });

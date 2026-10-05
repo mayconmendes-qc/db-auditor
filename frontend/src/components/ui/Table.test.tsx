@@ -21,4 +21,20 @@ describe("Table pagination", () => {
     expect(html).toContain("Linha 20");
     expect(html).not.toContain("Linha 21");
   });
+
+  it("virtualize mounts a window instead of every row", () => {
+    const html = renderToStaticMarkup(
+      <Table headers={["Nome"]} pagination={false} virtualize>
+        {Array.from({ length: 400 }, (_, index) => (
+          <tr key={index}>
+            <td>Linha {index + 1}</td>
+          </tr>
+        ))}
+      </Table>,
+    );
+    expect(html).toContain("Linha 1");
+    expect(html).toContain("Linha 30");
+    expect(html).not.toContain("Linha 31");
+    expect(html).not.toContain("Linha 400");
+  });
 });

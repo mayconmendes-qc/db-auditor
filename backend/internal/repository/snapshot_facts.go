@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/analyzer"
 )
 
 // LoadSnapshotFacts loads every analyzer input from one explicitly selected run.
@@ -226,6 +226,9 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 	}
 	f.RulePolicies = policies
 	if err = s.enrichP1Facts(ctx, environmentID, auditRunID, &f); err != nil {
+		return f, err
+	}
+	if err = s.enrichP2Facts(ctx, environmentID, auditRunID, &f); err != nil {
 		return f, err
 	}
 	return f, nil
