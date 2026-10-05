@@ -63,7 +63,7 @@ Abra http://localhost:5173 e entre com esse par. A conta `operator` só é criad
 DELETE FROM auditor_user;
 ```
 
-e suba a API de novo. A sessão dura 8 horas e fica só na memória da aba.
+e suba a API de novo. A sessão dura 8 horas e é mantida no armazenamento da aba; um reload verifica a sessão com a API e não exige novo login enquanto ela estiver válida.
 
 O schema está em `backend/migrations/01_baseline.sql` mais o seed local `02_seed_demo.sql`. Volumes antigos não reaplicam esse diretório; a API cria as tabelas de login se faltarem. Detalhe: [docs/sprint20-operations.md](docs/sprint20-operations.md).
 
