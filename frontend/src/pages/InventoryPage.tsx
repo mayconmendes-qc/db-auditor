@@ -112,6 +112,7 @@ export function InventoryPage() {
     inventory,
     search,
     openInventory,
+    closeInventory,
   } = useApp();
   const envId = environmentId;
 
@@ -424,6 +425,7 @@ export function InventoryPage() {
   );
 
   const openRow = (key: string) => {
+    closeInventory();
     selectedKeyRef.current = key;
     setSelectedKey(key);
     setSheetOpen(true);
@@ -432,8 +434,20 @@ export function InventoryPage() {
     setDetailWorkload([]);
   };
 
+  const closeSheet = () => {
+    selectedKeyRef.current = null;
+    openedDeepLinkRef.current = null;
+    setSheetOpen(false);
+    setSelectedKey(null);
+    setDeepLinkedTable(null);
+    closeInventory();
+  };
+
   const openTable = (t: TableSnapshot) => {
     const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
+    if (envId) {
+      openedDeepLinkRef.current = `${envId}/${t.audit_run_id}/${t.database_name}/${t.schema_name}/${t.table_name}`;
+    }
     openRow(key);
     setDeepLinkedTable(t);
     openInventory(
@@ -468,25 +482,11 @@ export function InventoryPage() {
 
   useEffect(() => {
     if (!envId || !page || loading) return;
-    const raw = window.location.hash.replace(/^#\/?/, "");
-    const [pathPart, queryPart] = raw.split("?");
-    const parts = pathPart.split("/").filter(Boolean);
-    const query = new URLSearchParams(queryPart || "");
-    let database = query.get("database");
-    let schema = query.get("schema");
-    let table = query.get("table");
-    if (parts[0] === "inventory" && parts.length >= 4) {
-      database = decodeURIComponent(parts[1]);
-      schema = decodeURIComponent(parts[2]);
-      table = decodeURIComponent(parts[3]);
-    } else if (inventory) {
-      database = inventory.database;
-      schema = inventory.schema;
-      table = inventory.table;
-    }
-    const run = query.get("run") || search.run;
+    const database = inventory?.database;
+    const schema = inventory?.schema;
+    const table = inventory?.table;
+    const run = search.run;
     if (!run || !database || !schema || !table) return;
-    if (query.get("env") && query.get("env") !== envId) return;
     const key = `${envId}/${run}/${database}/${schema}/${table}`;
     if (openedDeepLinkRef.current === key) return;
     openedDeepLinkRef.current = key;
@@ -702,8 +702,7 @@ export function InventoryPage() {
                       onClick={() => {
                         setKind(k);
                         setOffset(0);
-                        setSelectedKey(null);
-                        setSheetOpen(false);
+                        closeSheet();
                       }}
                       className={`rounded px-2.5 py-1 text-xs ${
                         kind === k
@@ -973,7 +972,9 @@ export function InventoryPage() {
 
           <Sheet
             open={sheetOpen}
-            onOpenChange={setSheetOpen}
+            onOpenChange={(open) => {
+              if (!open) closeSheet();
+            }}
             title={selectedKey ?? "Detalhe"}
             wide
           >

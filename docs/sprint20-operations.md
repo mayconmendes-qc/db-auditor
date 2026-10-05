@@ -15,9 +15,9 @@ A conta `operator` nasce uma vez, quando `auditor_user` está vazia. Se o login 
 
 - as duas variáveis não estavam no `.env` na subida que criou a conta;
 - a senha tem menos de 16 caracteres;
-- já existe um usuário e o bootstrap foi ignorado. Apague `auditor_user` no snapshot store e suba de novo.
+- já existe um usuário e o bootstrap foi ignorado. Use uma conta de operador existente para criar outra conta pela API administrativa. Se todos os acessos de operador forem perdidos, preserve os dados e planeje uma recuperação controlada a partir de backup. Não apague `auditor_user`.
 
-`AUDITOR_BOOTSTRAP_PASSWORD_FILE` continua válido apenas quando a variável de senha está vazia. Não coloque a senha no frontend nem no Git além do exemplo local. `deploy/compose.prod.yaml` ainda não passa essas variáveis.
+`AUDITOR_BOOTSTRAP_PASSWORD_FILE` continua válido apenas quando a variável de senha está vazia. Não coloque a senha no frontend nem no Git além do exemplo local. `deploy/compose.prod.yaml` repassa as variáveis de bootstrap configuradas no ambiente do Compose.
 
 ## Migração sem perda de dados
 

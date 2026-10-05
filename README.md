@@ -57,17 +57,11 @@ Copie essas duas variáveis para o seu `.env` se ele foi criado antes. A senha p
 make up    # recompila a API
 ```
 
-Abra http://localhost:5173 e entre com esse par. A conta `operator` só é criada se `auditor_user` estiver vazia. Mudar o `.env` depois **não** troca uma senha já gravada. Nesse caso, no snapshot store:
-
-```sql
-DELETE FROM auditor_user;
-```
-
-e suba a API de novo. A sessão dura 8 horas e é mantida no armazenamento da aba; um reload verifica a sessão com a API e não exige novo login enquanto ela estiver válida.
+Abra http://localhost:5173 e entre com esse par. A conta `operator` só é criada se `auditor_user` estiver vazia. Mudar o `.env` depois **não** troca uma senha já gravada. Se já houver um operador autenticado, ele pode criar outra conta pela API administrativa. Se todos os acessos de operador forem perdidos, preserve o banco interno e planeje uma recuperação controlada a partir de backup; não apague `auditor_user`, pois isso remove contas existentes. A sessão dura 8 horas e é mantida no armazenamento da aba; um reload verifica a sessão com a API e não exige novo login enquanto ela estiver válida.
 
 O schema está em `backend/migrations/01_baseline.sql` mais o seed local `02_seed_demo.sql`. Volumes antigos não reaplicam esse diretório; a API cria as tabelas de login se faltarem. Detalhe: [docs/sprint20-operations.md](docs/sprint20-operations.md).
 
-Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. Passe `AUDITOR_BOOTSTRAP_USER` e `AUDITOR_BOOTSTRAP_PASSWORD` para o container da API. O compose de produção ainda não faz isso.
+Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. Configure `AUDITOR_BOOTSTRAP_USER` e `AUDITOR_BOOTSTRAP_PASSWORD` no ambiente do Compose; o arquivo de produção os repassa ao container da API.
 
 Release MVP: `docs/mvp-release.md`.
 
