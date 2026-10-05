@@ -177,6 +177,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Use o card Filtros: Database, Schema e busca por nome.",
             "Alterne o tipo de objeto (Tabelas, Hypertables, Índices, Views, Funções, CAGGs).",
             "Clique em uma linha para abrir detalhes, assessment, histórico e métricas do objeto. A avaliação não modifica o banco auditado.",
+            "Feche o painel de detalhes pelo botão, pelo fundo ou com Esc. O link volta para o inventário sem a tabela selecionada.",
             "Ajuste linhas por página entre 20, 50, 100 e Todas. Todas carrega os lotes do servidor; use filtros em inventários grandes.",
           ]}
           terms={[
@@ -351,6 +352,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Escolha ambiente, execução concluída e tipo Executivo, Técnico ou Tabela.",
             "Um relatório de tabela exige database, schema e tabela. A geração é assíncrona; acompanhe a fila, cancele ou tente novamente quando permitido.",
             "Baixe o PDF somente enquanto o artefato estiver válido. O histórico mantém o solicitante e a versão das regras; o PDF expira após 30 dias.",
+            "O PDF mostra os achados por severidade e termina com próximos passos. Confira a cobertura e valide as recomendações com a equipe antes de alterar o banco.",
           ]}
           terms={[
             {

@@ -17,6 +17,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadCSV, downloadJSON } from "../lib/export";
+import { findingGuidance } from "../lib/findingGuidance";
 import { labels } from "../lib/labels";
 import { fetchAllPages } from "../lib/pagination";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
@@ -655,7 +656,7 @@ export function FindingsPage() {
                       onChange={() => {
                         toggleOne(f.id);
                       }}
-                      aria-label={`Selecionar ${f.title}`}
+                      aria-label={`Selecionar achado em ${f.object_key || "objeto não informado"}`}
                       className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
                     />
                   </td>
@@ -672,7 +673,9 @@ export function FindingsPage() {
                       {labels.findingStatus(f.status)}
                     </Badge>
                   </td>
-                  <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
+                  <td className="px-3 py-1.5 text-slate-100">
+                    {findingGuidance(f.finding_type).meaning}
+                  </td>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
                     {f.object_key || "—"}
                   </td>
@@ -693,7 +696,7 @@ export function FindingsPage() {
                 setOffset(0);
               }}
               onOffsetChange={setOffset}
-              label="Findings"
+              label="Achados"
             />
           </>
         ) : null}
@@ -701,10 +704,9 @@ export function FindingsPage() {
         {selected ? (
           <Card
             title={`Detalhe · ${labels.severity(selected.severity)}`}
-            subtitle={selected.title}
+            subtitle={findingGuidance(selected.finding_type).meaning}
           >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
-              <li>Tipo: {selected.finding_type}</li>
               <li>Status: {labels.findingStatus(selected.status)}</li>
               <li>
                 Primeira observação:{" "}
@@ -733,31 +735,32 @@ export function FindingsPage() {
                 </li>
               ) : null}
               <li>Objeto: {selected.object_key || "—"}</li>
-              <li>Resumo: {selected.summary}</li>
-              <li>
-                Regra: {selected.rule_id || selected.finding_type}{" "}
-                {selected.rule_version ? `(v${selected.rule_version})` : ""}
-              </li>
-              <li>Categoria: {selected.category || "—"}</li>
               <li>
                 Confiança:{" "}
                 {selected.confidence != null
                   ? `${Math.round(selected.confidence * 100)}%`
                   : "não informada"}
               </li>
-              <li>Impacto: {selected.impact || "—"}</li>
               <li>
-                Risco/ressalva: {selected.risk || "revisão humana necessária"}
-              </li>
-              <li>
-                Recomendação:{" "}
-                {selected.recommendation || "Investigar evidências"}
-              </li>
-              <li>
-                Validação:{" "}
-                {selected.validation || "Confirmar em ambiente controlado"}
+                Próximo passo: {findingGuidance(selected.finding_type).next}
               </li>
             </ul>
+            <details className="mt-3 text-xs text-slate-400">
+              <summary className="cursor-pointer">
+                Detalhes técnicos da regra
+              </summary>
+              <p className="mt-2">Título original: {selected.title}</p>
+              <p>
+                Regra: {selected.rule_id || selected.finding_type}{" "}
+                {selected.rule_version ? `(v${selected.rule_version})` : ""}
+              </p>
+              <p>Categoria: {selected.category || "—"}</p>
+              <p>Impacto: {selected.impact || "—"}</p>
+              <p>Risco/ressalva: {selected.risk || "revisão humana necessária"}</p>
+              <p>Resumo original: {selected.summary}</p>
+              <p>Recomendação original: {selected.recommendation || "—"}</p>
+              <p>Validação original: {selected.validation || "—"}</p>
+            </details>
             {selected.references?.length ? (
               <div className="mt-3 text-xs text-slate-400">
                 Referências:{" "}
