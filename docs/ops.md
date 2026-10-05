@@ -2,7 +2,19 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql` (consolidado pré-produção).
+O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql`, `04_p1.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir.
+
+`04_p1.sql` adiciona workflow de finding (responsável e prazo), dedupe de alerta, privilégio do papel auditor, GUCs fechados e colunas de job, lag de CAGG e tamanho antes/depois da compressão. Alertas são opcionais: `AUDITOR_ALERT_WEBHOOK_URL` e/ou `AUDITOR_ALERT_EMAIL_TO` com `AUDITOR_ALERT_SMTP_HOST`. Sem URL e sem SMTP, nada é enviado. Falha de envio não falha o run. O payload não leva DSN, senha nem SQL cru. Coletores de catálogo ficam no `statement_timeout` curto do alvo; estatística, chunks, jobs e workload usam 120s locais para não estourar falso timeout em banco grande.
+
+## Produção
+
+Copie [deploy/env.prod.example](../deploy/env.prod.example) para `.env.prod` na raiz do repositório. Preencha a senha do snapshot store, a senha inicial do operador e os dois slots `AUDITOR_TARGET_1_*` e `AUDITOR_TARGET_2_*`.
+
+```bash
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
+```
+
+O compose falha se faltarem `POSTGRES_PASSWORD`, `AUDITOR_BOOTSTRAP_USER`, `AUDITOR_BOOTSTRAP_PASSWORD`, `AUDITOR_CORS_ORIGINS` ou `AUDITOR_TARGET_ALLOWED_HOSTS`. Os DSNs não entram no YAML. O Postgres interno não publica porta. `GET /metrics` não passa pelo Caddy; o scrape fica em `api:9090`, dentro da rede do compose.
 O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
 
 Após alterar o baseline em desenvolvimento:
@@ -22,7 +34,7 @@ Detalhes: `backend/migrations/README.md`.
 |----------|-----|
 | `GET /health` | Liveness |
 | `GET /ready` | Readiness (snapshot store) |
-| `GET /metrics` | Prometheus text exposition |
+| `GET /metrics` | Prometheus, só na porta interna 9090 |
 | `GET /api/v1/status` | Visão operacional (UI Status) |
 
 Logs da API são **JSON estruturados** por padrão (`AUDITOR_LOG_FORMAT=json`).  
@@ -53,7 +65,8 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 ```
 
 3. Caddy termina TLS (quando o domínio aponta para a VPS) e encaminha:
-   - `/api/*`, `/health`, `/ready`, `/metrics` → API
+   - `/api/*`, `/health`, `/ready` → API
+   - `/metrics` não é publicado; scrape em `api:9090`
    - resto → frontend estático
 
 ### Volumes e secrets
@@ -68,11 +81,26 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d --build
 - `restart: unless-stopped` em todos os serviços long-running.
 - Healthchecks de Postgres e API controlam dependências de startup.
 
-## Checklist rápido de homologação
+## Backup do snapshot store
+
+O serviço `snapshot-backup` do compose de produção roda `pg_dump -Fc` uma vez por dia para o volume `snapshot-backup`, separado de `snapshot-store`. A retenção padrão é 14 dias (`BACKUP_RETENTION_DAYS`). Os DSNs dos Timescale auditados não entram no dump: ficam só no ambiente da API.
+
+Cada sucesso grava `snapshot_backup.last_success_at`. A métrica `auditor_snapshot_backup_age_seconds` é a idade dessa marca. Sem nenhum sucesso a idade parte do epoch e continua crescendo, então um job parado não aparece como saudável.
+
+Restore curto, com a API parada:
+
+```bash
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod stop api
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod exec -T postgres \
+  pg_restore -d "$POSTGRES_DB" --clean --if-exists /dev/stdin < /caminho/do.dump
+podman compose -f deploy/compose.prod.yaml --env-file .env.prod start api
+```
+
+O dump não contém senha de alvo. Confira o `.env.prod` à parte antes de subir de novo.
 
 1. `GET /health` → `ok`
 2. `GET /ready` → `ready`
-3. `GET /metrics` contém `auditor_up 1`
+3. `GET` na porta 9090 (`/metrics`) contém `auditor_up 1`. O mesmo caminho em 8080 responde 404.
 4. UI **Status** lista API, store e runs
 5. Logs JSON incluem `request_id` e `duration_ms`
 6. UI **Documentação** descreve o fluxo de configuração via `.env`

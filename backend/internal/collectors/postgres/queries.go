@@ -52,7 +52,8 @@ SELECT
     FROM pg_class cl
     WHERE cl.relnamespace = n.oid
       AND cl.relkind IN ('r', 'p', 'f', 'm', 'i', 'S', 't')
-  ), 0) AS size_bytes
+  ), 0) AS size_bytes,
+  COALESCE(n.nspacl::text, '') AS nspacl
 FROM pg_namespace n
 LEFT JOIN LATERAL (
   SELECT
@@ -285,6 +286,7 @@ SELECT
   p.provolatile::text AS volatility,
   p.proparallel::text AS parallel_safety,
   p.prokind::text AS kind,
+  COALESCE(array_to_string(p.proconfig, ','), '') AS proconfig,
   CASE
     WHEN p.prokind = 'a' THEN NULL
     ELSE pg_catalog.pg_get_functiondef(p.oid)

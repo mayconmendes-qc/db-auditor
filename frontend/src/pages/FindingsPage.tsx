@@ -10,10 +10,15 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import {
+  type PageSize,
+  PaginationControls,
+} from "../components/ui/PaginationControls";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadCSV, downloadJSON } from "../lib/export";
 import { labels } from "../lib/labels";
+import { fetchAllPages } from "../lib/pagination";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type { Finding, FindingEvent } from "../types";
@@ -84,8 +89,18 @@ function FilterChip({
 }
 
 export function FindingsPage() {
-  const { environmentId, setSection } = useApp();
+  const {
+    environmentId,
+    setSection,
+    search,
+    setSearch,
+    findingId,
+    openFinding,
+  } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -113,20 +128,40 @@ export function FindingsPage() {
     };
   }, [selected?.id]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [severityFilter, setSeverityFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [severityFilter, setSeverityFilter] = useState(search.severity || "");
+  const [statusFilter, setStatusFilter] = useState(search.status ?? "open");
+  const [mine, setMine] = useState(search.mine === "1");
+  const [overdueOnly, setOverdueOnly] = useState(search.overdue === "1");
+  const [assignee, setAssignee] = useState("");
+  const [dueAt, setDueAt] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.findings({
+      const filters = {
         severity: severityFilter || undefined,
         status: statusFilter || undefined,
         environment_id: environmentId || undefined,
-      });
-      setItems(res.items);
+        assignee: mine ? "me" : undefined,
+        overdue: overdueOnly ? "1" : undefined,
+      };
+      if (pageSize === "all") {
+        const rows = await fetchAllPages((pageOffset, limit) =>
+          api.findingsPage({ ...filters, offset: pageOffset, limit }),
+        );
+        setItems(rows);
+        setTotal(rows.length);
+      } else {
+        const res = await api.findingsPage({
+          ...filters,
+          offset,
+          limit: pageSize,
+        });
+        setItems(res.items);
+        setTotal(res.page.total);
+      }
       setSelectedIds(new Set());
     } catch (err: unknown) {
       setError(formatError(err, "Falha ao listar findings"));
@@ -134,11 +169,80 @@ export function FindingsPage() {
     } finally {
       setBusy(false);
     }
-  }, [severityFilter, statusFilter, environmentId]);
+  }, [
+    severityFilter,
+    statusFilter,
+    environmentId,
+    offset,
+    pageSize,
+    mine,
+    overdueOnly,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setSearch({
+      severity: severityFilter || null,
+      status: statusFilter || null,
+      mine: mine ? "1" : null,
+      overdue: overdueOnly ? "1" : null,
+    });
+  }, [severityFilter, statusFilter, mine, overdueOnly, setSearch]);
+
+  useEffect(() => {
+    const nextSeverity = search.severity || "";
+    const nextStatus = search.status ?? "open";
+    const nextMine = search.mine === "1";
+    const nextOverdue = search.overdue === "1";
+    setSeverityFilter((current) =>
+      current === nextSeverity ? current : nextSeverity,
+    );
+    setStatusFilter((current) =>
+      current === nextStatus ? current : nextStatus,
+    );
+    setMine((current) => (current === nextMine ? current : nextMine));
+    setOverdueOnly((current) =>
+      current === nextOverdue ? current : nextOverdue,
+    );
+  }, [search.severity, search.status, search.mine, search.overdue]);
+
+  useEffect(() => {
+    if (!findingId) return;
+    let active = true;
+    void api
+      .finding(findingId)
+      .then((item) => {
+        if (active) setSelected(item);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [findingId]);
+
+  useEffect(() => {
+    setAssignee(selected?.assignee || "");
+    setDueAt(selected?.due_at ? selected.due_at.slice(0, 16) : "");
+  }, [selected]);
+
+  const saveWorkflow = async () => {
+    if (!selected) return;
+    try {
+      const due = dueAt ? new Date(dueAt).toISOString() : undefined;
+      const updated = await api.updateFindingWorkflow(
+        selected.id,
+        assignee.trim(),
+        due,
+      );
+      setItems((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      setSelected(updated);
+    } catch (err: unknown) {
+      setError(formatError(err, "Falha ao salvar responsável ou prazo"));
+    }
+  };
 
   const triage = async (id: string, status: string) => {
     try {
@@ -305,14 +409,20 @@ export function FindingsPage() {
     activeChips.push({
       key: "sev",
       label: `Severidade: ${labels.severity(severityFilter)}`,
-      clear: () => setSeverityFilter(""),
+      clear: () => {
+        setSeverityFilter("");
+        setOffset(0);
+      },
     });
   }
   if (statusFilter) {
     activeChips.push({
       key: "status",
       label: `Status: ${labels.findingStatus(statusFilter)}`,
-      clear: () => setStatusFilter(""),
+      clear: () => {
+        setStatusFilter("");
+        setOffset(0);
+      },
     });
   }
 
@@ -352,18 +462,65 @@ export function FindingsPage() {
           <Card title={String(health.inactivity)} subtitle="Inatividade" />
         </div>
 
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={mine ? "primary" : "secondary"}
+            onClick={() => {
+              setMine((value) => !value);
+              setOffset(0);
+            }}
+          >
+            Meus
+          </Button>
+          <Button
+            variant={overdueOnly ? "primary" : "secondary"}
+            onClick={() => {
+              setOverdueOnly((value) => !value);
+              setOffset(0);
+            }}
+          >
+            Atrasados
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setSeverityFilter("critical");
+              setStatusFilter("open");
+              setOffset(0);
+            }}
+          >
+            Críticos
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setStatusFilter("suppressed");
+              setSeverityFilter("");
+              setOffset(0);
+            }}
+          >
+            Suprimidos
+          </Button>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
             label="Severidade"
             options={SEVERITY_OPTIONS}
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => {
+              setSeverityFilter(e.target.value);
+              setOffset(0);
+            }}
           />
           <Select
             label="Status"
             options={STATUS_OPTIONS}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setOffset(0);
+            }}
           />
         </div>
 
@@ -379,7 +536,7 @@ export function FindingsPage() {
           <Button onClick={() => void load()} disabled={busy || bulkBusy}>
             Atualizar
           </Button>
-          {selectionCount > 0 ? (
+          {selectionCount > 0 && api.hasRole("auditor") ? (
             <>
               <span className="text-xs text-slate-400">
                 {selectionCount} selecionado(s)
@@ -433,91 +590,112 @@ export function FindingsPage() {
         ) : null}
 
         {!busy && sortedItems.length > 0 ? (
-          <Table
-            dense
-            headers={[
-              { id: "sel", label: "Sel." },
-              { id: "type", label: "Tipo", sortable: true },
-              { id: "severity", label: "Severidade", sortable: true },
-              { id: "status", label: "Status", sortable: true },
-              { id: "title", label: "Título", sortable: true },
-              { id: "object", label: "Objeto", sortable: true },
-              { id: "last_seen", label: "Última vez", sortable: true },
-            ]}
-            sortKey={sort?.key}
-            sortDir={sort?.dir}
-            onSort={(id) => {
-              if (id === "sel") {
-                return;
-              }
-              setSort((prev) => nextSort(prev, id));
-            }}
-          >
-            <tr className="border-t border-slate-800 bg-slate-900/40">
-              <td className="px-3 py-1.5">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Selecionar todos"
-                  className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
-                />
-              </td>
-              <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
-                Selecionar todos na página ({sortedItems.length})
-              </td>
-            </tr>
-            {sortedItems.map((f) => (
-              <tr
-                key={f.id}
-                className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
-                onClick={() => setSelected(f)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelected(f);
-                  }
-                }}
-              >
+          <>
+            <Table
+              dense
+              pagination={false}
+              virtualize
+              headers={[
+                { id: "sel", label: "Sel." },
+                { id: "type", label: "Tipo", sortable: true },
+                { id: "severity", label: "Severidade", sortable: true },
+                { id: "status", label: "Status", sortable: true },
+                { id: "title", label: "Título", sortable: true },
+                { id: "object", label: "Objeto", sortable: true },
+                { id: "last_seen", label: "Última vez", sortable: true },
+              ]}
+              sortKey={sort?.key}
+              sortDir={sort?.dir}
+              onSort={(id) => {
+                if (id === "sel") {
+                  return;
+                }
+                setSort((prev) => nextSort(prev, id));
+              }}
+            >
+              <tr className="border-t border-slate-800 bg-slate-900/40">
                 <td className="px-3 py-1.5">
                   <input
                     type="checkbox"
-                    checked={selectedIds.has(f.id)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                    onChange={() => {
-                      toggleOne(f.id);
-                    }}
-                    aria-label={`Selecionar ${f.title}`}
+                    disabled={!api.hasRole("auditor")}
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Selecionar todos"
                     className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
                   />
                 </td>
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
-                  {f.finding_type}
-                </td>
-                <td className="px-3 py-1.5">
-                  <Badge tone={severityTone(f.severity)}>
-                    {labels.severity(f.severity)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5">
-                  <Badge tone={statusTone(f.status)}>
-                    {labels.findingStatus(f.status)}
-                  </Badge>
-                </td>
-                <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
-                  {f.object_key || "—"}
-                </td>
-                <td className="px-3 py-1.5 text-xs text-slate-400">
-                  {f.last_seen_at
-                    ? new Date(f.last_seen_at).toLocaleString()
-                    : "—"}
+                <td className="px-3 py-1.5 text-xs text-slate-500" colSpan={6}>
+                  Selecionar todos na página ({sortedItems.length})
                 </td>
               </tr>
-            ))}
-          </Table>
+              {sortedItems.map((f) => (
+                <tr
+                  key={f.id}
+                  className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
+                  onClick={() => {
+                    setSelected(f);
+                    openFinding(f.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected(f);
+                      openFinding(f.id);
+                    }
+                  }}
+                >
+                  <td className="px-3 py-1.5">
+                    <input
+                      type="checkbox"
+                      disabled={!api.hasRole("auditor")}
+                      checked={selectedIds.has(f.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onChange={() => {
+                        toggleOne(f.id);
+                      }}
+                      aria-label={`Selecionar ${f.title}`}
+                      className="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-400/50"
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
+                    {f.finding_type}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <Badge tone={severityTone(f.severity)}>
+                      {labels.severity(f.severity)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <Badge tone={statusTone(f.status)}>
+                      {labels.findingStatus(f.status)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-1.5 text-slate-100">{f.title}</td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
+                    {f.object_key || "—"}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs text-slate-400">
+                    {f.last_seen_at
+                      ? new Date(f.last_seen_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            <PaginationControls
+              total={total}
+              offset={pageSize === "all" ? 0 : offset}
+              size={pageSize}
+              onSizeChange={(next) => {
+                setPageSize(next);
+                setOffset(0);
+              }}
+              onOffsetChange={setOffset}
+              label="Findings"
+            />
+          </>
         ) : null}
 
         {selected ? (
@@ -607,42 +785,82 @@ export function FindingsPage() {
                 {JSON.stringify(selected.evidence, null, 2)}
               </pre>
             ) : null}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button onClick={() => void triage(selected.id, "acknowledged")}>
-                Reconhecer
-              </Button>
-              <Button onClick={() => void triage(selected.id, "resolved")}>
-                Resolver
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => void triage(selected.id, "open")}
-              >
-                Reabrir
-              </Button>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <input
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                aria-label="Motivo da supressão"
-                placeholder="Motivo da supressão"
-                value={suppressionReason}
-                onChange={(event) => setSuppressionReason(event.target.value)}
-              />
-              <input
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                aria-label="Validade da supressão"
-                type="datetime-local"
-                value={suppressedUntil}
-                onChange={(event) => setSuppressedUntil(event.target.value)}
-              />
-              <Button
-                disabled={!suppressionReason.trim() || !suppressedUntil}
-                onClick={() => void suppressSelected()}
-              >
-                Suprimir com validade
-              </Button>
-            </div>
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  onClick={() => void triage(selected.id, "acknowledged")}
+                >
+                  Reconhecer
+                </Button>
+                <Button onClick={() => void triage(selected.id, "resolved")}>
+                  Resolver
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void triage(selected.id, "open")}
+                >
+                  Reabrir
+                </Button>
+              </div>
+            ) : null}
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Responsável"
+                  placeholder="Responsável"
+                  value={assignee}
+                  onChange={(event) => setAssignee(event.target.value)}
+                />
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Prazo"
+                  type="datetime-local"
+                  value={dueAt}
+                  onChange={(event) => setDueAt(event.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    disabled={!assignee.trim() && !dueAt}
+                    onClick={() => void saveWorkflow()}
+                  >
+                    Salvar prazo
+                  </Button>
+                  {api.currentUser() ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setAssignee(api.currentUser())}
+                    >
+                      Eu
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {api.hasRole("auditor") ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Motivo da supressão"
+                  placeholder="Motivo da supressão"
+                  value={suppressionReason}
+                  onChange={(event) => setSuppressionReason(event.target.value)}
+                />
+                <input
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                  aria-label="Validade da supressão"
+                  type="datetime-local"
+                  value={suppressedUntil}
+                  onChange={(event) => setSuppressedUntil(event.target.value)}
+                />
+                <Button
+                  disabled={!suppressionReason.trim() || !suppressedUntil}
+                  onClick={() => void suppressSelected()}
+                >
+                  Suprimir com validade
+                </Button>
+              </div>
+            ) : null}
             <h3 className="mt-5 text-sm font-semibold text-slate-200">
               Linha do tempo
             </h3>

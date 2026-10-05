@@ -8,8 +8,14 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import {
+  type PageSize,
+  PaginationControls,
+} from "../components/ui/PaginationControls";
+import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
+import { fetchAllPages } from "../lib/pagination";
 import { api } from "../services/api";
 import type { Finding } from "../types";
 
@@ -26,7 +32,11 @@ function severityTone(
 }
 
 export function PerformancePage() {
+  const { environmentId } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState<PageSize>(20);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
@@ -35,20 +45,36 @@ export function PerformancePage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.findings({ status: "open", limit: 200 });
-      const perf = res.items.filter(
-        (f) =>
-          f.finding_type.startsWith("performance.") ||
-          f.finding_type.startsWith("vacuum."),
-      );
-      setItems(perf);
+      const filters = {
+        environment_id: environmentId || undefined,
+        status: "open",
+      };
+      if (pageSize === "all") {
+        const rows = await fetchAllPages((pageOffset, limit) =>
+          api.findingsCategoryPage("performance", {
+            ...filters,
+            offset: pageOffset,
+            limit,
+          }),
+        );
+        setItems(rows);
+        setTotal(rows.length);
+      } else {
+        const res = await api.findingsCategoryPage("performance", {
+          ...filters,
+          offset,
+          limit: pageSize,
+        });
+        setItems(res.items);
+        setTotal(res.page.total);
+      }
     } catch (err: unknown) {
       setError(formatError(err, "Falha ao listar performance"));
       setItems([]);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [environmentId, offset, pageSize]);
 
   useEffect(() => {
     void load();
@@ -86,6 +112,7 @@ export function PerformancePage() {
           <Card title="Conexões" subtitle={String(summary.connections)} />
           <Card title="Slow queries" subtitle={String(summary.slow)} />
         </div>
+        <p className="text-xs text-slate-400">Resumo da página exibida.</p>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void load()} disabled={busy}>
@@ -106,35 +133,49 @@ export function PerformancePage() {
         ) : null}
 
         {!busy && items.length > 0 ? (
-          <Table
-            headers={["Tipo", "Severidade", "Título", "Objeto", "Última vez"]}
-          >
-            {items.map((f) => (
-              <tr
-                key={f.id}
-                className="border-t border-slate-800 cursor-pointer"
-                onClick={() => setSelected(f)}
-              >
-                <td className="px-4 py-3 text-slate-300 font-mono text-xs">
-                  {f.finding_type}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={severityTone(f.severity)}>
-                    {labels.severity(f.severity)}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-slate-100">{f.title}</td>
-                <td className="px-4 py-3 text-slate-400 font-mono text-xs">
-                  {f.object_key || "—"}
-                </td>
-                <td className="px-4 py-3 text-slate-400 text-xs">
-                  {f.last_seen_at
-                    ? new Date(f.last_seen_at).toLocaleString()
-                    : "—"}
-                </td>
-              </tr>
-            ))}
-          </Table>
+          <>
+            <Table
+              pagination={false}
+              headers={["Tipo", "Severidade", "Título", "Objeto", "Última vez"]}
+            >
+              {items.map((f) => (
+                <tr
+                  key={f.id}
+                  className="border-t border-slate-800 cursor-pointer"
+                  onClick={() => setSelected(f)}
+                >
+                  <td className="px-4 py-3 text-slate-300 font-mono text-xs">
+                    {f.finding_type}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={severityTone(f.severity)}>
+                      {labels.severity(f.severity)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-slate-100">{f.title}</td>
+                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">
+                    {f.object_key || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400 text-xs">
+                    {f.last_seen_at
+                      ? new Date(f.last_seen_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            <PaginationControls
+              total={total}
+              offset={pageSize === "all" ? 0 : offset}
+              size={pageSize}
+              onSizeChange={(next) => {
+                setPageSize(next);
+                setOffset(0);
+              }}
+              onOffsetChange={setOffset}
+              label="Performance"
+            />
+          </>
         ) : null}
 
         {selected ? (

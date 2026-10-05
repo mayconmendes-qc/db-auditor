@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/analyzer"
 )
 
 type AnalysisRun struct {
@@ -119,5 +119,6 @@ RETURNING id::text`, persisted.ID, f.EnvironmentID, f.RuleID, f.ObjectKey, f.Rul
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err
 	}
+	s.NotifyFindings(ctx, findings)
 	return len(findings), nil
 }

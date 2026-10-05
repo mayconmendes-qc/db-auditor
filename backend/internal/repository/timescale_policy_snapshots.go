@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/mayconmendes-qc/db-auditor/internal/collectors/timescale"
+	"github.com/osmendes/db-auditor/internal/collectors/timescale"
 )
 
 // SaveTimescalePolicyInventory persists CAGG/jobs/policies for an audit run.
@@ -25,16 +25,16 @@ func (s *Store) SaveTimescalePolicyInventory(
 INSERT INTO continuous_aggregate_snapshot (
   audit_run_id, environment_id, database_name, schema_name, view_name, owner_name,
   materialization_schema, materialization_hypertable, materialized_only,
-  compression_enabled, finalized, view_definition, collected_at
+  compression_enabled, finalized, view_definition, lag_interval, collected_at
 ) VALUES (
   $1,$2,$3,$4,$5,$6,
   $7,$8,$9,
-  $10,$11,$12, now()
+  $10,$11,$12,$13, now()
 )
 ON CONFLICT (audit_run_id, database_name, schema_name, view_name) DO NOTHING
 `, auditRunID, environmentID, ca.DatabaseName, ca.SchemaName, ca.ViewName, nullString(ca.Owner),
 			nullString(ca.MaterializationSchema), nullString(ca.MaterializationHypertable), ca.MaterializedOnly,
-			ca.CompressionEnabled, ca.Finalized, ca.ViewDefinition)
+			ca.CompressionEnabled, ca.Finalized, ca.ViewDefinition, ca.LagInterval)
 		if err != nil {
 			return fmt.Errorf("insert continuous_aggregate_snapshot %s.%s.%s: %w", ca.DatabaseName, ca.SchemaName, ca.ViewName, err)
 		}
@@ -47,13 +47,13 @@ INSERT INTO job_snapshot (
   schedule_interval, max_runtime, max_retries, retry_period, proc_schema, proc_name, owner_name,
   scheduled, fixed_schedule, config_json, next_start, initial_start,
   hypertable_schema, hypertable_name, check_schema, check_name,
-  last_run_status, total_failures, collected_at
+  last_run_status, total_failures, last_run_duration, max_background_workers, collected_at
 ) VALUES (
   $1,$2,$3,$4,$5,
   $6,$7,$8,$9,$10,$11,$12,
   $13,$14,$15,$16,$17,
   $18,$19,$20,$21,
-  $22,$23, now()
+  $22,$23,$24,$25, now()
 )
 ON CONFLICT (audit_run_id, database_name, job_id) DO NOTHING
 `, auditRunID, environmentID, j.DatabaseName, j.JobID, nullString(j.ApplicationName),
@@ -61,7 +61,7 @@ ON CONFLICT (audit_run_id, database_name, job_id) DO NOTHING
 			nullString(j.ProcSchema), nullString(j.ProcName), nullString(j.Owner),
 			j.Scheduled, j.FixedSchedule, nullStringPtr(j.ConfigJSON), j.NextStart, j.InitialStart,
 			nullStringPtr(j.HypertableSchema), nullStringPtr(j.HypertableName), nullStringPtr(j.CheckSchema), nullStringPtr(j.CheckName),
-			nullString(j.LastRunStatus), j.TotalFailures)
+			nullString(j.LastRunStatus), j.TotalFailures, nullString(j.LastRunDuration), j.MaxBackgroundWorkers)
 		if err != nil {
 			return fmt.Errorf("insert job_snapshot %s#%d: %w", j.DatabaseName, j.JobID, err)
 		}

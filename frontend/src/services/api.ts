@@ -19,6 +19,7 @@ import type {
   DatabaseSnapshot,
   DependencySnapshot,
   DimensionSnapshot,
+  EffectiveRule,
   EnvironmentsResponse,
   Finding,
   FindingEvent,
@@ -40,8 +41,9 @@ import type {
   ReportJob,
   RLSPolicySnapshot,
   SchemaSnapshot,
+  ScopeAggregate,
   ScopeHistoryPoint,
-  ScopeScore,
+  ServerCompareReport,
   SnapshotCompleteness,
   StatusResponse,
   StorageGrowthResponse,
@@ -52,41 +54,84 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
+import { apiContractVersion, type ScopeScore } from "../types/openapi";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
 ).replace(/\/$/, "");
 
 let reportToken = "";
+let sessionToken = "";
+let sessionRole = "";
+let sessionUser = "";
+
+function authHeaders(): Record<string, string> {
+  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+}
+
+function handleSessionExpiry(response: Response, path: string): void {
+  if (
+    response.status === 401 &&
+    path !== "/api/v1/auth/login" &&
+    sessionToken
+  ) {
+    sessionToken = "";
+    sessionRole = "";
+    sessionUser = "";
+    window.dispatchEvent(new Event("auditor:session-expired"));
+  }
+}
 
 async function reportRequest<T>(
   path: string,
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  if (!reportToken)
+  if (!reportToken && !sessionToken)
     throw new Error("Informe o token de relatórios para esta sessão.");
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${reportToken}`,
+      Authorization: `Bearer ${sessionToken || reportToken}`,
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
-  if (!response.ok) throw await toApiError(response, path);
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
   return response.json() as Promise<T>;
 }
 
 async function getJSON<T>(path: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`);
+    response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -97,13 +142,14 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -114,13 +160,14 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
   if (!response.ok) {
+    handleSessionExpiry(response, path);
     throw await toApiError(response, path);
   }
   return response.json() as Promise<T>;
@@ -175,6 +222,33 @@ export type TableScopeParams = {
 
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
+  contractVersion: apiContractVersion,
+  hasSession: () => Boolean(sessionToken),
+  currentUser: () => sessionUser,
+  hasRole: (minimum: "auditor" | "operator") =>
+    ({ viewer: 1, auditor: 2, operator: 3 })[
+      sessionRole as "viewer" | "auditor" | "operator"
+    ] >= { auditor: 2, operator: 3 }[minimum],
+  login: async (username: string, password: string) => {
+    const result = await postJSON<{
+      token: string;
+      user: { username: string; role: string };
+    }>("/api/v1/auth/login", { username, password });
+    sessionToken = result.token;
+    sessionRole = result.user.role;
+    sessionUser = result.user.username;
+    return result.user;
+  },
+  logout: async () => {
+    try {
+      if (sessionToken) await postJSON("/api/v1/auth/logout", {});
+    } finally {
+      sessionToken = "";
+      sessionRole = "";
+      sessionUser = "";
+      reportToken = "";
+    }
+  },
   setReportToken: (value: string) => {
     reportToken = value;
   },
@@ -207,14 +281,17 @@ export const api = {
     environmentId: string,
     id: string,
   ): Promise<Blob> => {
-    if (!reportToken)
+    if (!reportToken && !sessionToken)
       throw new Error("Informe o token de relatórios para esta sessão.");
     const path = `/api/v1/environments/${environmentId}/reports/${id}/download`;
     const response = await fetch(`${API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${reportToken}` },
+      headers: { Authorization: `Bearer ${sessionToken || reportToken}` },
       cache: "no-store",
     });
-    if (!response.ok) throw await toApiError(response, path);
+    if (!response.ok) {
+      handleSessionExpiry(response, path);
+      throw await toApiError(response, path);
+    }
     return new Blob([await response.arrayBuffer()], {
       type: "application/pdf",
     });
@@ -425,7 +502,21 @@ export const api = {
       `/api/v1/audit-runs${s ? `?${s}` : ""}`,
     );
   },
+  auditRunsPage: (params: {
+    environment_id?: string;
+    profile?: string;
+    status?: string;
+    limit: number;
+    offset: number;
+  }) => getJSON<PagedResponse<AuditRun>>(`/api/v1/audit-runs${qs(params)}`),
   auditRun: (id: string) => getJSON<AuditRun>(`/api/v1/audit-runs/${id}`),
+  cancelAuditRun: (id: string) =>
+    postJSON<{ status: string }>(`/api/v1/audit-runs/${id}/cancel`, {}),
+  cancelAuditDatabase: (id: string, database: string) =>
+    postJSON<{ status: string }>(
+      `/api/v1/audit-runs/${id}/databases/${encodeURIComponent(database)}/cancel`,
+      {},
+    ),
   auditRunCollectors: (id: string) =>
     getJSON<ItemsResponse<CollectorRun>>(`/api/v1/audit-runs/${id}/collectors`),
   auditRunCoverage: (id: string) =>
@@ -475,6 +566,27 @@ export const api = {
     getJSON<ScopeScore>(
       `/api/v1/environments/${environmentId}/runs/${runId}/score${qs({ database, schema, table })}`,
     ),
+  scopeScores: (environmentId: string, runId: string) =>
+    getJSON<{ items: ScopeAggregate[]; version: string }>(
+      `/api/v1/environments/${environmentId}/runs/${runId}/scores`,
+    ),
+  rules: (environmentId: string, schema?: string) =>
+    getJSON<{ items: EffectiveRule[]; schema: string }>(
+      `/api/v1/environments/${environmentId}/rules${qs({ schema })}`,
+    ),
+  putRule: (
+    environmentId: string,
+    ruleId: string,
+    body: {
+      schema: string;
+      enabled: boolean;
+      parameters: Record<string, unknown>;
+    },
+  ) =>
+    putJSON<{ rule_id: string; enabled: boolean; note: string }>(
+      `/api/v1/environments/${environmentId}/rules/${encodeURIComponent(ruleId)}`,
+      body,
+    ),
   reprocessAuditRun: (id: string) =>
     postJSON<{ audit_run_id: string; produced: number; saved: number }>(
       `/api/v1/audit-runs/${id}/reprocess`,
@@ -485,6 +597,24 @@ export const api = {
       environment_id: environmentId,
       profile,
     }),
+  schedules: (environmentId: string) =>
+    getJSON<{
+      items: {
+        environment_id: string;
+        profile: string;
+        enabled: boolean;
+        last_status?: string;
+        last_run_at?: string;
+        next_run_at?: string;
+      }[];
+    }>(`/api/v1/environments/${environmentId}/schedules`),
+  saveSchedule: (environmentId: string, profile: string, enabled: boolean) =>
+    putJSON<{
+      profile: string;
+      enabled: boolean;
+      next_run_at?: string;
+      last_status?: string;
+    }>(`/api/v1/environments/${environmentId}/schedules`, { profile, enabled }),
   mappings: (params?: {
     source_environment_id?: string;
     target_environment_id?: string;
@@ -523,6 +653,10 @@ export const api = {
     statuses?: string[];
     object_type?: string;
   }) => postJSON<CompareResult>("/api/v1/compare", body),
+  serverCompare: (left: string, right: string) =>
+    getJSON<ServerCompareReport>(
+      `/api/v1/server-compare${qs({ left, right })}`,
+    ),
   findings: (params?: {
     environment_id?: string;
     finding_type?: string;
@@ -551,6 +685,32 @@ export const api = {
       `/api/v1/findings${s ? `?${s}` : ""}`,
     );
   },
+  runFindings: (auditRunId: string) =>
+    getJSON<ItemsResponse<Finding>>(
+      `/api/v1/findings?audit_run_id=${encodeURIComponent(auditRunId)}`,
+    ),
+  findingsPage: (params: {
+    environment_id?: string;
+    finding_type?: string;
+    severity?: string;
+    status?: string;
+    assignee?: string;
+    overdue?: string;
+    limit: number;
+    offset: number;
+  }) => getJSON<PagedResponse<Finding>>(`/api/v1/findings${qs(params)}`),
+  findingsCategoryPage: (
+    category: "security" | "performance",
+    params: {
+      environment_id?: string;
+      status?: string;
+      limit: number;
+      offset: number;
+    },
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `/api/v1/finding-categories/${category}${qs(params)}`,
+    ),
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
   findingTimeline: (id: string) =>
     getJSON<ItemsResponse<FindingEvent>>(`/api/v1/findings/${id}/timeline`),
@@ -562,6 +722,11 @@ export const api = {
     }),
   updateFindingStatus: (id: string, status: string, notes?: string) =>
     patchJSON<Finding>(`/api/v1/findings/${id}`, { status, notes }),
+  updateFindingWorkflow: (id: string, assignee: string, dueAt?: string) =>
+    patchJSON<Finding>(`/api/v1/findings/${id}`, {
+      assignee,
+      due_at: dueAt,
+    }),
   analyzeFindings: (body: {
     environment_id: string;
     audit_run_id?: string;

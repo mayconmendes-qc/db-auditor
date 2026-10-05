@@ -62,20 +62,22 @@ type DimensionFacts struct {
 
 // ChunkFacts is one row from the chunk collector.
 type ChunkFacts struct {
-	DatabaseName      string     `json:"database_name"`
-	SchemaName        string     `json:"schema_name"`
-	HypertableName    string     `json:"hypertable_name"`
-	ChunkSchema       string     `json:"chunk_schema"`
-	ChunkName         string     `json:"chunk_name"`
-	RangeStart        *time.Time `json:"range_start,omitempty"`
-	RangeEnd          *time.Time `json:"range_end,omitempty"`
-	RangeStartInteger *int64     `json:"range_start_integer,omitempty"`
-	RangeEndInteger   *int64     `json:"range_end_integer,omitempty"`
-	IsCompressed      bool       `json:"is_compressed"`
-	ChunkTablespace   string     `json:"chunk_tablespace"`
-	TotalSizeBytes    int64      `json:"total_size_bytes"`
-	DataSizeBytes     int64      `json:"data_size_bytes"`
-	IndexSizeBytes    int64      `json:"index_size_bytes"`
+	DatabaseName           string     `json:"database_name"`
+	SchemaName             string     `json:"schema_name"`
+	HypertableName         string     `json:"hypertable_name"`
+	ChunkSchema            string     `json:"chunk_schema"`
+	ChunkName              string     `json:"chunk_name"`
+	RangeStart             *time.Time `json:"range_start,omitempty"`
+	RangeEnd               *time.Time `json:"range_end,omitempty"`
+	RangeStartInteger      *int64     `json:"range_start_integer,omitempty"`
+	RangeEndInteger        *int64     `json:"range_end_integer,omitempty"`
+	IsCompressed           bool       `json:"is_compressed"`
+	ChunkTablespace        string     `json:"chunk_tablespace"`
+	TotalSizeBytes         int64      `json:"total_size_bytes"`
+	DataSizeBytes          int64      `json:"data_size_bytes"`
+	IndexSizeBytes         int64      `json:"index_size_bytes"`
+	BeforeCompressionBytes int64      `json:"before_compression_bytes,omitempty"`
+	AfterCompressionBytes  int64      `json:"after_compression_bytes,omitempty"`
 }
 
 // InventoryResult bundles Timescale facts for one database collection pass.

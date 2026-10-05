@@ -10,7 +10,8 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "gen:openapi": "bun scripts/gen-openapi.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

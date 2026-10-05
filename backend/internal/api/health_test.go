@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 type stubStore struct {
@@ -126,11 +125,8 @@ func TestMetrics(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), "auditor_up 1") {
-		t.Fatalf("metrics body: %s", w.Body.String())
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("public status = %d", w.Code)
 	}
 }
 

@@ -77,6 +77,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           onNavigate={onNavigate}
           howTo={[
             "Use o seletor de Ambiente na barra lateral para filtrar KPIs e gráficos (ou deixe em Todos).",
+            "Total de Databases, Schemas e Tabelas vem da última execução coerente de cada ambiente. Todos soma os ambientes; aviso de cobertura parcial indica que algum inventário está ausente ou incompleto.",
             "Confira o status de conexão de cada ambiente no topo (Conectado / Indisponível / DSN ausente).",
             "Clique nos cards de KPI (Findings, Storage, Runs) para ir à tela correspondente.",
             "O gráfico de pizza mostra a distribuição de storage: a legenda traz o armazenamento em bytes; o percentual aparece só nas fatias do gráfico.",
@@ -139,6 +140,8 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Em Disparo manual, escolha o ambiente e clique em Executar agora (confirmação via modal).",
             "Filtre a lista por Status e Perfil (largura total, lado a lado).",
             "Selecione uma run na tabela para ver detalhe, erros e progresso por collector.",
+            "A cobertura identifica databases coletados e falhas. Uma execução ativa pode ser cancelada por operador; o cancelamento é cooperativo e os dados já persistidos permanecem auditáveis.",
+            "No detalhe, compare a execução com o baseline aprovado e acompanhe o score do escopo. Aprovar novo baseline exige confirmação e cobertura elegível.",
             "Enquanto houver runs em execução, a lista atualiza automaticamente.",
           ]}
           terms={[
@@ -173,7 +176,8 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Selecione um ambiente na sidebar (obrigatório para carregar snapshots).",
             "Use o card Filtros: Database, Schema e busca por nome.",
             "Alterne o tipo de objeto (Tabelas, Hypertables, Índices, Views, Funções, CAGGs).",
-            "Clique em uma linha para ver o JSON de detalhe do objeto à direita (em telas largas).",
+            "Clique em uma linha para abrir detalhes, assessment, histórico e métricas do objeto. A avaliação não modifica o banco auditado.",
+            "Ajuste linhas por página entre 20, 50, 100 e Todas. Todas carrega os lotes do servidor; use filtros em inventários grandes.",
           ]}
           terms={[
             {
@@ -262,6 +266,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Filtre por severidade e status usando os seletores em português.",
             "Abra um finding para ler evidências e contexto do objeto.",
             "Triagem: reconheça, resolva ou suprima em lote quando fizer sentido.",
+            "Consulte o histórico imutável antes de mudar o status. Supressões têm motivo e validade; uma reincidência após a validade volta a ser visível.",
             "Exporte CSV/JSON para auditoria externa, se necessário.",
           ]}
           terms={[
@@ -336,6 +341,54 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       ),
     },
     {
+      id: "relatorios",
+      title: "Relatórios",
+      content: (
+        <SectionBody
+          goTo="Relatórios"
+          onNavigate={onNavigate}
+          howTo={[
+            "Escolha ambiente, execução concluída e tipo Executivo, Técnico ou Tabela.",
+            "Um relatório de tabela exige database, schema e tabela. A geração é assíncrona; acompanhe a fila, cancele ou tente novamente quando permitido.",
+            "Baixe o PDF somente enquanto o artefato estiver válido. O histórico mantém o solicitante e a versão das regras; o PDF expira após 30 dias.",
+          ]}
+          terms={[
+            {
+              name: "Artefato",
+              def: "PDF persistido com hash para validar a integridade do download.",
+            },
+            {
+              name: "Redação de metadados",
+              def: "A configuração do servidor pode ocultar ambiente, ID da execução, solicitante e versões do cabeçalho do PDF.",
+            },
+          ]}
+        />
+      ),
+    },
+    {
+      id: "acesso",
+      title: "Contas e permissões",
+      content: (
+        <SectionBody
+          howTo={[
+            "Entre com uma conta local; a sessão fica apenas na memória da aba e pode ser encerrada em Sair.",
+            "Viewer consulta os ambientes atribuídos; auditor também faz triagem e solicita relatórios; operator gerencia execuções, baselines e contas.",
+            "Um operator cria outras contas pela API administrativa, definindo role e IDs de ambientes. Segredos de conexão e senhas não são expostos na interface.",
+          ]}
+          terms={[
+            {
+              name: "Sessão",
+              def: "Token temporário e revogável, válido por até 8 horas.",
+            },
+            {
+              name: "Escopo",
+              def: "Conjunto de ambientes explicitamente associado a uma conta não-operadora.",
+            },
+          ]}
+        />
+      ),
+    },
+    {
       id: "status",
       title: "Status",
       content: (
@@ -345,7 +398,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           howTo={[
             "Verifique saúde da API, store interno e runs recentes.",
             "Após make up ou mudança de .env, confirme que API e conexões estão verdes.",
-            "Em produção, métricas Prometheus ficam em GET /metrics (fora desta UI).",
+            "Em produção, métricas Prometheus ficam na porta interna 9090, fora do site público.",
           ]}
           terms={[
             {
@@ -366,10 +419,10 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       content: (
         <SectionBody
           howTo={[
-            "Instale Podman (ou Docker) com Compose. Copie .env.example para .env e defina POSTGRES_PASSWORD.",
-            "Configure AUDITOR_TARGET_DSN_* e denylists de database/schema fora do repositório.",
-            "Suba com make up; valide com make smoke e a tela Status.",
-            "Após mudar baseline SQL: make reset-volume && make up.",
+            "O usuário e a senha ficam no .env: AUDITOR_BOOTSTRAP_USER=admin e AUDITOR_BOOTSTRAP_PASSWORD=db-auditor-local-1. A senha precisa ter pelo menos 16 caracteres.",
+            "Suba com make up e entre em http://localhost:5173. A conta operator só nasce se ainda não existir nenhum usuário. Mudar o .env depois não troca a senha já gravada.",
+            "Configure os alvos com sslmode=verify-full e AUDITOR_TARGET_ALLOWED_HOSTS. Use conta somente leitura e denylists de database/schema. Host e senha dos Timescale ficam no .env, não numa migration.",
+            "O schema é 01_baseline.sql mais 02_seed_demo.sql. Não use reset-volume em produção: ele apaga os dados.",
           ]}
           terms={[
             {
@@ -378,7 +431,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             },
             {
               name: "Seed demo",
-              def: "Dados de exemplo carregados em volume vazio para demonstração local.",
+              def: "Duas linhas locais de audit_environment, só em volume vazio. Não guarda host nem senha dos Timescale; isso vem do .env.",
             },
           ]}
         />

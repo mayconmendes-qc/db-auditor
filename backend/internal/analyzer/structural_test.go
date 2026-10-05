@@ -177,11 +177,11 @@ func TestRulePolicyScopeAndVersionedDedup(t *testing.T) {
 
 func TestCatalogVersionGolden(t *testing.T) {
 	items := Catalog()
-	if len(items) != 43 {
+	if len(items) != 67 {
 		t.Fatalf("catalog size changed: %d", len(items))
 	}
 	for i, item := range items {
-		if item.Version != "1.0.0" || item.ID == "" || item.Recommendation == "" || item.Validation == "" || len(item.References) == 0 {
+		if (item.Version != "1.0.0" && item.Version != "1.1.0") || item.ID == "" || item.Recommendation == "" || item.Validation == "" || len(item.References) == 0 {
 			t.Fatalf("incomplete versioned rule: %#v", item)
 		}
 		if i > 0 && strings.Compare(items[i-1].ID, item.ID) >= 0 {
@@ -191,12 +191,15 @@ func TestCatalogVersionGolden(t *testing.T) {
 			t.Fatalf("heuristic confidence too high: %s", item.ID)
 		}
 	}
+	if len(items) != 67 {
+		t.Fatalf("catalog length %d", len(items))
+	}
 	encoded, err := json.Marshal(items)
 	if err != nil {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(encoded)
-	const golden = "9d15de7022dade15839c313daeab7b90f0faec05cecb24be308c989103a66810"
+	const golden = "ebd760140f3412ff42f60a182f50b509121c65de1ddc5516735f1da084887fbe"
 	if got := hex.EncodeToString(digest[:]); got != golden {
 		t.Fatalf("catalog golden changed: %s", got)
 	}

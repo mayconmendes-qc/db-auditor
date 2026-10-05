@@ -1,12 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 // DashboardKPIs is the executive summary for the main dashboard.
@@ -22,6 +23,10 @@ type DashboardKPIs struct {
 	Hypertables          int       `json:"hypertables"`
 	JobsScheduled        int       `json:"jobs_scheduled"`
 	Policies             int       `json:"policies"`
+	Databases            *int      `json:"databases"`
+	Schemas              *int      `json:"schemas"`
+	Tables               *int      `json:"tables"`
+	InventoryStatus      string    `json:"inventory_status"`
 	Notes                []string  `json:"notes,omitempty"`
 }
 
@@ -109,12 +114,23 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		envID := envFilter(r)
-		res := DashboardKPIs{GeneratedAtUTC: time.Now().UTC()}
+		res := DashboardKPIs{GeneratedAtUTC: time.Now().UTC(), InventoryStatus: "empty"}
 
 		envs, err := store.ListEnvironmentsAPI(ctx)
 		if err != nil {
 			res.Notes = append(res.Notes, "list environments failed")
 		} else if envID != "" {
+			found := false
+			for _, environment := range envs {
+				if environment.ID == envID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				writeError(w, http.StatusNotFound, CodeNotFound, "Ambiente não encontrado.")
+				return
+			}
 			res.Environments = 1
 		} else {
 			res.Environments = len(envs)
@@ -154,6 +170,29 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 		for _, e := range envs {
 			if envID != "" && e.ID != envID {
 				continue
+			}
+			if counter, ok := store.(interface {
+				CountLatestInventory(context.Context, string) (*repository.InventoryCounts, error)
+			}); ok {
+				counts, countErr := counter.CountLatestInventory(ctx, e.ID)
+				if countErr != nil {
+					res.Notes = append(res.Notes, "inventory counts failed for "+e.ID)
+					res.InventoryStatus = "partial"
+				} else if counts == nil {
+					res.InventoryStatus = "partial"
+				} else {
+					if res.Databases == nil {
+						res.Databases, res.Schemas, res.Tables = new(int), new(int), new(int)
+					}
+					*res.Databases += counts.Databases
+					*res.Schemas += counts.Schemas
+					*res.Tables += counts.Tables
+					if counts.Status != "complete" {
+						res.InventoryStatus = "partial"
+					} else if res.InventoryStatus == "empty" {
+						res.InventoryStatus = "complete"
+					}
+				}
 			}
 			dbs, err := store.ListDatabaseSnapshots(ctx, e.ID)
 			if err == nil {

@@ -40,7 +40,9 @@ SELECT
   j.check_schema AS check_schema,
   j.check_name AS check_name,
   COALESCE(to_jsonb(js)->>'last_run_status', '') AS last_run_status,
-  COALESCE((to_jsonb(js)->>'total_failures')::bigint, 0) AS total_failures
+  COALESCE((to_jsonb(js)->>'total_failures')::bigint, 0) AS total_failures,
+  COALESCE(to_jsonb(js)->>'last_run_duration', '') AS last_run_duration,
+  COALESCE(NULLIF(current_setting('timescaledb.max_background_workers', true), ''), '0')::int AS max_background_workers
 FROM timescaledb_information.jobs j
 LEFT JOIN timescaledb_information.job_stats js ON js.job_id = j.job_id
 ORDER BY j.job_id

@@ -64,6 +64,36 @@ func (SecurityAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Findi
 		out = append(out, f)
 	}
 
+	for _, role := range facts.Roles {
+		if !role.Current {
+			continue
+		}
+		if role.PrivilegeCheckFailed {
+			key := fmt.Sprintf("%s.auditor:%s", role.Database, role.RoleName)
+			title := "Auditor privilege check incomplete: " + role.RoleName
+			out = append(out, Finding{
+				EnvironmentID: facts.EnvironmentID, AuditRunID: facts.AuditRunID,
+				FindingType: "security.auditor_privilege_unknown", Severity: SeverityMedium, Status: StatusOpen,
+				Title: title, Summary: "The privilege query failed. This is not evidence that the role is read-only.",
+				ObjectType: "role", ObjectKey: key, DatabaseName: role.Database, ObjectName: role.RoleName,
+				DedupKey: DedupKey("security.auditor_privilege_unknown", key, title),
+			})
+			continue
+		}
+		if role.CanWrite || role.Superuser || role.CreateRole || role.CreateDB {
+			key := fmt.Sprintf("%s.auditor:%s", role.Database, role.RoleName)
+			title := "Auditor connection is not read-only: " + role.RoleName
+			out = append(out, Finding{
+				EnvironmentID: facts.EnvironmentID, AuditRunID: facts.AuditRunID,
+				FindingType: "security.auditor_not_readonly", Severity: SeverityHigh, Status: StatusOpen,
+				Title: title, Summary: "The target role used by the auditor can write or holds a privileged attribute. Collection stays SELECT-only.",
+				ObjectType: "role", ObjectKey: key, DatabaseName: role.Database, ObjectName: role.RoleName,
+				Evidence: map[string]any{"superuser": role.Superuser, "can_write": role.CanWrite, "createrole": role.CreateRole},
+				DedupKey: DedupKey("security.auditor_not_readonly", key, title),
+			})
+		}
+	}
+
 	// Superuser / powerful roles
 	for _, role := range facts.Roles {
 		if !role.Superuser && !role.BypassRLS && !role.Replication {

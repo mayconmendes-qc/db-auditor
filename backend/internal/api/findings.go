@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 // FindingStore exposes finding persistence.
@@ -23,6 +22,8 @@ type updateFindingBody struct {
 	Notes             string `json:"notes"`
 	SuppressionReason string `json:"suppression_reason"`
 	SuppressedUntil   string `json:"suppressed_until"`
+	Assignee          string `json:"assignee"`
+	DueAt             string `json:"due_at"`
 }
 
 type analyzeBody struct {
@@ -36,6 +37,31 @@ type AnalysisRunner interface {
 
 func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis AnalysisRunner) {
 	mux.HandleFunc("GET /api/v1/findings", listFindings(store))
+	mux.HandleFunc("GET /api/v1/finding-categories/{category}", func(w http.ResponseWriter, r *http.Request) {
+		backend, ok := store.(interface {
+			ListFindingsCategoryPage(context.Context, string, string, string, int, int) ([]repository.Finding, int, error)
+		})
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Listagem indisponível.")
+			return
+		}
+		category := r.PathValue("category")
+		if category != "security" && category != "performance" {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Categoria inválida.")
+			return
+		}
+		limit, offset, valid := parseListPage(r, 20)
+		if !valid {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Paginação inválida.")
+			return
+		}
+		items, total, err := backend.ListFindingsCategoryPage(r.Context(), r.URL.Query().Get("environment_id"), category, r.URL.Query().Get("status"), limit, offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao listar findings.")
+			return
+		}
+		writePage(w, items, limit, offset, total)
+	})
 	mux.HandleFunc("GET /api/v1/findings/{id}", getFinding(store))
 	mux.HandleFunc("GET /api/v1/findings/{id}/timeline", func(w http.ResponseWriter, r *http.Request) {
 		backend, ok := store.(interface {
@@ -64,7 +90,64 @@ func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis Anal
 func listFindings(store FindingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		limit, _ := strconv.Atoi(q.Get("limit"))
+		if runID := q.Get("audit_run_id"); runID != "" {
+			if !uuidPattern.MatchString(runID) {
+				writeError(w, http.StatusBadRequest, CodeValidation, "Execução inválida.")
+				return
+			}
+			backend, ok := store.(interface {
+				ListRunFindings(context.Context, string) ([]repository.Finding, error)
+			})
+			if !ok {
+				writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Histórico do run indisponível.")
+				return
+			}
+			items, err := backend.ListRunFindings(r.Context(), runID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings do run.")
+				return
+			}
+			if items == nil {
+				items = []repository.Finding{}
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"items": items})
+			return
+		}
+		limit, offset, valid := parseListPage(r, 100)
+		if !valid {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Paginação inválida.")
+			return
+		}
+		if backend, ok := store.(interface {
+			ListFindingsQueue(context.Context, string, string, string, string, string, bool, int, int) ([]repository.Finding, int, error)
+		}); ok {
+			assignee := q.Get("assignee")
+			if assignee == "me" {
+				if user := requestIdentity(r); user != nil {
+					assignee = user.Username
+				} else {
+					assignee = ""
+				}
+			}
+			items, total, err := backend.ListFindingsQueue(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), assignee, q.Get("overdue") == "1" || q.Get("overdue") == "true", limit, offset)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")
+				return
+			}
+			writePage(w, items, limit, offset, total)
+			return
+		}
+		if backend, ok := store.(interface {
+			ListFindingsPage(context.Context, string, string, string, string, int, int) ([]repository.Finding, int, error)
+		}); ok {
+			items, total, err := backend.ListFindingsPage(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), limit, offset)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")
+				return
+			}
+			writePage(w, items, limit, offset, total)
+			return
+		}
 		items, err := store.ListFindings(r.Context(), q.Get("environment_id"), q.Get("finding_type"), q.Get("severity"), q.Get("status"), limit)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os findings.")
@@ -95,6 +178,31 @@ func patchFinding(store FindingStore) http.HandlerFunc {
 		var body updateFindingBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, CodeBadRequest, "Corpo da requisição inválido.")
+			return
+		}
+		if body.Status == "" && (body.Assignee != "" || body.DueAt != "") {
+			var due *time.Time
+			if body.DueAt != "" {
+				parsed, err := time.Parse(time.RFC3339, body.DueAt)
+				if err != nil {
+					writeError(w, http.StatusBadRequest, CodeValidation, "Prazo inválido.")
+					return
+				}
+				due = &parsed
+			}
+			backend, ok := store.(interface {
+				UpdateFindingWorkflow(context.Context, string, string, *time.Time) (*repository.Finding, error)
+			})
+			if !ok {
+				writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Workflow indisponível.")
+				return
+			}
+			f, err := backend.UpdateFindingWorkflow(r.Context(), id, body.Assignee, due)
+			if err != nil {
+				writeError(w, http.StatusNotFound, CodeNotFound, "Finding não encontrado.")
+				return
+			}
+			writeJSON(w, http.StatusOK, f)
 			return
 		}
 		if body.Status == "" {

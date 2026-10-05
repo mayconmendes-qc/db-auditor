@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,19 +26,25 @@ type Scope struct {
 }
 
 type Config struct {
-	HTTPAddress string
-	Database    Database
-	Scope       Scope
-	Collection  CollectionPolicy
+	HTTPAddress              string
+	Database                 Database
+	Scope                    Scope
+	Collection               CollectionPolicy
+	MaxConcurrentRuns        int
+	MaxCollectorWorkers      int
+	MaxDatabaseConnections   int
+	OptionalCollectorTimeout time.Duration
+	TargetStatementTimeout   time.Duration
 }
 
 // CollectionPolicy limits optional, potentially expensive collectors.
 type CollectionPolicy struct {
-	ColumnStatsEnabled bool
-	ColumnStatsLimit   int
-	ColumnStatsSchemas []string
-	WorkloadEnabled    bool
-	WorkloadLimit      int
+	ColumnStatsEnabled  bool
+	ColumnStatsLimit    int
+	ColumnStatsSchemas  []string
+	WorkloadEnabled     bool
+	WorkloadLimit       int
+	OptionalMaxPlanCost float64
 }
 
 func Load() (Config, error) {
@@ -49,13 +56,21 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	optionalTimeout, err := durationFromEnv("AUDITOR_OPTIONAL_COLLECTOR_TIMEOUT", 2*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	targetStatementTimeout, err := durationFromEnv("AUDITOR_TARGET_STATEMENT_TIMEOUT", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		HTTPAddress: env("AUDITOR_HTTP_ADDRESS", ":8080"),
 		Database: Database{
 			URL:              env("AUDITOR_DATABASE_URL", ""),
 			StatementTimeout: statementTimeout,
 			LockTimeout:      lockTimeout,
-			ApplicationName:  env("AUDITOR_APPLICATION_NAME", "timescale-auditor"),
+			ApplicationName:  env("AUDITOR_APPLICATION_NAME", "db-auditor"),
 		},
 		Scope: Scope{
 			DatabaseAllowlist: splitCSV(env("AUDITOR_DATABASE_ALLOWLIST", "")),
@@ -64,12 +79,18 @@ func Load() (Config, error) {
 			SchemaDenylist:    splitCSV(env("AUDITOR_SCHEMA_DENYLIST", "pg_catalog,information_schema")),
 		},
 		Collection: CollectionPolicy{
-			ColumnStatsEnabled: boolFromEnv("AUDITOR_COLUMN_STATS_ENABLED", true),
-			ColumnStatsLimit:   intFromEnv("AUDITOR_COLUMN_STATS_LIMIT", 5000),
-			ColumnStatsSchemas: splitCSV(env("AUDITOR_COLUMN_STATS_SCHEMA_ALLOWLIST", "")),
-			WorkloadEnabled:    boolFromEnv("AUDITOR_WORKLOAD_ENABLED", true),
-			WorkloadLimit:      intFromEnv("AUDITOR_WORKLOAD_LIMIT", 500),
+			ColumnStatsEnabled:  boolFromEnv("AUDITOR_COLUMN_STATS_ENABLED", true),
+			ColumnStatsLimit:    intFromEnv("AUDITOR_COLUMN_STATS_LIMIT", 5000),
+			ColumnStatsSchemas:  splitCSV(env("AUDITOR_COLUMN_STATS_SCHEMA_ALLOWLIST", "")),
+			WorkloadEnabled:     boolFromEnv("AUDITOR_WORKLOAD_ENABLED", true),
+			WorkloadLimit:       intFromEnv("AUDITOR_WORKLOAD_LIMIT", 500),
+			OptionalMaxPlanCost: floatFromEnv("AUDITOR_OPTIONAL_MAX_PLAN_COST", 100000),
 		},
+		MaxConcurrentRuns:        intFromEnv("AUDITOR_MAX_CONCURRENT_RUNS", 2),
+		MaxCollectorWorkers:      intFromEnv("AUDITOR_MAX_COLLECTOR_WORKERS", 4),
+		MaxDatabaseConnections:   intFromEnv("AUDITOR_MAX_DATABASE_CONNECTIONS", 4),
+		OptionalCollectorTimeout: optionalTimeout,
+		TargetStatementTimeout:   targetStatementTimeout,
 	}
 	if cfg.Database.URL == "" {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is required")
@@ -78,6 +99,18 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("AUDITOR_DATABASE_URL is invalid: %w", err)
 	}
 	return cfg, nil
+}
+
+func floatFromEnv(key string, fallback float64) float64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v <= 0 || v > 1000000000 {
+		return fallback
+	}
+	return v
 }
 
 func boolFromEnv(key string, fallback bool) bool {
