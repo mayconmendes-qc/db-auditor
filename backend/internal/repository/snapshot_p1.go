@@ -266,13 +266,17 @@ func (s *Store) loadServerSide(ctx context.Context, environmentID, name, auditRu
 	}
 	extRows.Close()
 
-	htRows, err := s.pool.Query(ctx, `SELECT database_name, schema_name, hypertable_name FROM hypertable_snapshot WHERE audit_run_id=$1::uuid`, auditRunID)
+	htRows, err := s.pool.Query(ctx, `SELECT h.database_name, h.schema_name, h.hypertable_name,
+COALESCE((SELECT d.time_interval FROM dimension_snapshot d
+  WHERE d.audit_run_id=h.audit_run_id AND d.database_name=h.database_name AND d.schema_name=h.schema_name AND d.hypertable_name=h.hypertable_name AND COALESCE(d.time_interval,'')<>''
+  ORDER BY d.dimension_number LIMIT 1), '')
+FROM hypertable_snapshot h WHERE h.audit_run_id=$1::uuid`, auditRunID)
 	if err != nil {
 		return side, err
 	}
 	for htRows.Next() {
 		var item analyzer.HypertableFact
-		if err = htRows.Scan(&item.Database, &item.Schema, &item.Name); err != nil {
+		if err = htRows.Scan(&item.Database, &item.Schema, &item.Name, &item.ChunkInterval); err != nil {
 			htRows.Close()
 			return side, err
 		}
@@ -294,13 +298,16 @@ func (s *Store) loadServerSide(ctx context.Context, environmentID, name, auditRu
 	}
 	polRows.Close()
 
-	caggRows, err := s.pool.Query(ctx, `SELECT schema_name, view_name, COALESCE(lag_interval,''), materialized_only, view_definition FROM continuous_aggregate_snapshot WHERE audit_run_id=$1::uuid`, auditRunID)
+	caggRows, err := s.pool.Query(ctx, `SELECT c.database_name, c.schema_name, c.view_name, COALESCE(c.lag_interval,''), c.materialized_only, c.view_definition,
+EXISTS(SELECT 1 FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh'
+  AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable)))
+FROM continuous_aggregate_snapshot c WHERE c.audit_run_id=$1::uuid`, auditRunID)
 	if err != nil {
 		return side, err
 	}
 	for caggRows.Next() {
 		var item analyzer.CAGGFact
-		if err = caggRows.Scan(&item.Schema, &item.ViewName, &item.Lag, &item.MaterializedOnly, &item.ViewDefinition); err != nil {
+		if err = caggRows.Scan(&item.Database, &item.Schema, &item.ViewName, &item.Lag, &item.MaterializedOnly, &item.ViewDefinition, &item.HasRefreshPolicy); err != nil {
 			caggRows.Close()
 			return side, err
 		}
@@ -311,7 +318,17 @@ func (s *Store) loadServerSide(ctx context.Context, environmentID, name, auditRu
 
 	critRows, err := s.pool.Query(ctx, `SELECT f.dedup_key, e.title, e.severity
 FROM finding_event e JOIN finding f ON f.id = e.finding_id
-WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND e.severity IN ('high','critical')`, auditRunID)
+WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND e.severity IN ('high','critical')
+AND NOT EXISTS (
+  SELECT 1 FROM finding_event prev
+  WHERE prev.finding_id = e.finding_id AND prev.event_type='observed'
+    AND prev.audit_run_id = (
+      SELECT id FROM audit_run
+      WHERE environment_id=$2::uuid AND status IN ('success','partial_success') AND id <> $1::uuid
+      ORDER BY COALESCE(finished_at, started_at) DESC
+      LIMIT 1
+    )
+)`, auditRunID, environmentID)
 	if err != nil {
 		return side, err
 	}

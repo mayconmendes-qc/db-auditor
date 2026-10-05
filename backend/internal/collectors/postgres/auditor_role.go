@@ -26,10 +26,22 @@ FROM pg_roles r WHERE r.rolname = current_user`).Scan(&role.Database, &role.Role
 		role.CheckFailed = true
 		return role, nil
 	}
-	err = conn.QueryRow(ctx, `SELECT EXISTS (
-  SELECT 1 FROM information_schema.role_table_grants
-  WHERE grantee IN (current_user, 'PUBLIC') AND privilege_type IN ('INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER')
-) OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolcreatedb OR rolcreaterole))`).Scan(&role.CanWrite)
+	err = conn.QueryRow(ctx, `SELECT
+  r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind IN ('r', 'p')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema', '_timescaledb_catalog', '_timescaledb_config', '_timescaledb_internal')
+      AND n.nspname NOT LIKE 'pg_%'
+      AND (
+        has_table_privilege(c.oid, 'INSERT')
+        OR has_table_privilege(c.oid, 'UPDATE')
+        OR has_table_privilege(c.oid, 'DELETE')
+        OR has_table_privilege(c.oid, 'TRUNCATE')
+      )
+  )
+FROM pg_roles r WHERE r.rolname = current_user`).Scan(&role.CanWrite)
 	if err != nil {
 		role.CheckFailed = true
 	}

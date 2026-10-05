@@ -70,7 +70,7 @@ func Load() (Config, error) {
 			URL:              env("AUDITOR_DATABASE_URL", ""),
 			StatementTimeout: statementTimeout,
 			LockTimeout:      lockTimeout,
-			ApplicationName:  env("AUDITOR_APPLICATION_NAME", "timescale-auditor"),
+			ApplicationName:  env("AUDITOR_APPLICATION_NAME", "db-auditor"),
 		},
 		Scope: Scope{
 			DatabaseAllowlist: splitCSV(env("AUDITOR_DATABASE_ALLOWLIST", "")),

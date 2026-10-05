@@ -2,7 +2,9 @@ package analyzer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -116,5 +118,56 @@ func (CAGGAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, 
 		}
 		out = append(out, f)
 	}
+	out = append(out, refreshWindowFindings(facts)...)
 	return out, nil
+}
+
+func refreshWindowFindings(facts SnapshotFacts) []Finding {
+	var out []Finding
+	for _, p := range facts.Policies {
+		if !strings.EqualFold(p.PolicyType, "refresh") {
+			continue
+		}
+		start, end := policyOffsets(p.Config)
+		window := start - end
+		schedule := parseInterval(p.ScheduleInterval)
+		if window <= 0 || schedule <= 0 || window <= schedule {
+			continue
+		}
+		key := fmt.Sprintf("%s.%s.%s", p.Database, p.HypertableSchema, p.HypertableName)
+		title := fmt.Sprintf("CAGG refresh window exceeds the job schedule: %s", key)
+		out = append(out, Finding{
+			EnvironmentID: facts.EnvironmentID,
+			AuditRunID:    facts.AuditRunID,
+			FindingType:   "cagg.refresh_window_exceeded",
+			Severity:      SeverityMedium,
+			Status:        StatusOpen,
+			Title:         title,
+			Summary:       "The refresh start/end window is longer than the job schedule, so one run cannot cover the configured range.",
+			ObjectType:    "continuous_aggregate",
+			ObjectKey:     key,
+			DatabaseName:  p.Database,
+			SchemaName:    p.HypertableSchema,
+			ObjectName:    p.HypertableName,
+			Evidence: map[string]any{
+				"window": window.String(), "schedule": p.ScheduleInterval,
+				"start_offset": start.String(), "end_offset": end.String(),
+			},
+			DedupKey: DedupKey("cagg.refresh_window_exceeded", key, title),
+		})
+	}
+	return out
+}
+
+func policyOffsets(config string) (time.Duration, time.Duration) {
+	if config == "" {
+		return 0, 0
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(config), &raw); err != nil {
+		return 0, 0
+	}
+	start, _ := raw["start_offset"].(string)
+	end, _ := raw["end_offset"].(string)
+	return parseInterval(start), parseInterval(end)
 }

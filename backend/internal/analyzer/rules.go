@@ -49,7 +49,7 @@ var ruleIDs = []string{
 	"model.type_review", "model.jsonb_critical",
 	"chunk.inventory_truncated", "policy.retention_chunk_mismatch", "policy.reorder_hypothesis",
 	"policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "job.slo_exceeded", "job.workers_saturated",
-	"cagg.materialization_lag", "cagg.realtime_hypothesis", "security.auditor_not_readonly",
+	"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "security.auditor_not_readonly",
 	"security.auditor_privilege_unknown", "config.version_drift", "config.extension_drift", "config.guc_drift",
 }
 
@@ -111,7 +111,7 @@ func Catalog() []RuleDefinition {
 		switch id {
 		case "policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "policy.retention_chunk_mismatch",
 			"policy.reorder_hypothesis", "job.slo_exceeded", "job.workers_saturated",
-			"cagg.materialization_lag", "cagg.realtime_hypothesis", "chunk.inventory_truncated",
+			"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "chunk.inventory_truncated",
 			"security.auditor_not_readonly", "security.auditor_privilege_unknown",
 			"config.version_drift", "config.extension_drift", "config.guc_drift":
 			version = "1.1.0"

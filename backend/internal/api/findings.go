@@ -91,6 +91,10 @@ func listFindings(store FindingStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if runID := q.Get("audit_run_id"); runID != "" {
+			if !uuidPattern.MatchString(runID) {
+				writeError(w, http.StatusBadRequest, CodeValidation, "Execução inválida.")
+				return
+			}
 			backend, ok := store.(interface {
 				ListRunFindings(context.Context, string) ([]repository.Finding, error)
 			})

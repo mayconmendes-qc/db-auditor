@@ -5,6 +5,49 @@ import (
 	"testing"
 )
 
+func TestRetentionDropsLaterThanChunkBoundary(t *testing.T) {
+	t.Parallel()
+	late := SnapshotFacts{EnvironmentID: "e", AuditRunID: "r",
+		Hypertables: []HypertableFact{{Database: "db", Schema: "public", Name: "metrics", ChunkInterval: "7 days"}},
+		Policies:    []PolicyFact{{Database: "db", HypertableSchema: "public", HypertableName: "metrics", PolicyType: "retention", Config: `{"drop_after":"10 days"}`}},
+	}
+	got, err := PolicyAnalyzer{}.Analyze(context.Background(), late)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasType(got, "policy.retention_chunk_mismatch") {
+		t.Fatalf("%#v", typesOf(got))
+	}
+	aligned := SnapshotFacts{EnvironmentID: "e", AuditRunID: "r",
+		Hypertables: []HypertableFact{{Database: "db", Schema: "public", Name: "metrics", ChunkInterval: "7 days"}},
+		Policies:    []PolicyFact{{Database: "db", HypertableSchema: "public", HypertableName: "metrics", PolicyType: "retention", Config: `{"drop_after":"14 days"}`}},
+	}
+	got, _ = PolicyAnalyzer{}.Analyze(context.Background(), aligned)
+	if hasType(got, "policy.retention_chunk_mismatch") {
+		t.Fatalf("aligned retention must not be a mismatch: %#v", typesOf(got))
+	}
+}
+
+func TestCAGGRefreshWindow(t *testing.T) {
+	t.Parallel()
+	facts := SnapshotFacts{Policies: []PolicyFact{{
+		Database: "db", HypertableSchema: "public", HypertableName: "hourly", PolicyType: "refresh",
+		ScheduleInterval: "1 hour", Config: `{"start_offset":"30 days","end_offset":"1 hour"}`,
+	}}}
+	got, _ := CAGGAnalyzer{}.Analyze(context.Background(), facts)
+	if !hasType(got, "cagg.refresh_window_exceeded") {
+		t.Fatalf("%#v", typesOf(got))
+	}
+	fit := SnapshotFacts{Policies: []PolicyFact{{
+		Database: "db", HypertableSchema: "public", HypertableName: "hourly", PolicyType: "refresh",
+		ScheduleInterval: "1 hour", Config: `{"start_offset":"30 minutes","end_offset":"0 seconds"}`,
+	}}}
+	got, _ = CAGGAnalyzer{}.Analyze(context.Background(), fit)
+	if hasType(got, "cagg.refresh_window_exceeded") {
+		t.Fatal("window inside the schedule must stay quiet")
+	}
+}
+
 func TestRetentionShorterThanChunk(t *testing.T) {
 	t.Parallel()
 	facts := SnapshotFacts{EnvironmentID: "e", AuditRunID: "r",
