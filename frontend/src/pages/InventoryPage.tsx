@@ -733,6 +733,7 @@ export function InventoryPage() {
                     <Table
                       pagination={false}
                       dense
+                      virtualize
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
                       onSort={(id) => setSort((s) => nextSort(s, id))}
@@ -922,6 +923,7 @@ export function InventoryPage() {
                     <Table
                       pagination={false}
                       dense
+                      virtualize
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
                       onSort={(id) => setSort((s) => nextSort(s, id))}

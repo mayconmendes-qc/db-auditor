@@ -19,6 +19,7 @@ import type {
   DatabaseSnapshot,
   DependencySnapshot,
   DimensionSnapshot,
+  EffectiveRule,
   EnvironmentsResponse,
   Finding,
   FindingEvent,
@@ -40,6 +41,7 @@ import type {
   ReportJob,
   RLSPolicySnapshot,
   SchemaSnapshot,
+  ScopeAggregate,
   ScopeHistoryPoint,
   ScopeScore,
   ServerCompareReport,
@@ -53,6 +55,7 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
+import { apiContractVersion } from "../types/openapi";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
@@ -220,6 +223,7 @@ export type TableScopeParams = {
 
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
+  contractVersion: apiContractVersion,
   hasSession: () => Boolean(sessionToken),
   currentUser: () => sessionUser,
   hasRole: (minimum: "auditor" | "operator") =>
@@ -562,6 +566,27 @@ export const api = {
   ) =>
     getJSON<ScopeScore>(
       `/api/v1/environments/${environmentId}/runs/${runId}/score${qs({ database, schema, table })}`,
+    ),
+  scopeScores: (environmentId: string, runId: string) =>
+    getJSON<{ items: ScopeAggregate[]; version: string }>(
+      `/api/v1/environments/${environmentId}/runs/${runId}/scores`,
+    ),
+  rules: (environmentId: string, schema?: string) =>
+    getJSON<{ items: EffectiveRule[]; schema: string }>(
+      `/api/v1/environments/${environmentId}/rules${qs({ schema })}`,
+    ),
+  putRule: (
+    environmentId: string,
+    ruleId: string,
+    body: {
+      schema: string;
+      enabled: boolean;
+      parameters: Record<string, unknown>;
+    },
+  ) =>
+    putJSON<{ rule_id: string; enabled: boolean; note: string }>(
+      `/api/v1/environments/${environmentId}/rules/${encodeURIComponent(ruleId)}`,
+      body,
     ),
   reprocessAuditRun: (id: string) =>
     postJSON<{ audit_run_id: string; produced: number; saved: number }>(

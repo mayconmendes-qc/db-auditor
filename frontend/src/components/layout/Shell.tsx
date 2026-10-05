@@ -5,6 +5,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
 import { Select } from "../ui";
+import { Input } from "../ui/Input";
 
 export const navigationSections: NavigationSection[] = [
   "Dashboard",
@@ -19,6 +20,7 @@ export const navigationSections: NavigationSection[] = [
   "Findings",
   "Performance",
   "Segurança",
+  "Regras",
   "Status",
 ];
 
@@ -42,6 +44,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
       "Findings",
       "Performance",
       "Segurança",
+      "Regras",
     ],
   },
   { label: "Sistema", items: ["Status"] },
@@ -128,11 +131,17 @@ export function Shell({
   onNavigate,
   onLogout,
 }: ShellProps) {
-  const { environments, environmentId, setEnvironmentId } = useApp();
+  const {
+    environments,
+    environmentId,
+    setEnvironmentId,
+    setSearch,
+    openFinding,
+  } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [dsnDown, setDsnDown] = useState(0);
   const [openFindings, setOpenFindings] = useState(0);
-  const [runningRuns, setRunningRuns] = useState(0);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -242,6 +251,27 @@ export function Shell({
             aria-label="Ambiente global"
           />
         </div>
+        <form
+          className="mt-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const term = query.trim();
+            if (!term) return;
+            if (/^[0-9a-f-]{36}$/i.test(term)) {
+              openFinding(term);
+              return;
+            }
+            setSearch({ q: term });
+            onNavigate?.("Inventário");
+          }}
+        >
+          <Input
+            label="Busca"
+            value={query}
+            placeholder="Objeto ou id do finding"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </form>
 
         <nav className="mt-5 min-h-0 flex-1 space-y-4" aria-label="Principal">
           {navGroups.map((group) => (

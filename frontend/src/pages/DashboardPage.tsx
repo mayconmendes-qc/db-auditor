@@ -19,6 +19,7 @@ import type {
   DashboardKPIs,
   FindingsTrendResponse,
   JobHealthResponse,
+  ScopeAggregate,
   StorageGrowthResponse,
 } from "../types";
 
@@ -97,6 +98,7 @@ export function DashboardPage() {
   const [connections, setConnections] = useState<ConnectionStatus[] | null>(
     null,
   );
+  const [scores, setScores] = useState<ScopeAggregate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
@@ -123,6 +125,21 @@ export function DashboardPage() {
           setTrends(t);
           setJobs(j);
           setConnections(c.items);
+        }
+        if (environmentId) {
+          const runs = await api.auditRuns({
+            environment_id: environmentId,
+            status: "success",
+          });
+          const run = runs.items[0];
+          if (run && !cancelled) {
+            const agg = await api.scopeScores(environmentId, run.id);
+            if (!cancelled) setScores(agg.items);
+          } else if (!cancelled) {
+            setScores([]);
+          }
+        } else if (!cancelled) {
+          setScores([]);
         }
       } catch (e) {
         if (!cancelled) {
@@ -278,6 +295,21 @@ export function DashboardPage() {
               onClick={() => setSection("Execuções")}
             />
           </KpiGroup>
+          {scores.length > 0 ? (
+            <KpiGroup title="Score por schema">
+              {scores.slice(0, 6).map((item) => (
+                <Card
+                  key={`${item.database_name}.${item.schema_name ?? ""}`}
+                  subtitle={`${item.database_name}.${item.schema_name ?? ""} · ${item.tables} tabelas`}
+                  title={
+                    item.score == null
+                      ? "cobertura insuficiente"
+                      : `${item.score}/100`
+                  }
+                />
+              ))}
+            </KpiGroup>
+          ) : null}
           <KpiGroup title="Capacidade">
             <Card
               subtitle="Total de Databases"

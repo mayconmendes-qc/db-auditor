@@ -66,22 +66,30 @@ type Finding struct {
 
 // SnapshotFacts is the read-only input analyzers consume.
 type SnapshotFacts struct {
-	EnvironmentID   string
-	AuditRunID      string
-	RulePolicies    []RulePolicy
-	Tables          []TableFact
-	Columns         []ColumnFact
-	Constraints     []ConstraintFact
-	Sequences       []SequenceFact
-	Indexes         []IndexFact
-	Hypertables     []HypertableFact
-	Chunks          []ChunkFact
-	ChunkStats      []ChunkStat
-	ChunksTruncated bool
-	CAGGs           []CAGGFact
-	Policies        []PolicyFact
-	Jobs            []JobFact
-	Activity        []ActivityFact
+	EnvironmentID      string
+	AuditRunID         string
+	RulePolicies       []RulePolicy
+	Tables             []TableFact
+	Columns            []ColumnFact
+	Constraints        []ConstraintFact
+	Sequences          []SequenceFact
+	Indexes            []IndexFact
+	PreviousIndexes    []IndexFact
+	Fingerprints       []FingerprintFact
+	Schemas            []SchemaACLFact
+	ExpectsReplica     bool
+	ReplayLagBytes     *int64
+	LastArchived       *time.Time
+	LastFailedArchive  *time.Time
+	ArchiveFailedCount int64
+	Hypertables        []HypertableFact
+	Chunks             []ChunkFact
+	ChunkStats         []ChunkStat
+	ChunksTruncated    bool
+	CAGGs              []CAGGFact
+	Policies           []PolicyFact
+	Jobs               []JobFact
+	Activity           []ActivityFact
 	// Sprint 9 — performance & security facts (demo or collector-fed).
 	Vacuum      []VacuumFact
 	Locks       []LockFact
@@ -100,23 +108,24 @@ type SnapshotFacts struct {
 
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {
-	Database      string     `json:"database"`
-	Schema        string     `json:"schema"`
-	Name          string     `json:"name"`
-	SizeBytes     int64      `json:"size_bytes"`
-	RowEstimate   int64      `json:"row_estimate"`
-	ColumnCount   int        `json:"column_count"`
-	HasPrimaryKey bool       `json:"has_primary_key"`
-	IsPartition   bool       `json:"is_partition"`
-	RelationClass string     `json:"relation_class"`
-	Comment       string     `json:"comment,omitempty"`
-	SeqScan       int64      `json:"seq_scan"`
-	NTupIns       int64      `json:"n_tup_ins"`
-	NTupUpd       int64      `json:"n_tup_upd"`
-	NTupDel       int64      `json:"n_tup_del"`
-	LastAnalyze   *time.Time `json:"last_analyze,omitempty"`
-	StatsReset    *time.Time `json:"stats_reset,omitempty"`
-	CollectedAt   time.Time  `json:"collected_at,omitempty"`
+	Database       string     `json:"database"`
+	Schema         string     `json:"schema"`
+	Name           string     `json:"name"`
+	SizeBytes      int64      `json:"size_bytes"`
+	RowEstimate    int64      `json:"row_estimate"`
+	ColumnCount    int        `json:"column_count"`
+	HasPrimaryKey  bool       `json:"has_primary_key"`
+	IsPartition    bool       `json:"is_partition"`
+	RelationClass  string     `json:"relation_class"`
+	Comment        string     `json:"comment,omitempty"`
+	SeqScan        int64      `json:"seq_scan"`
+	NTupIns        int64      `json:"n_tup_ins"`
+	NTupUpd        int64      `json:"n_tup_upd"`
+	NTupDel        int64      `json:"n_tup_del"`
+	LastAnalyze    *time.Time `json:"last_analyze,omitempty"`
+	StatsReset     *time.Time `json:"stats_reset,omitempty"`
+	CollectedAt    time.Time  `json:"collected_at,omitempty"`
+	RelRowSecurity bool       `json:"relrowsecurity"`
 }
 
 type ColumnFact struct {
@@ -147,8 +156,25 @@ type SequenceFact struct {
 	Database      string `json:"database"`
 	Schema        string `json:"schema"`
 	Name          string `json:"name"`
+	DataType      string `json:"data_type,omitempty"`
 	OwnedByTable  string `json:"owned_by_table,omitempty"`
 	OwnedByColumn string `json:"owned_by_column,omitempty"`
+	// LastValue is the pg_sequences.last_value observation. It is nil when the
+	// sequence has not been used or when the snapshot store has no last_value
+	// column (sequence_snapshot does not persist it yet).
+	LastValue *int64 `json:"last_value,omitempty"`
+	MaxValue  *int64 `json:"max_value,omitempty"`
+}
+
+type FingerprintFact struct {
+	Hash string
+	Text string
+}
+
+type SchemaACLFact struct {
+	Database string
+	Name     string
+	ACLs     []string
 }
 
 // IndexFact carries scan counters when available.
@@ -342,14 +368,19 @@ type GrantFact struct {
 }
 
 // FunctionSecurityFact flags SECURITY DEFINER routines for manual review.
+// SearchPathPinned is true when proconfig contains search_path= or the stored
+// definition contains SET search_path. DefaultParameters are not used here.
 type FunctionSecurityFact struct {
-	Database          string `json:"database"`
-	Schema            string `json:"schema"`
-	FunctionName      string `json:"function_name"`
-	IdentityArgs      string `json:"identity_arguments,omitempty"`
-	IsSecurityDefiner bool   `json:"is_security_definer"`
-	Owner             string `json:"owner,omitempty"`
-	Language          string `json:"language,omitempty"`
+	Database           string `json:"database"`
+	Schema             string `json:"schema"`
+	FunctionName       string `json:"function_name"`
+	IdentityArgs       string `json:"identity_arguments,omitempty"`
+	IsSecurityDefiner  bool   `json:"is_security_definer"`
+	Owner              string `json:"owner,omitempty"`
+	Language           string `json:"language,omitempty"`
+	FunctionDefinition string `json:"function_definition,omitempty"`
+	Config             string `json:"config,omitempty"`
+	SearchPathPinned   bool   `json:"search_path_pinned,omitempty"`
 }
 
 // Analyzer produces findings from snapshot facts.

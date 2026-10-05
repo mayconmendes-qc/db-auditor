@@ -7,6 +7,7 @@ export { InventoryPage } from "./InventoryPage";
 export { MappingsPage } from "./MappingsPage";
 export { PerformancePage } from "./PerformancePage";
 export { ReportsPage } from "./ReportsPage";
+export { RulesPage } from "./RulesPage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
 export { SecurityPage } from "./SecurityPage";
 export { ServerComparePage } from "./ServerComparePage";

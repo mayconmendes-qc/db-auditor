@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/analyzer"
 )
 
 // EnsureRuleCatalog only inserts new immutable versions. Existing catalog
