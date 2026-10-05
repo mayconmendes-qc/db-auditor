@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -168,17 +167,6 @@ func sequenceNearLimit(facts SnapshotFacts) []Finding {
 		})
 	}
 	return out
-}
-
-func parseSeqInt(raw *string) *int64 {
-	if raw == nil {
-		return nil
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(*raw), 10, 64)
-	if err != nil {
-		return nil
-	}
-	return &n
 }
 
 // SearchPathPinned reports a function config that fixes search_path.
@@ -351,6 +339,3 @@ func ChunkDeadTupleSample(dead, live int64) bool {
 func ShouldSkipStructural(profile, previousHash, currentHash string) bool {
 	return profile == "fast" && previousHash != "" && previousHash == currentHash
 }
-
-// Quiet reference so unused imports stay out if time is needed by tests in this file.
-var _ = time.RFC3339
