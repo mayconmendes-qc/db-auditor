@@ -16,6 +16,27 @@ func RenderPDF(document Document) ([]byte, error) {
 	pages := [][]string{{}}
 	y := 790
 	for _, line := range lines {
+		if line.Style == "bar" {
+			if y < 75 {
+				pages = append(pages, []string{})
+				y = 790
+			}
+			parts := strings.Split(line.Text, "|")
+			if len(parts) == 3 {
+				value, valueErr := strconv.Atoi(parts[1])
+				maximum, maxErr := strconv.Atoi(parts[2])
+				if valueErr == nil && maxErr == nil && value >= 0 && maximum >= 0 {
+					width := 0
+					if maximum > 0 {
+						width = 300 * value / maximum
+					}
+					command := fmt.Sprintf("0.94 0.96 0.97 rg 42 %d 68 11 re f 0.90 0.93 0.94 rg 115 %d 300 11 re f 0.09 0.55 0.42 rg 115 %d %d 11 re f 0.12 0.18 0.24 rg BT /F1 9 Tf 43 %d Td (%s) Tj ET BT /F1 9 Tf 425 %d Td (%d) Tj ET\n", y-2, y-2, y-2, width, y, escapePDFText(parts[0]), y, value)
+					pages[len(pages)-1] = append(pages[len(pages)-1], command)
+					y -= 20
+					continue
+				}
+			}
+		}
 		fontSize, step := 10, 14
 		if line.Style == "title" {
 			fontSize, step = 18, 26
@@ -25,6 +46,14 @@ func RenderPDF(document Document) ([]byte, error) {
 		}
 		if line.Style == "subheading" {
 			fontSize, step = 10, 17
+		}
+		if y < 780 {
+			switch line.Style {
+			case "heading":
+				y -= 10
+			case "subheading":
+				y -= 4
+			}
 		}
 		width := 96
 		if fontSize == 18 {
@@ -38,7 +67,11 @@ func RenderPDF(document Document) ([]byte, error) {
 				pages = append(pages, []string{})
 				y = 790
 			}
-			command := fmt.Sprintf("BT /F1 %d Tf 42 %d Td (%s) Tj ET\n", fontSize, y, escapePDFText(part))
+			color := "0.15 0.20 0.26"
+			if line.Style == "title" || line.Style == "heading" {
+				color = "0.08 0.45 0.35"
+			}
+			command := fmt.Sprintf("%s rg BT /F1 %d Tf 42 %d Td (%s) Tj ET\n", color, fontSize, y, escapePDFText(part))
 			pages[len(pages)-1] = append(pages[len(pages)-1], command)
 			y -= step
 			fontSize, step = 10, 14
@@ -50,7 +83,7 @@ func RenderPDF(document Document) ([]byte, error) {
 		pageID := len(objects) + 1
 		contentID := pageID + 1
 		kids = append(kids, fmt.Sprintf("%d 0 R", pageID))
-		stream := strings.Join(commands, "") + fmt.Sprintf("BT /F1 9 Tf 42 30 Td (Pagina %d de %d) Tj ET\n", index+1, len(pages))
+		stream := "1 1 1 rg 0 0 595 842 re f\n" + strings.Join(commands, "") + fmt.Sprintf("0.45 0.50 0.55 rg BT /F1 9 Tf 42 30 Td (%s) Tj ET\n", escapePDFText(fmt.Sprintf("Página %d de %d", index+1, len(pages))))
 		objects = append(objects, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>", contentID), fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(stream), stream))
 	}
 	objects[0] = "<< /Type /Catalog /Pages 2 0 R >>"
