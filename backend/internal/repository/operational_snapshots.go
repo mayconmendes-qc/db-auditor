@@ -143,26 +143,8 @@ type ScopeHistoryPoint struct {
 	RowEstimate    int64     `json:"row_estimate"`
 }
 
-// ListStorageHistory aggregates complete snapshots by environment, database,
-// schema or table. SQL expressions are selected from this fixed allowlist.
-func (s *Store) ListStorageHistory(ctx context.Context, f HistoryFilter, scope string) ([]ScopeHistoryPoint, error) {
-	labelExpr := "database_name || '.' || schema_name || '.' || table_name"
-	switch scope {
-	case "environment":
-		labelExpr = "'environment'"
-	case "database":
-		labelExpr = "database_name"
-	case "schema":
-		labelExpr = "database_name || '.' || schema_name"
-	case "table":
-	default:
-		scope = "table"
-	}
-	grain := "day"
-	if f.Granularity == "hour" || f.Granularity == "week" || f.Granularity == "month" {
-		grain = f.Granularity
-	}
-	query := fmt.Sprintf(`WITH latest_run AS (
+const storageHistoryFrom = `
+WITH latest_run AS (
  SELECT DISTINCT ON (date_trunc($1::text,r.started_at))
         date_trunc($1::text,r.started_at) bucket,r.id
  FROM audit_run r
@@ -170,13 +152,33 @@ func (s *Store) ListStorageHistory(ctx context.Context, f HistoryFilter, scope s
    AND r.started_at BETWEEN $4 AND $5
  ORDER BY date_trunc($1::text,r.started_at),r.started_at DESC,r.id DESC
 )
-SELECT latest_run.bucket,$2::text scope,%s label,
+SELECT latest_run.bucket,$2::text scope, `
+
+const storageHistoryTail = ` label,
 SUM(t.total_size_bytes)::bigint,SUM(t.row_estimate)::bigint
 FROM latest_run JOIN table_snapshot t ON t.audit_run_id=latest_run.id
 WHERE t.environment_id=$3::uuid
 AND ($6='' OR t.database_name=$6) AND ($7='' OR t.schema_name=$7) AND ($8='' OR t.table_name=$8)
-GROUP BY bucket,label ORDER BY bucket,label`, labelExpr)
-	rows, err := s.pool.Query(ctx, query, grain, scope, f.EnvironmentID, f.From, f.To, f.DatabaseName, f.SchemaName, f.TableName)
+GROUP BY bucket,label ORDER BY bucket,label`
+
+var storageHistorySQL = map[string]string{
+	"environment": storageHistoryFrom + "'environment'" + storageHistoryTail,
+	"database":    storageHistoryFrom + "database_name" + storageHistoryTail,
+	"schema":      storageHistoryFrom + "database_name || '.' || schema_name" + storageHistoryTail,
+	"table":       storageHistoryFrom + "database_name || '.' || schema_name || '.' || table_name" + storageHistoryTail,
+}
+
+// ListStorageHistory aggregates complete snapshots by environment, database,
+// schema or table. The label expression comes from a fixed query map.
+func (s *Store) ListStorageHistory(ctx context.Context, f HistoryFilter, scope string) ([]ScopeHistoryPoint, error) {
+	if _, ok := storageHistorySQL[scope]; !ok {
+		scope = "table"
+	}
+	grain := "day"
+	if f.Granularity == "hour" || f.Granularity == "week" || f.Granularity == "month" {
+		grain = f.Granularity
+	}
+	rows, err := s.pool.Query(ctx, storageHistorySQL[scope], grain, scope, f.EnvironmentID, f.From, f.To, f.DatabaseName, f.SchemaName, f.TableName)
 	if err != nil {
 		return nil, err
 	}

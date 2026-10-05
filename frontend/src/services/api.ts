@@ -43,7 +43,6 @@ import type {
   SchemaSnapshot,
   ScopeAggregate,
   ScopeHistoryPoint,
-  ScopeScore,
   ServerCompareReport,
   SnapshotCompleteness,
   StatusResponse,
@@ -55,7 +54,7 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
-import { apiContractVersion } from "../types/openapi";
+import { apiContractVersion, type ScopeScore } from "../types/openapi";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"

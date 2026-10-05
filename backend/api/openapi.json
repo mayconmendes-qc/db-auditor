@@ -453,7 +453,12 @@
       "get": {
         "responses": {
           "200": {
-            "description": "ok"
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ScopeScore" }
+              }
+            }
           }
         }
       }
@@ -664,6 +669,43 @@
         "responses": {
           "200": {
             "description": "ok"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ScopeScoreCategory": {
+        "type": "object",
+        "required": ["category", "score", "penalty", "findings"],
+        "properties": {
+          "category": { "type": "string" },
+          "score": { "type": "integer" },
+          "penalty": { "type": "integer" },
+          "findings": { "type": "integer" }
+        }
+      },
+      "ScopeScore": {
+        "type": "object",
+        "required": ["version", "environment_id", "audit_run_id", "status", "score", "confidence", "categories", "missing_collectors"],
+        "properties": {
+          "version": { "type": "string" },
+          "environment_id": { "type": "string" },
+          "audit_run_id": { "type": "string" },
+          "database_name": { "type": "string" },
+          "schema_name": { "type": "string" },
+          "table_name": { "type": "string" },
+          "status": { "type": "string" },
+          "score": { "type": ["integer", "null"] },
+          "confidence": { "type": "number" },
+          "categories": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ScopeScoreCategory" }
+          },
+          "missing_collectors": {
+            "type": "array",
+            "items": { "type": "string" }
           }
         }
       }

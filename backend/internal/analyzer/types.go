@@ -85,6 +85,7 @@ type SnapshotFacts struct {
 	Hypertables        []HypertableFact
 	Chunks             []ChunkFact
 	ChunkStats         []ChunkStat
+	ChunkVacuum        []ChunkVacuumFact
 	ChunksTruncated    bool
 	CAGGs              []CAGGFact
 	Policies           []PolicyFact
@@ -159,9 +160,7 @@ type SequenceFact struct {
 	DataType      string `json:"data_type,omitempty"`
 	OwnedByTable  string `json:"owned_by_table,omitempty"`
 	OwnedByColumn string `json:"owned_by_column,omitempty"`
-	// LastValue is the pg_sequences.last_value observation. It is nil when the
-	// sequence has not been used or when the snapshot store has no last_value
-	// column (sequence_snapshot does not persist it yet).
+	// LastValue is pg_sequences.last_value. Nil when the sequence was never used.
 	LastValue *int64 `json:"last_value,omitempty"`
 	MaxValue  *int64 `json:"max_value,omitempty"`
 }
@@ -209,7 +208,17 @@ type HypertableFact struct {
 	ReadsOutsideTime         bool   `json:"reads_outside_time,omitempty"`
 }
 
-// ChunkStat is the size distribution of one hypertable without listing chunks.
+// ChunkVacuumFact is a capped sample of one chunk, not the whole hypertable.
+type ChunkVacuumFact struct {
+	Database       string     `json:"database"`
+	Schema         string     `json:"schema"`
+	Hypertable     string     `json:"hypertable"`
+	Chunk          string     `json:"chunk"`
+	DeadTuples     int64      `json:"dead_tuples"`
+	LiveTuples     int64      `json:"live_tuples"`
+	LastAutovacuum *time.Time `json:"last_autovacuum,omitempty"`
+	LastAnalyze    *time.Time `json:"last_analyze,omitempty"`
+}
 type ChunkStat struct {
 	Database       string `json:"database"`
 	Schema         string `json:"schema"`

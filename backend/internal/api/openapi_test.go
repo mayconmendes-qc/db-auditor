@@ -3,9 +3,12 @@ package api
 import (
 	"encoding/json"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
@@ -72,5 +75,60 @@ func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "dsn") || strings.Contains(strings.ToLower(string(raw)), "password") {
 		t.Fatal("spec must not publish DSN or password fields")
+	}
+}
+
+func TestOpenAPIScopeScoreMatchesStore(t *testing.T) {
+	raw, err := os.ReadFile("../../api/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+				Required   []string                   `json:"required"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		t.Fatal(err)
+	}
+	schema, ok := spec.Components.Schemas["ScopeScore"]
+	if !ok {
+		t.Fatal("missing ScopeScore schema")
+	}
+	want := map[string]bool{}
+	required := map[string]bool{}
+	typ := reflect.TypeOf(repository.ScopeScore{})
+	for i := 0; i < typ.NumField(); i++ {
+		name, opt, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		want[name] = true
+		if !strings.Contains(opt, "omitempty") {
+			required[name] = true
+		}
+	}
+	if len(schema.Properties) != len(want) {
+		t.Fatalf("schema properties %d, struct tags %d", len(schema.Properties), len(want))
+	}
+	for name := range want {
+		if _, ok := schema.Properties[name]; !ok {
+			t.Errorf("schema missing %s", name)
+		}
+	}
+	gotRequired := map[string]bool{}
+	for _, name := range schema.Required {
+		gotRequired[name] = true
+	}
+	if len(gotRequired) != len(required) {
+		t.Fatalf("required %v, want %v", schema.Required, required)
+	}
+	for name := range required {
+		if !gotRequired[name] {
+			t.Errorf("schema should require %s", name)
+		}
 	}
 }

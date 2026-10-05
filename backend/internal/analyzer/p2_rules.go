@@ -323,6 +323,25 @@ func (P2Analyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, er
 			DedupKey: DedupKey("replication.archive_stalled", facts.EnvironmentID, "archive"),
 		})
 	}
+	for _, chunk := range facts.ChunkVacuum {
+		if !ChunkDeadTupleSample(chunk.DeadTuples, chunk.LiveTuples) {
+			continue
+		}
+		key := fmt.Sprintf("%s.%s.%s", chunk.Database, chunk.Schema, chunk.Chunk)
+		title := "Chunk has local dead-tuple pressure: " + key
+		out = append(out, Finding{
+			EnvironmentID: facts.EnvironmentID, AuditRunID: facts.AuditRunID,
+			FindingType: "timescale.chunk_dead_tuples", Severity: SeverityMedium, Status: StatusOpen,
+			Title:      title,
+			Summary:    "This chunk is dirty even if the hypertable average is fine. Check automatic maintenance settings. No maintenance command is applied.",
+			ObjectType: "chunk", ObjectKey: key, DatabaseName: chunk.Database, SchemaName: chunk.Schema, ObjectName: chunk.Chunk,
+			Evidence: map[string]any{
+				"hypertable": chunk.Hypertable, "dead_tuples": chunk.DeadTuples, "live_tuples": chunk.LiveTuples,
+				"last_autoanalyze": chunk.LastAnalyze, "last_automatic_maintenance": chunk.LastAutovacuum,
+			},
+			DedupKey: DedupKey("timescale.chunk_dead_tuples", key, title),
+		})
+	}
 	return out, nil
 }
 

@@ -38,3 +38,23 @@ CREATE TABLE IF NOT EXISTS scheduled_report (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (environment_id, audit_run_id, report_type)
 );
+
+ALTER TABLE sequence_snapshot ADD COLUMN IF NOT EXISTS last_value numeric;
+ALTER TABLE function_snapshot ADD COLUMN IF NOT EXISTS proconfig text NOT NULL DEFAULT '';
+ALTER TABLE schema_snapshot ADD COLUMN IF NOT EXISTS nspacl text NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS chunk_vacuum_sample (
+  audit_run_id uuid NOT NULL REFERENCES audit_run(id) ON DELETE CASCADE,
+  environment_id uuid NOT NULL REFERENCES audit_environment(id),
+  database_name text NOT NULL,
+  hypertable_schema text NOT NULL DEFAULT '',
+  hypertable_name text NOT NULL DEFAULT '',
+  chunk_schema text NOT NULL,
+  chunk_name text NOT NULL,
+  n_dead_tup bigint NOT NULL DEFAULT 0,
+  n_live_tup bigint NOT NULL DEFAULT 0,
+  last_autovacuum timestamptz,
+  last_analyze timestamptz,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (audit_run_id, database_name, chunk_schema, chunk_name)
+);
