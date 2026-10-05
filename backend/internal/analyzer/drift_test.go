@@ -37,6 +37,43 @@ func TestDriftAndCompareSnapshots(t *testing.T) {
 	}
 }
 
+func TestCompareSeparatesObjectPresenceFromChunkAndPolicy(t *testing.T) {
+	t.Parallel()
+	left := ServerSide{
+		Hypertables: []HypertableFact{
+			{Database: "db", Schema: "public", Name: "only_left", ChunkInterval: "7 days"},
+			{Database: "db", Schema: "public", Name: "both", ChunkInterval: "7 days"},
+		},
+		Policies: []PolicyFact{{Database: "db", PolicyType: "retention", HypertableSchema: "public", HypertableName: "both", Config: "1 day"}},
+		CAGGs:    []CAGGFact{{Database: "db", Schema: "public", ViewName: "hourly", HasRefreshPolicy: true, Lag: "1 hour"}},
+		Critical: []CriticalFact{{DedupKey: "new", Title: "compression stuck"}},
+	}
+	right := ServerSide{
+		Hypertables: []HypertableFact{{Database: "db", Schema: "public", Name: "both", ChunkInterval: "1 day"}},
+		Policies:    []PolicyFact{{Database: "db", PolicyType: "retention", HypertableSchema: "public", HypertableName: "both", Config: "14 days"}},
+	}
+	rows := CompareServers(left, right).Rows
+	want := map[string]string{
+		"hypertable:db.public.only_left":  "only_left",
+		"chunk_interval:db.public.both":   "drift",
+		"policy:db retention public.both": "drift",
+		"cagg:db.public.hourly":           "only_left",
+		"critical:compression stuck":      "only_left",
+	}
+	got := map[string]string{}
+	for _, row := range rows {
+		got[row.Kind+":"+row.Name] = row.Status
+	}
+	for key, status := range want {
+		if got[key] != status {
+			t.Fatalf("%s = %q, rows %#v", key, got[key], rows)
+		}
+	}
+	if _, ok := got["hypertable:db.public.both"]; ok {
+		t.Fatal("shared hypertable must not look like an object that exists on only one side")
+	}
+}
+
 func TestGUCToleranceSkipsSmallNumericDrift(t *testing.T) {
 	t.Parallel()
 	facts := SnapshotFacts{

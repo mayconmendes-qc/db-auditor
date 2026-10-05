@@ -661,6 +661,10 @@ export const api = {
       `/api/v1/findings${s ? `?${s}` : ""}`,
     );
   },
+  runFindings: (auditRunId: string) =>
+    getJSON<ItemsResponse<Finding>>(
+      `/api/v1/findings?audit_run_id=${encodeURIComponent(auditRunId)}`,
+    ),
   findingsPage: (params: {
     environment_id?: string;
     finding_type?: string;

@@ -309,10 +309,17 @@ func CompareServers(left, right ServerSide) CompareReport {
 	}
 	leftHT := hypertableSet(left.Hypertables)
 	rightHT := hypertableSet(right.Hypertables)
-	for name := range leftHT {
-		if _, ok := rightHT[name]; !ok {
+	for name, interval := range leftHT {
+		other, ok := rightHT[name]
+		if !ok {
 			add(CompareRow{Kind: "hypertable", Name: name, Left: "present", Status: "only_left"})
+			continue
 		}
+		status := "match"
+		if interval != other {
+			status = "drift"
+		}
+		add(CompareRow{Kind: "chunk_interval", Name: name, Left: interval, Right: other, Status: status})
 	}
 	for name := range rightHT {
 		if _, ok := leftHT[name]; !ok {
@@ -359,12 +366,12 @@ func CompareServers(left, right ServerSide) CompareReport {
 	rightCrit := criticalSet(right.Critical)
 	for key, title := range leftCrit {
 		if _, ok := rightCrit[key]; !ok {
-			add(CompareRow{Kind: "critical", Name: title, Left: key, Status: "only_left"})
+			add(CompareRow{Kind: "critical", Name: title, Left: key, Status: "only_left", Detail: "Novo desde o run anterior deste lado."})
 		}
 	}
 	for key, title := range rightCrit {
 		if _, ok := leftCrit[key]; !ok {
-			add(CompareRow{Kind: "critical", Name: title, Right: key, Status: "only_right"})
+			add(CompareRow{Kind: "critical", Name: title, Right: key, Status: "only_right", Detail: "Novo desde o run anterior deste lado."})
 		}
 	}
 	return report
@@ -385,10 +392,10 @@ func versionRow(name, left, right string) CompareRow {
 	return CompareRow{Kind: "version", Name: name, Left: left, Right: right, Status: status}
 }
 
-func hypertableSet(items []HypertableFact) map[string]struct{} {
-	out := map[string]struct{}{}
+func hypertableSet(items []HypertableFact) map[string]string {
+	out := map[string]string{}
 	for _, item := range items {
-		out[fmt.Sprintf("%s.%s.%s", item.Database, item.Schema, item.Name)] = struct{}{}
+		out[fmt.Sprintf("%s.%s.%s", item.Database, item.Schema, item.Name)] = item.ChunkInterval
 	}
 	return out
 }
@@ -409,7 +416,10 @@ func caggSet(items []CAGGFact) map[string]string {
 	out := map[string]string{}
 	for _, item := range items {
 		name := fmt.Sprintf("%s.%s", item.Schema, item.ViewName)
-		flags := fmt.Sprintf("lag=%s hierarchical=%t realtime=%t", item.Lag, item.Hierarchical, item.Realtime)
+		if item.Database != "" {
+			name = item.Database + "." + name
+		}
+		flags := fmt.Sprintf("lag=%s hierarchical=%t realtime=%t refresh=%t", item.Lag, item.Hierarchical, item.Realtime, item.HasRefreshPolicy)
 		out[name] = flags
 	}
 	return out

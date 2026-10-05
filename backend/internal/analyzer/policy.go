@@ -166,10 +166,20 @@ func retentionChunkFindings(facts SnapshotFacts) []Finding {
 		retention := retentionInterval(p)
 		chunk := parseInterval(interval[key])
 		keep := parseInterval(retention)
-		if chunk <= 0 || keep <= 0 || keep >= chunk {
+		if chunk <= 0 || keep <= 0 {
+			continue
+		}
+		short := keep < chunk
+		late := keep > chunk && keep%chunk != 0
+		if !short && !late {
 			continue
 		}
 		title := fmt.Sprintf("Retention does not cover a closed chunk: %s", key)
+		summary := fmt.Sprintf("Retention %s is shorter than the chunk interval %s, so a closed chunk is not dropped on the retention boundary. This is not a missing-retention finding.", retention, interval[key])
+		if late {
+			title = fmt.Sprintf("Retention drops later than the chunk boundary: %s", key)
+			summary = fmt.Sprintf("Retention %s is not a multiple of the chunk interval %s, so a chunk is dropped only after it is fully outside the window and data stays longer than configured. This is not a missing-retention finding and does not recommend drop_chunks.", retention, interval[key])
+		}
 		out = append(out, Finding{
 			EnvironmentID: facts.EnvironmentID,
 			AuditRunID:    facts.AuditRunID,
@@ -177,7 +187,7 @@ func retentionChunkFindings(facts SnapshotFacts) []Finding {
 			Severity:      SeverityHigh,
 			Status:        StatusOpen,
 			Title:         title,
-			Summary:       fmt.Sprintf("Retention %s is shorter than the chunk interval %s, so a closed chunk is not dropped on the retention boundary. This is not a missing-retention finding.", retention, interval[key]),
+			Summary:       summary,
 			ObjectType:    "hypertable",
 			ObjectKey:     key,
 			DatabaseName:  p.Database,
