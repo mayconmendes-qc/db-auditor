@@ -64,6 +64,25 @@ let reportToken = "";
 let sessionToken = "";
 let sessionRole = "";
 let sessionUser = "";
+const SESSION_KEY = "db-auditor:session";
+let restorePromise: Promise<{ username: string; role: string } | null> | null =
+  null;
+
+function saveSession(token: string): void {
+  try {
+    if (token) window.sessionStorage.setItem(SESSION_KEY, token);
+    else window.sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Storage may be disabled; the in-memory session still works until reload.
+  }
+}
+
+function clearSession(): void {
+  sessionToken = "";
+  sessionRole = "";
+  sessionUser = "";
+  saveSession("");
+}
 
 function authHeaders(): Record<string, string> {
   return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
@@ -75,9 +94,7 @@ function handleSessionExpiry(response: Response, path: string): void {
     path !== "/api/v1/auth/login" &&
     sessionToken
   ) {
-    sessionToken = "";
-    sessionRole = "";
-    sessionUser = "";
+    clearSession();
     window.dispatchEvent(new Event("auditor:session-expired"));
   }
 }
@@ -225,6 +242,32 @@ export const api = {
   contractVersion: apiContractVersion,
   hasSession: () => Boolean(sessionToken),
   currentUser: () => sessionUser,
+  restoreSession: () => {
+    if (restorePromise) return restorePromise;
+    restorePromise = (async () => {
+      try {
+        sessionToken = window.sessionStorage.getItem(SESSION_KEY) ?? "";
+      } catch {
+        sessionToken = "";
+      }
+      if (!sessionToken) return null;
+      try {
+        const result = await getJSON<{
+          user: { username: string; role: string };
+        }>("/api/v1/auth/me");
+        sessionRole = result.user.role;
+        sessionUser = result.user.username;
+        return result.user;
+      } catch (error) {
+        // A temporary API error or rate limit does not invalidate the token.
+        if (!sessionToken) return null;
+        throw error;
+      }
+    })().finally(() => {
+      restorePromise = null;
+    });
+    return restorePromise;
+  },
   hasRole: (minimum: "auditor" | "operator") =>
     ({ viewer: 1, auditor: 2, operator: 3 })[
       sessionRole as "viewer" | "auditor" | "operator"
@@ -237,15 +280,14 @@ export const api = {
     sessionToken = result.token;
     sessionRole = result.user.role;
     sessionUser = result.user.username;
+    saveSession(result.token);
     return result.user;
   },
   logout: async () => {
     try {
       if (sessionToken) await postJSON("/api/v1/auth/logout", {});
     } finally {
-      sessionToken = "";
-      sessionRole = "";
-      sessionUser = "";
+      clearSession();
       reportToken = "";
     }
   },
