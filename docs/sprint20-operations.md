@@ -27,35 +27,37 @@ e `02_seed_demo.sql`. Os arquivos `03`–`10` foram incorporados no baseline e
 removidos. O entrypoint só roda em volume vazio. `make reset-volume` **apaga**
 snapshots, findings, baselines e relatórios.
 
-Num volume antigo, a API cria `auditor_user`, `auditor_session` e
-`auditor_operation_log` na subida se ainda não existirem. Não aplique o baseline
+Num volume antigo, a API cria `auditor_user`, `auditor_session`,
+`auditor_login_attempt` e `auditor_operation_log` na subida se ainda não existirem. Não aplique o baseline
 de novo por cima desse volume.
 
 O `operator` pode criar outras contas pela rota administrativa
 `POST /api/v1/auth/users` com `username`, `password` (mínimo 16 caracteres),
 `role` (`viewer`, `auditor`, `operator`) e `environments` (lista de UUIDs).
 Não-operadores precisam de ambientes explicitamente atribuídos. Sessões são
-temporárias e revogáveis; o frontend guarda o token em `sessionStorage` para
-restaurar a sessão após um reload na mesma aba. A API valida o token em
-`GET /api/v1/auth/me`; logout ou resposta 401 remove o token da aba. Use HTTPS
-e evite scripts de terceiros na interface, pois JavaScript da mesma origem pode
-ler `sessionStorage`.
+temporárias e revogáveis. A interface usa cookie HttpOnly, SameSite=Lax e
+Secure quando a requisição chega por HTTPS; JavaScript não lê o token. O
+`GET /api/v1/auth/me` restaura a identidade e um token CSRF mantido somente
+na memória da página. Mutações com sessão por cookie exigem `X-CSRF-Token`.
+Clientes de API que já usam bearer continuam aceitos; o login sem
+`?mode=cookie` mantém esse contrato. Não armazene o bearer no navegador.
 Somente HTTPS deve ser exposto publicamente; a API não termina TLS por conta
 própria, então use um proxy HTTPS confiável.
 
 ### Login após reload e limite de requisições
 
-O reload restaura o token da mesma aba e consulta `GET /api/v1/auth/me`.
+O reload consulta `GET /api/v1/auth/me` com o cookie da sessão.
 Se a API responder 401, a sessão expirou ou foi revogada e é preciso entrar
 novamente. Se responder 429 ou estiver indisponível, a tela oferece uma nova
-tentativa sem apagar o token; aguarde um minuto antes de tentar de novo.
+tentativa sem revogar a sessão; aguarde antes de tentar de novo.
 
-A API limita o login a 10 tentativas por minuto por endereço remoto e as
-requisições autenticadas a 600 por minuto por usuário. Para investigar um 429,
+A API limita o login a 120 tentativas por minuto por endereço remoto e 10 por
+conta em cinco minutos, usando o banco interno para coordenar réplicas. Os
+contadores de conta são limpos após login bem-sucedido. Requisições autenticadas
+mantêm limite independente de 600 por minuto por usuário. Para investigar um 429,
 veja no painel Network do navegador qual rota respondeu 429 e quantas vezes
-ela foi chamada no minuto. A opção **Todas** em listas grandes busca lotes de
-500 linhas e pode atingir o limite; use filtros ou 20, 50 ou 100 linhas por
-página. Se vários navegadores ou integrações usam a mesma conta, as chamadas
+ela foi chamada no minuto. O Inventário oferece 20, 50 ou 100 linhas por
+página e faz paginação no servidor. Se vários navegadores ou integrações usam a mesma conta, as chamadas
 deles também compartilham o limite desse usuário. Não aumente o limite antes
 de identificar a origem das chamadas.
 
@@ -105,12 +107,10 @@ conexões por database no processo. `AUDITOR_TARGET_STATEMENT_TIMEOUT` limita
 cada consulta no servidor auditado; os collectors opcionais têm limite de
 linhas, duração (`AUDITOR_OPTIONAL_COLLECTOR_TIMEOUT`) e custo estimado do
 plano (`AUDITOR_OPTIONAL_MAX_PLAN_COST`). Um plano acima do limite vira falha
-parcial auditável, não execução irrestrita. O inventário usa páginas de até 500 linhas
-por requisição; a opção Todas busca lotes e deve ser usada com filtros em
-ambientes grandes. Inspecione planos `EXPLAIN (ANALYZE, BUFFERS)` em cópia de
+parcial auditável, não execução irrestrita. O inventário usa páginas de até 100 linhas
+na interface e até 500 por requisição na API. Inspecione planos `EXPLAIN (ANALYZE, BUFFERS)` em cópia de
 dados representativa antes de elevar limites. Os índices de paginação ficam no
 baseline.
 
-A opção Todas interrompe a operação e apresenta erro se ultrapassar 500.000
-linhas; ela nunca exibe um subconjunto como se fosse o resultado completo.
-Refine os filtros para conjuntos maiores.
+O Inventário não oferece “Todas”: os totais vêm do servidor e os objetos são
+carregados por página, inclusive hypertables e agregados contínuos.

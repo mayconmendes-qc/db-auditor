@@ -56,43 +56,34 @@ import type {
 } from "../types";
 import { apiContractVersion, type ScopeScore } from "../types/openapi";
 
-const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
-).replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 let reportToken = "";
-let sessionToken = "";
+let sessionActive = false;
+let csrfToken = "";
 let sessionRole = "";
 let sessionUser = "";
-const SESSION_KEY = "db-auditor:session";
 let restorePromise: Promise<{ username: string; role: string } | null> | null =
   null;
 
-function saveSession(token: string): void {
-  try {
-    if (token) window.sessionStorage.setItem(SESSION_KEY, token);
-    else window.sessionStorage.removeItem(SESSION_KEY);
-  } catch {
-    // Storage may be disabled; the in-memory session still works until reload.
-  }
-}
-
 function clearSession(): void {
-  sessionToken = "";
+  sessionActive = false;
+  csrfToken = "";
   sessionRole = "";
   sessionUser = "";
-  saveSession("");
 }
 
-function authHeaders(): Record<string, string> {
-  return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+function authHeaders(method = "GET"): Record<string, string> {
+  return sessionActive && method !== "GET" && method !== "HEAD"
+    ? { "X-CSRF-Token": csrfToken }
+    : {};
 }
 
 function handleSessionExpiry(response: Response, path: string): void {
   if (
     response.status === 401 &&
-    path !== "/api/v1/auth/login" &&
-    sessionToken
+    !path.startsWith("/api/v1/auth/login") &&
+    sessionActive
   ) {
     clearSession();
     window.dispatchEvent(new Event("auditor:session-expired"));
@@ -104,16 +95,20 @@ async function reportRequest<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  if (!reportToken && !sessionToken)
+  if (!reportToken && !sessionActive)
     throw new Error("Informe o token de relatórios para esta sessão.");
   const response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {
-      Authorization: `Bearer ${sessionToken || reportToken}`,
+      ...(!sessionActive && reportToken
+        ? { Authorization: `Bearer ${reportToken}` }
+        : {}),
+      ...authHeaders(method),
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
+    credentials: "include",
   });
   if (!response.ok) {
     handleSessionExpiry(response, path);
@@ -125,7 +120,10 @@ async function reportRequest<T>(
 async function getJSON<T>(path: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: authHeaders(),
+      credentials: "include",
+    });
   } catch (cause) {
     throw networkApiError(path, cause);
   }
@@ -141,8 +139,9 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders("PUT") },
       body: JSON.stringify(body),
+      credentials: "include",
     });
   } catch (cause) {
     throw networkApiError(path, cause);
@@ -159,8 +158,9 @@ async function postJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders("POST") },
       body: JSON.stringify(body),
+      credentials: "include",
     });
   } catch (cause) {
     throw networkApiError(path, cause);
@@ -177,8 +177,9 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders("PATCH") },
       body: JSON.stringify(body),
+      credentials: "include",
     });
   } catch (cause) {
     throw networkApiError(path, cause);
@@ -226,6 +227,9 @@ export type InventoryListParams = {
 
 export type AnalyticsParams = {
   environment_id?: string;
+  from?: string;
+  to?: string;
+  granularity?: "hour" | "day" | "week" | "month";
 };
 
 export type TableScopeParams = {
@@ -240,27 +244,31 @@ export type TableScopeParams = {
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   contractVersion: apiContractVersion,
-  hasSession: () => Boolean(sessionToken),
+  hasSession: () => sessionActive,
   currentUser: () => sessionUser,
   restoreSession: () => {
     if (restorePromise) return restorePromise;
     restorePromise = (async () => {
       try {
-        sessionToken = window.sessionStorage.getItem(SESSION_KEY) ?? "";
-      } catch {
-        sessionToken = "";
-      }
-      if (!sessionToken) return null;
-      try {
         const result = await getJSON<{
           user: { username: string; role: string };
+          csrf_token: string;
         }>("/api/v1/auth/me");
+        sessionActive = true;
+        csrfToken = result.csrf_token;
         sessionRole = result.user.role;
         sessionUser = result.user.username;
         return result.user;
       } catch (error) {
-        // A temporary API error or rate limit does not invalidate the token.
-        if (!sessionToken) return null;
+        if (
+          error &&
+          typeof error === "object" &&
+          "status" in error &&
+          error.status === 401
+        ) {
+          clearSession();
+          return null;
+        }
         throw error;
       }
     })().finally(() => {
@@ -274,18 +282,18 @@ export const api = {
     ] >= { auditor: 2, operator: 3 }[minimum],
   login: async (username: string, password: string) => {
     const result = await postJSON<{
-      token: string;
       user: { username: string; role: string };
-    }>("/api/v1/auth/login", { username, password });
-    sessionToken = result.token;
+      csrf_token: string;
+    }>("/api/v1/auth/login?mode=cookie", { username, password });
+    sessionActive = true;
+    csrfToken = result.csrf_token;
     sessionRole = result.user.role;
     sessionUser = result.user.username;
-    saveSession(result.token);
     return result.user;
   },
   logout: async () => {
     try {
-      if (sessionToken) await postJSON("/api/v1/auth/logout", {});
+      if (sessionActive) await postJSON("/api/v1/auth/logout", {});
     } finally {
       clearSession();
       reportToken = "";
@@ -323,12 +331,16 @@ export const api = {
     environmentId: string,
     id: string,
   ): Promise<Blob> => {
-    if (!reportToken && !sessionToken)
+    if (!reportToken && !sessionActive)
       throw new Error("Informe o token de relatórios para esta sessão.");
     const path = `/api/v1/environments/${environmentId}/reports/${id}/download`;
     const response = await fetch(`${API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${sessionToken || reportToken}` },
+      headers:
+        !sessionActive && reportToken
+          ? { Authorization: `Bearer ${reportToken}` }
+          : {},
       cache: "no-store",
+      credentials: "include",
     });
     if (!response.ok) {
       handleSessionExpiry(response, path);
@@ -378,6 +390,10 @@ export const api = {
     getJSON<ItemsResponse<HypertableSnapshot>>(
       `/api/v1/environments/${environmentId}/hypertables`,
     ),
+  hypertablesPage: (environmentId: string, params?: InventoryListParams) =>
+    getJSON<PagedResponse<HypertableSnapshot>>(
+      `/api/v1/environments/${environmentId}/hypertables/page${qs(params)}`,
+    ),
   dimensions: (environmentId: string) =>
     getJSON<ItemsResponse<DimensionSnapshot>>(
       `/api/v1/environments/${environmentId}/dimensions`,
@@ -389,6 +405,13 @@ export const api = {
   continuousAggregates: (environmentId: string) =>
     getJSON<ItemsResponse<CAGGSnapshot>>(
       `/api/v1/environments/${environmentId}/continuous-aggregates`,
+    ),
+  continuousAggregatesPage: (
+    environmentId: string,
+    params?: InventoryListParams,
+  ) =>
+    getJSON<PagedResponse<CAGGSnapshot>>(
+      `/api/v1/environments/${environmentId}/continuous-aggregates/page${qs(params)}`,
     ),
   jobs: (environmentId: string) =>
     getJSON<ItemsResponse<JobSnapshot>>(

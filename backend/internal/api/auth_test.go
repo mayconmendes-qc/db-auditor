@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 type fakeAuthStore struct {
 	user        *repository.AuditorUser
 	environment string
+	attempts    int
 }
 
 func (s fakeAuthStore) FindAuditorUser(context.Context, string) (*repository.AuditorUser, error) {
@@ -34,6 +37,13 @@ func (s fakeAuthStore) LogAuditorOperation(context.Context, *repository.AuditorU
 func (s fakeAuthStore) ResolveAuditorResourceEnvironment(context.Context, string, string) (string, error) {
 	return s.environment, nil
 }
+func (s fakeAuthStore) RecordLoginAttempt(context.Context, []byte, time.Duration) (int, error) {
+	if s.attempts > 0 {
+		return s.attempts, nil
+	}
+	return 1, nil
+}
+func (s fakeAuthStore) ClearLoginAttempt(context.Context, []byte) error { return nil }
 
 func TestAuthMiddlewareRoleAndEnvironment(t *testing.T) {
 	allowed := "00000000-0000-0000-0000-000000000001"
@@ -74,5 +84,64 @@ func TestAuthMiddlewareRejectsMissingSession(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/environments", nil))
 	if w.Code != 401 {
 		t.Fatalf("status %d", w.Code)
+	}
+}
+
+func TestCookieSessionRequiresCSRFForMutations(t *testing.T) {
+	hash, err := repository.HashAuditorPassword("a-strong-test-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := fakeAuthStore{user: &repository.AuditorUser{ID: "00000000-0000-0000-0000-000000000001", Username: "admin", Role: "operator", Active: true, PasswordHash: hash}}
+	mux := http.NewServeMux()
+	registerAuthRoutes(mux, store)
+	handler := authMiddleware(mux, store)
+	login := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login?mode=cookie", strings.NewReader(`{"username":"admin","password":"a-strong-test-password"}`))
+	login.Header.Set("X-Forwarded-Proto", "https")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, login)
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), `"token"`) {
+		t.Fatalf("login status=%d body=%s", response.Code, response.Body.String())
+	}
+	cookies := response.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure || cookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("cookie attributes: %+v", cookies)
+	}
+	var body struct {
+		CSRF string `json:"csrf_token"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.CSRF == "" {
+		t.Fatalf("missing csrf token: %s (%v)", response.Body.String(), err)
+	}
+	me := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	me.AddCookie(cookies[0])
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, me)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), body.CSRF) {
+		t.Fatalf("cookie restore: %d %s", response.Code, response.Body.String())
+	}
+	logout := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logout.AddCookie(cookies[0])
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, logout)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("missing csrf: %d", response.Code)
+	}
+	logout.Header.Set("X-CSRF-Token", body.CSRF)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, logout)
+	if response.Code != http.StatusOK {
+		t.Fatalf("logout with csrf: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestLoginRateLimitIsIndependentFromAPIRateLimit(t *testing.T) {
+	store := fakeAuthStore{attempts: 31}
+	mux := http.NewServeMux()
+	registerAuthRoutes(mux, store)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"invalid"}`)))
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") == "" {
+		t.Fatalf("login limit: %d %s", response.Code, response.Body.String())
 	}
 }

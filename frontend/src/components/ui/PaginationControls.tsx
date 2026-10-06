@@ -7,6 +7,7 @@ export interface PaginationControlsProps {
   onSizeChange: (size: PageSize) => void;
   onOffsetChange: (offset: number) => void;
   label?: string;
+  allowAll?: boolean;
 }
 
 export function PaginationControls({
@@ -16,6 +17,7 @@ export function PaginationControls({
   onSizeChange,
   onOffsetChange,
   label = "Tabela",
+  allowAll = true,
 }: PaginationControlsProps) {
   const start = total === 0 ? 0 : offset + 1;
   const end = size === "all" ? total : Math.min(offset + size, total);
@@ -46,7 +48,7 @@ export function PaginationControls({
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
-            <option value="all">Todas</option>
+            {allowAll ? <option value="all">Todas</option> : null}
           </select>
         </label>
         <button

@@ -13,7 +13,39 @@ func registerInventoryRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("GET /api/v1/environments/{id}/views", listViews(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/functions", listFunctions(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/constraints", listConstraints(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/hypertables/page", listHypertablesPage(store))
+	mux.HandleFunc("GET /api/v1/environments/{id}/continuous-aggregates/page", listCAGGsPage(store))
 	mux.HandleFunc("GET /api/v1/environments/{id}/snapshot-status", getSnapshotStatus(store))
+}
+
+func listHypertablesPage(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := parseInventoryQuery(r)
+		items, total, err := store.ListHypertableSnapshotsPage(r.Context(), repository.InventoryFilter{
+			EnvironmentID: r.PathValue("id"), AuditRunID: q.AuditRunID,
+			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as hypertables.")
+			return
+		}
+		writePage(w, items, q.Limit, q.Offset, total)
+	}
+}
+
+func listCAGGsPage(store InventoryStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := parseInventoryQuery(r)
+		items, total, err := store.ListCAGGSnapshotsPage(r.Context(), repository.InventoryFilter{
+			EnvironmentID: r.PathValue("id"), AuditRunID: q.AuditRunID,
+			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os agregados contínuos.")
+			return
+		}
+		writePage(w, items, q.Limit, q.Offset, total)
+	}
 }
 
 func getSnapshotStatus(store InventoryStore) http.HandlerFunc {

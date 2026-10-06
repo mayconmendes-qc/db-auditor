@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/osmendes/db-auditor/internal/repository"
 )
@@ -28,6 +29,9 @@ func (s *stubStore) ListSchemaSnapshots(context.Context, string) ([]repository.S
 func (s *stubStore) ListHypertableSnapshots(context.Context, string) ([]repository.HypertableSnapshotRow, error) {
 	return []repository.HypertableSnapshotRow{}, nil
 }
+func (s *stubStore) ListHypertableSnapshotsPage(context.Context, repository.InventoryFilter) ([]repository.HypertableSnapshotRow, int, error) {
+	return []repository.HypertableSnapshotRow{}, 0, nil
+}
 func (s *stubStore) ListDimensionSnapshots(context.Context, string) ([]repository.DimensionSnapshotRow, error) {
 	return []repository.DimensionSnapshotRow{}, nil
 }
@@ -36,6 +40,9 @@ func (s *stubStore) ListChunkSnapshots(context.Context, string) ([]repository.Ch
 }
 func (s *stubStore) ListCAGGSnapshots(context.Context, string) ([]repository.CAGGSnapshotRow, error) {
 	return []repository.CAGGSnapshotRow{}, nil
+}
+func (s *stubStore) ListCAGGSnapshotsPage(context.Context, repository.InventoryFilter) ([]repository.CAGGSnapshotRow, int, error) {
+	return []repository.CAGGSnapshotRow{}, 0, nil
 }
 func (s *stubStore) ListJobSnapshots(context.Context, string) ([]repository.JobSnapshotRow, error) {
 	return []repository.JobSnapshotRow{}, nil
@@ -90,6 +97,22 @@ func (s *stubStore) UpdateObjectMappingStatus(context.Context, string, string, s
 }
 func (s *stubStore) ListFindings(context.Context, string, string, string, string, int) ([]repository.Finding, error) {
 	return []repository.Finding{}, nil
+}
+func (s *stubStore) CountFindings(context.Context, string) (repository.FindingAggregate, error) {
+	return repository.FindingAggregate{BySeverity: map[string]int{}, ByStatus: map[string]int{}, ByType: map[string]int{}}, nil
+}
+func (s *stubStore) CountRecentRuns(context.Context, string) (int, int, error) { return 0, 0, nil }
+func (s *stubStore) CountLatestCapabilities(context.Context, string) (repository.CapabilityAggregate, error) {
+	return repository.CapabilityAggregate{}, nil
+}
+func (s *stubStore) ListStorageTrend(context.Context, string, time.Time, time.Time, string) ([]repository.RunTrendPoint, error) {
+	return []repository.RunTrendPoint{}, nil
+}
+func (s *stubStore) ListFindingTrend(context.Context, string, time.Time, time.Time, string) ([]repository.RunTrendPoint, error) {
+	return []repository.RunTrendPoint{}, nil
+}
+func (s *stubStore) ListTopTableConsumers(context.Context, string, int) ([]repository.StorageConsumer, error) {
+	return []repository.StorageConsumer{}, nil
 }
 func (s *stubStore) GetFinding(context.Context, string) (*repository.Finding, error) {
 	return nil, nil
