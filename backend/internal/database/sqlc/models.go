@@ -624,6 +624,18 @@ type QualityIssue struct {
 	UpdatedAt     pgtype.Timestamptz
 }
 
+type QualityIssueEvent struct {
+	ID             pgtype.UUID
+	IssueID        pgtype.UUID
+	PreviousStatus string
+	NewStatus      string
+	Actor          string
+	OwnerName      string
+	Justification  string
+	ResultNote     string
+	RecordedAt     pgtype.Timestamptz
+}
+
 type QualityScan struct {
 	ID            pgtype.UUID
 	EnvironmentID pgtype.UUID
