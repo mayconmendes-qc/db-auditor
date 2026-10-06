@@ -178,7 +178,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             "Alterne o tipo de objeto (Tabelas, Hypertables, Índices, Views, Funções, CAGGs).",
             "Clique em uma linha para abrir detalhes, assessment, histórico e métricas do objeto. A avaliação não modifica o banco auditado.",
             "Feche o painel de detalhes pelo botão, pelo fundo ou com Esc. O link volta para o inventário sem a tabela selecionada.",
-            "Ajuste linhas por página entre 20, 50, 100 e Todas. Todas carrega os lotes do servidor; use filtros em inventários grandes.",
+            "Ajuste linhas por página entre 20, 50 e 100. O inventário carrega uma página por vez; refine os filtros em ambientes grandes.",
           ]}
           terms={[
             {
@@ -373,7 +373,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
       content: (
         <SectionBody
           howTo={[
-            "Entre com uma conta local; a sessão fica apenas na memória da aba e pode ser encerrada em Sair.",
+            "Entre com uma conta local; a sessão usa cookie protegido, é verificada ao recarregar a página e pode ser encerrada em Sair.",
             "Viewer consulta os ambientes atribuídos; auditor também faz triagem e solicita relatórios; operator gerencia execuções, baselines e contas.",
             "Um operator cria outras contas pela API administrativa, definindo role e IDs de ambientes. Segredos de conexão e senhas não são expostos na interface.",
           ]}

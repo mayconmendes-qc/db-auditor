@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"log/slog"
@@ -24,9 +25,19 @@ type AuthStore interface {
 	CreateAuditorUser(context.Context, string, string, string, []string) (*repository.AuditorUser, error)
 	LogAuditorOperation(context.Context, *repository.AuditorUser, string, string, string, string) error
 	ResolveAuditorResourceEnvironment(context.Context, string, string) (string, error)
+	RecordLoginAttempt(context.Context, []byte, time.Duration) (int, error)
+	ClearLoginAttempt(context.Context, []byte) error
 }
 
 type identityKey struct{}
+type sessionKey struct{}
+
+const sessionCookie = "auditor_session"
+
+type requestSession struct {
+	token  string
+	cookie bool
+}
 
 func requestIdentity(r *http.Request) *repository.AuditorUser {
 	user, _ := r.Context().Value(identityKey{}).(*repository.AuditorUser)
@@ -72,19 +83,41 @@ func (l *loginLimiter) allow(remote string) bool {
 	return v.count <= limit
 }
 
-func registerAuthRoutes(mux *http.ServeMux, store AuthStore, limiter *loginLimiter) {
+func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if !limiter.allow(r.RemoteAddr) {
-			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas tentativas. Aguarde um minuto.")
-			return
-		}
 		var body struct{ Username, Password string }
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&body) != nil {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Credenciais inválidas.")
 			return
 		}
-		user, err := store.FindAuditorUser(r.Context(), strings.TrimSpace(body.Username))
+		username := strings.TrimSpace(body.Username)
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ipKey := sha256.Sum256([]byte("login-ip:" + host))
+		accountKey := sha256.Sum256([]byte("login-user:" + strings.ToLower(username)))
+		ipAttempts, err := store.RecordLoginAttempt(r.Context(), ipKey[:], time.Minute)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
+			return
+		}
+		accountAttempts, err := store.RecordLoginAttempt(r.Context(), accountKey[:], 5*time.Minute)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
+			return
+		}
+		if ipAttempts > 120 || accountAttempts > 10 {
+			retryAfter := "60"
+			if accountAttempts > 10 {
+				retryAfter = "300"
+			}
+			w.Header().Set("Retry-After", retryAfter)
+			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas tentativas. Aguarde e tente novamente.")
+			return
+		}
+		user, err := store.FindAuditorUser(r.Context(), username)
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
 			return
@@ -104,18 +137,34 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore, limiter *loginLimit
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao criar sessão.")
 			return
 		}
+		if err := store.ClearLoginAttempt(r.Context(), accountKey[:]); err != nil {
+			slog.Warn("could not clear login attempt counter", "error", err)
+		}
+		if r.URL.Query().Get("mode") == "cookie" {
+			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800,
+				HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+			writeJSON(w, http.StatusOK, map[string]any{"user": user, "csrf_token": csrfToken(encoded), "expires_in": 28800})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"token": encoded, "user": user, "expires_in": 28800})
 	})
 	mux.HandleFunc("GET /api/v1/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		session, _ := r.Context().Value(sessionKey{}).(requestSession)
+		if session.cookie {
+			writeJSON(w, http.StatusOK, map[string]any{"user": requestIdentity(r), "csrf_token": csrfToken(session.token)})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"user": requestIdentity(r)})
 	})
 	mux.HandleFunc("POST /api/v1/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		digest := sha256.Sum256([]byte(token))
+		session, _ := r.Context().Value(sessionKey{}).(requestSession)
+		digest := sha256.Sum256([]byte(session.token))
 		if err := store.DeleteAuditorSession(r.Context(), digest[:]); err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao encerrar sessão.")
 			return
 		}
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+			HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 	})
 	mux.HandleFunc("POST /api/v1/auth/users", func(w http.ResponseWriter, r *http.Request) {
@@ -152,12 +201,21 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		provided := r.Header.Get("Authorization")
-		if !strings.HasPrefix(provided, "Bearer ") || len(provided) > 128 {
+		session := requestSession{}
+		if provided != "" {
+			if !strings.HasPrefix(provided, "Bearer ") || len(provided) > 128 {
+				writeError(w, http.StatusUnauthorized, CodeUnavailable, "Sessão ausente ou expirada.")
+				return
+			}
+			session.token = strings.TrimPrefix(provided, "Bearer ")
+		} else if cookie, err := r.Cookie(sessionCookie); err == nil {
+			session.token, session.cookie = cookie.Value, true
+		}
+		if session.token == "" || len(session.token) > 128 {
 			writeError(w, http.StatusUnauthorized, CodeUnavailable, "Sessão ausente ou expirada.")
 			return
 		}
-		token := strings.TrimPrefix(provided, "Bearer ")
-		digest := sha256.Sum256([]byte(token))
+		digest := sha256.Sum256([]byte(session.token))
 		user, err := store.GetAuditorSession(r.Context(), digest[:])
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
@@ -171,6 +229,11 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas requisições. Aguarde um minuto.")
 			return
 		}
+		if session.cookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(csrfToken(session.token))) != 1 {
+			writeError(w, http.StatusForbidden, CodeUnavailable, "Token de proteção da sessão ausente ou inválido.")
+			return
+		}
 		env, allowed := authorizeRequest(r, user, store)
 		if !allowed {
 			if err := store.LogAuditorOperation(r.Context(), user, r.Method+" "+r.URL.Path, env, "", "denied"); err != nil {
@@ -179,12 +242,13 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 			writeError(w, http.StatusForbidden, CodeUnavailable, "Acesso não autorizado.")
 			return
 		}
+		ctx := context.WithValue(context.WithValue(r.Context(), identityKey{}, user), sessionKey{}, session)
 		if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/download") {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, user)))
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		recorder := &operationRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(recorder, r.WithContext(context.WithValue(r.Context(), identityKey{}, user)))
+		next.ServeHTTP(recorder, r.WithContext(ctx))
 		result := "success"
 		if recorder.status >= 400 {
 			result = "failed"
@@ -193,6 +257,11 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 			slog.Warn("could not write operation log", "error", err)
 		}
 	})
+}
+
+func csrfToken(token string) string {
+	digest := sha256.Sum256([]byte("auditor-csrf:" + token))
+	return base64.RawURLEncoding.EncodeToString(digest[:])
 }
 
 type operationRecorder struct {

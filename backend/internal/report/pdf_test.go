@@ -60,19 +60,32 @@ func TestLargeInventoryPDFIsBounded(t *testing.T) {
 	}
 }
 
+func BenchmarkLargeInventoryPDF(b *testing.B) {
+	d := Document{Type: "technical", Environment: "large", RunID: "fixed", RunStarted: time.Unix(0, 0), RunStatus: "success", Coverage: "complete"}
+	for i := 0; i < 5000; i++ {
+		d.Tables = append(d.Tables, Table{Database: "db", Schema: "public", Name: strings.Repeat("large_table_", 3) + string(rune('a'+i%26)), SizeBytes: int64(i)})
+	}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := RenderPDF(d); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestReportContentGolden(t *testing.T) {
-	d := Document{Type: "executive", Environment: "env", RunID: "run", RunStarted: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), RunStatus: "partial_success", ServiceVersion: "1.0", RuleVersion: "rule-v2", RequestedBy: "report-token", Coverage: "partial", CoverageNotes: []string{"coverage incomplete"}, TotalTables: 4, TotalFindings: 1, Findings: []Finding{{Severity: "critical", Title: "risk", Recommendation: "validate", Evidence: "proof", Confidence: 0.8}}, Baseline: &Baseline{RunID: "base", Status: "partial"}, Growth: []GrowthPoint{{RunID: "run", SizeBytes: 100, Tables: 4}}}
+	d := Document{Type: "executive", Environment: "env", RunID: "run", RunStarted: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), RunStatus: "partial_success", ServiceVersion: "1.0", RuleVersion: "rule-v2", RequestedBy: "report-token", Coverage: "partial", CoverageNotes: []string{"coverage incomplete"}, TotalTables: 4, TotalFindings: 1, Findings: []Finding{{Type: "security.excessive_privilege", Severity: "critical", Title: "risk", Recommendation: "validate", Evidence: "proof", Confidence: 0.8}}, Baseline: &Baseline{RunID: "base", Status: "partial"}, Growth: []GrowthPoint{{RunID: "run", SizeBytes: 100, Tables: 4}}}
 	lines := BuildLines(d)
 	joined := ""
 	for _, line := range lines {
 		joined += line.Text + "\n"
 	}
-	for _, want := range []string{"DB Auditor - Relatório executivo", "4 tabelas | 1 achado", "Cobertura: parcial", "Índice indisponível", "Baseline base", "Evolucao de armazenamento", "Evidência: proof", "Recomendação técnica: validate", "Metodologia e glossário"} {
+	for _, want := range []string{"DB Auditor - Relatório executivo", "4 tabelas | 1 achado", "Cobertura: parcial", "Índice indisponível", "Referência base", "Evolução de armazenamento", "Evidência técnica: proof", "Confirme as funções da conta", "Metodologia e glossário"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("report missing %q", want)
 		}
 	}
-	if !strings.Contains(joined, "Análise final e próximos passos") || !strings.Contains(joined, "Prioridade 1 (crítica): risk") {
+	if !strings.Contains(joined, "Análise final e próximos passos") || !strings.Contains(joined, "Prioridade 1 (crítica): Uma conta pode ter mais permissões") {
 		t.Fatal("report is missing its final analysis")
 	}
 	if !strings.Contains(string(mustRenderPDF(t, d)), " re f ") {

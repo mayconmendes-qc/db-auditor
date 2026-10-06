@@ -80,6 +80,7 @@ export interface StorageGrowthResponse {
   by_environment: StorageSeriesPoint[];
   by_database: StorageSeriesPoint[];
   top_consumers: StorageSeriesPoint[];
+  series: RunTrendPoint[];
   notes?: string[];
 }
 
@@ -94,6 +95,19 @@ export interface FindingsTrendResponse {
   by_status: FindingTrendBucket[];
   by_type: FindingTrendBucket[];
   total: number;
+  series: RunTrendPoint[];
+}
+
+export interface RunTrendPoint {
+  environment_id: string;
+  environment_name: string;
+  audit_run_id: string;
+  at: string;
+  status: "success" | "partial_success";
+  size_bytes?: number;
+  findings?: number;
+  critical?: number;
+  high?: number;
 }
 
 export interface JobHealthItem {
@@ -740,6 +754,8 @@ export interface Finding {
   impact?: string;
   risk?: string;
   recommendation?: string;
+  friendly_meaning?: string;
+  friendly_next?: string;
   validation?: string;
   references?: string[];
   rule_parameters?: Record<string, unknown>;

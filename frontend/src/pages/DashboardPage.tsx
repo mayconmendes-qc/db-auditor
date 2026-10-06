@@ -19,6 +19,7 @@ import type {
   DashboardKPIs,
   FindingsTrendResponse,
   JobHealthResponse,
+  RunTrendPoint,
   ScopeAggregate,
   StorageGrowthResponse,
 } from "../types";
@@ -88,6 +89,55 @@ function KpiGroup({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function TrendBars({
+  points,
+  metric,
+}: {
+  points: RunTrendPoint[];
+  metric: "size_bytes" | "findings";
+}) {
+  const available = points.filter((point) => point[metric] != null);
+  const visible = available.slice(-60);
+  const max = Math.max(1, ...visible.map((point) => point[metric] ?? 0));
+  if (visible.length === 0) {
+    return (
+      <p className="text-sm text-slate-400">
+        Sem medições comparáveis no período.
+      </p>
+    );
+  }
+  return (
+    <div className="max-h-72 space-y-3 overflow-y-auto pr-2">
+      {visible.map((point) => {
+        const value = point[metric] ?? 0;
+        const when = new Date(point.at).toLocaleDateString("pt-BR");
+        return (
+          <div
+            key={point.audit_run_id}
+            title={`Execução ${point.audit_run_id}`}
+          >
+            <MiniBar
+              label={`${when} · ${point.environment_name}${point.status === "partial_success" ? " · coleta parcial" : ""}`}
+              value={value}
+              max={max}
+              valueLabel={
+                metric === "size_bytes" ? formatBytes(value) : String(value)
+              }
+              tone={point.status === "partial_success" ? "amber" : "sky"}
+            />
+          </div>
+        );
+      })}
+      <p className="text-xs text-slate-400">
+        Cada barra representa a última execução elegível do período. Períodos
+        sem coleta não são tratados como zero. Mostrando {visible.length} de{" "}
+        {available.length} pontos; selecione um ambiente ou aumente a
+        granularidade para facilitar a leitura.
+      </p>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { environmentId, setEnvironmentId, setSection, selectedEnvironment } =
     useApp();
@@ -102,6 +152,10 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  const [historyDays, setHistoryDays] = useState(90);
+  const [historyGranularity, setHistoryGranularity] = useState<
+    "day" | "week" | "month"
+  >("day");
 
   useEffect(() => {
     let cancelled = false;
@@ -112,10 +166,16 @@ export function DashboardPage() {
         const params = environmentId
           ? { environment_id: environmentId }
           : undefined;
+        const historyParams = {
+          ...params,
+          from: new Date(Date.now() - historyDays * 86400000).toISOString(),
+          to: new Date().toISOString(),
+          granularity: historyGranularity,
+        };
         const [k, s, t, j, c] = await Promise.all([
           api.analyticsKpis(params),
-          api.analyticsStorage(params),
-          api.analyticsFindingsTrends(params),
+          api.analyticsStorage(historyParams),
+          api.analyticsFindingsTrends(historyParams),
           api.analyticsJobHealth(params),
           api.connectionStatus(),
         ]);
@@ -159,7 +219,7 @@ export function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [environmentId, reloadKey]);
+  }, [environmentId, reloadKey, historyDays, historyGranularity]);
 
   const consumersMax = storage?.top_consumers?.length
     ? Math.max(1, ...storage.top_consumers.map((p) => p.size_bytes))
@@ -453,6 +513,53 @@ export function DashboardPage() {
             </Card>
           ) : null}
         </div>
+      ) : null}
+
+      {!loading && storage && trends ? (
+        <section className="mt-8" aria-labelledby="history-heading">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2
+              id="history-heading"
+              className="text-sm font-medium text-slate-300"
+            >
+              Evolução por execução
+            </h2>
+            <div className="flex gap-2">
+              <select
+                aria-label="Período do histórico"
+                value={historyDays}
+                onChange={(event) => setHistoryDays(Number(event.target.value))}
+                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              >
+                <option value={30}>30 dias</option>
+                <option value={90}>90 dias</option>
+                <option value={365}>365 dias</option>
+              </select>
+              <select
+                aria-label="Granularidade do histórico"
+                value={historyGranularity}
+                onChange={(event) =>
+                  setHistoryGranularity(
+                    event.target.value as "day" | "week" | "month",
+                  )
+                }
+                className="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              >
+                <option value="day">Diária</option>
+                <option value="week">Semanal</option>
+                <option value="month">Mensal</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <Card title="Armazenamento ao longo do tempo">
+              <TrendBars points={storage.series ?? []} metric="size_bytes" />
+            </Card>
+            <Card title="Achados observados por execução">
+              <TrendBars points={trends.series ?? []} metric="findings" />
+            </Card>
+          </div>
+        </section>
       ) : null}
 
       {!loading && jobs ? (

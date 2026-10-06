@@ -21,6 +21,9 @@ func TestCORSAllowsLocalhostOrigin(t *testing.T) {
 	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
 		t.Fatalf("Allow-Origin = %q", got)
 	}
+	if got := w.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("Allow-Credentials = %q", got)
+	}
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d", w.Code)
 	}
@@ -47,6 +50,9 @@ func TestCORSPreflight(t *testing.T) {
 	if !contains(w.Header().Get("Access-Control-Allow-Methods"), "POST") {
 		t.Fatalf("Allow-Methods missing POST: %q", w.Header().Get("Access-Control-Allow-Methods"))
 	}
+	if !contains(w.Header().Get("Access-Control-Allow-Headers"), "X-CSRF-Token") {
+		t.Fatalf("CSRF header missing: %q", w.Header().Get("Access-Control-Allow-Headers"))
+	}
 }
 
 func TestCORSRejectsUnknownOrigin(t *testing.T) {
@@ -60,6 +66,9 @@ func TestCORSRejectsUnknownOrigin(t *testing.T) {
 	h.ServeHTTP(w, req)
 	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("unexpected Allow-Origin %q", got)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Fatalf("unexpected Allow-Credentials %q", got)
 	}
 }
 

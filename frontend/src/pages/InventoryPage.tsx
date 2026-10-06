@@ -17,13 +17,13 @@ import {
 } from "../components/ui/PaginationControls";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
-import { formatBytes, matchesSearch } from "../lib/format";
+import { formatBytes } from "../lib/format";
 import {
   relationClassBadgeClass,
   relationClassLabel,
 } from "../lib/relationClass";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
-import { api, type InventoryListParams } from "../services/api";
+import { api } from "../services/api";
 import type {
   ColumnStatSnapshot,
   DatabaseSnapshot,
@@ -31,7 +31,6 @@ import type {
   HypertableSnapshot,
   IndexSnapshot,
   InventoryObjectKind,
-  PagedResponse,
   PageMeta,
   SchemaSnapshot,
   SnapshotCompleteness,
@@ -47,28 +46,6 @@ import {
   ViewDetail,
 } from "./InventoryDetails";
 import { TableAssessmentPanel } from "./TableAssessmentPanel";
-
-async function fetchAllInventory<T>(
-  load: (params: InventoryListParams) => Promise<PagedResponse<T>>,
-  filters: InventoryListParams,
-): Promise<PagedResponse<T>> {
-  const items: T[] = [];
-  let total = 0;
-  for (let batch = 0; batch < 1000; batch++) {
-    const result = await load({ ...filters, limit: 500, offset: items.length });
-    total = result.page.total;
-    items.push(...result.items);
-    if (!result.page.has_more || result.items.length === 0) {
-      return {
-        items,
-        page: { limit: Math.max(total, 1), offset: 0, total, has_more: false },
-      };
-    }
-  }
-  throw new Error(
-    "Inventário excede o limite operacional de 500.000 linhas. Refine os filtros.",
-  );
-}
 
 const KINDS: InventoryObjectKind[] = [
   "tables",
@@ -212,8 +189,8 @@ export function InventoryPage() {
     setSelectedKey(null);
     setSheetOpen(false);
     const params = {
-      limit: pageSize === "all" ? 500 : pageSize,
-      offset: pageSize === "all" ? 0 : offset,
+      limit: pageSize === "all" ? 100 : pageSize,
+      offset,
       q: q || undefined,
       database: selectedDb || undefined,
       schema: selectedSchema || undefined,
@@ -229,10 +206,8 @@ export function InventoryPage() {
     };
 
     if (kind === "tables") {
-      (pageSize === "all"
-        ? fetchAllInventory((p) => api.tables(envId, p), params)
-        : api.tables(envId, params)
-      )
+      api
+        .tables(envId, params)
         .then((res) => {
           if (!cancelled) {
             setTables(res.items);
@@ -242,10 +217,8 @@ export function InventoryPage() {
         .catch((e: unknown) => fail(formatError(e, "Falha ao listar tables")))
         .finally(ok);
     } else if (kind === "indexes") {
-      (pageSize === "all"
-        ? fetchAllInventory((p) => api.indexes(envId, p), params)
-        : api.indexes(envId, params)
-      )
+      api
+        .indexes(envId, params)
         .then((res) => {
           if (!cancelled) {
             setIndexes(res.items);
@@ -255,10 +228,8 @@ export function InventoryPage() {
         .catch((e: unknown) => fail(formatError(e, "Falha ao listar indexes")))
         .finally(ok);
     } else if (kind === "views") {
-      (pageSize === "all"
-        ? fetchAllInventory((p) => api.views(envId, p), params)
-        : api.views(envId, params)
-      )
+      api
+        .views(envId, params)
         .then((res) => {
           if (!cancelled) {
             setViews(res.items);
@@ -268,10 +239,8 @@ export function InventoryPage() {
         .catch((e: unknown) => fail(formatError(e, "Falha ao listar views")))
         .finally(ok);
     } else if (kind === "functions") {
-      (pageSize === "all"
-        ? fetchAllInventory((p) => api.functions(envId, p), params)
-        : api.functions(envId, params)
-      )
+      api
+        .functions(envId, params)
         .then((res) => {
           if (!cancelled) {
             setFunctions(res.items);
@@ -284,32 +253,11 @@ export function InventoryPage() {
         .finally(ok);
     } else if (kind === "hypertables") {
       api
-        .hypertables(envId)
+        .hypertablesPage(envId, params)
         .then((res) => {
           if (!cancelled) {
-            let items = res.items;
-            if (selectedDb)
-              items = items.filter((h) => h.database_name === selectedDb);
-            if (selectedSchema)
-              items = items.filter((h) => h.schema_name === selectedSchema);
-            if (q)
-              items = items.filter(
-                (h) =>
-                  matchesSearch(h.hypertable_name, q) ||
-                  matchesSearch(h.schema_name, q),
-              );
-            const total = items.length;
-            setHypertables(
-              pageSize === "all"
-                ? items
-                : items.slice(offset, offset + pageSize),
-            );
-            setPage({
-              limit: pageSize === "all" ? Math.max(total, 1) : pageSize,
-              offset,
-              total,
-              has_more: pageSize !== "all" && offset + pageSize < total,
-            });
+            setHypertables(res.items);
+            setPage(res.page);
           }
         })
         .catch((e: unknown) =>
@@ -318,27 +266,12 @@ export function InventoryPage() {
         .finally(ok);
     } else {
       api
-        .continuousAggregates(envId)
+        .continuousAggregatesPage(envId, params)
         .then((res) => {
           if (!cancelled) {
-            let items = res.items;
-            if (selectedDb)
-              items = items.filter((c) => c.database_name === selectedDb);
-            if (selectedSchema)
-              items = items.filter((c) => c.schema_name === selectedSchema);
-            if (q) items = items.filter((c) => matchesSearch(c.view_name, q));
-            const total = items.length;
-            setPage({
-              limit: pageSize === "all" ? Math.max(total, 1) : pageSize,
-              offset,
-              total,
-              has_more: pageSize !== "all" && offset + pageSize < total,
-            });
+            setPage(res.page);
             setViews(
-              (pageSize === "all"
-                ? items
-                : items.slice(offset, offset + pageSize)
-              ).map((c) => ({
+              res.items.map((c) => ({
                 id: c.id,
                 database_name: c.database_name,
                 schema_name: c.schema_name,
@@ -560,6 +493,7 @@ export function InventoryPage() {
       total={page.total}
       offset={pageSize === "all" ? 0 : offset}
       size={pageSize}
+      allowAll={false}
       onSizeChange={(next) => {
         setPageSize(next);
         setOffset(0);
