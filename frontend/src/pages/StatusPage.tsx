@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, ErrorBanner, Table } from "../components/ui";
 import { formatError } from "../lib/errors";
+import { formatBytes } from "../lib/format";
 import { labels } from "../lib/labels";
 import { api } from "../services/api";
 import type { StatusResponse } from "../types";
@@ -146,6 +147,22 @@ export function StatusPage() {
               </div>
             )}
           </div>
+
+          {data.storage && (
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {(
+                [
+                  ["Histórico de runs", data.storage.snapshots_bytes],
+                  ["Jobs de PDF", data.storage.report_jobs_bytes],
+                  ["PDFs armazenados", data.storage.pdf_artifacts_bytes],
+                  ["Diagnósticos", data.storage.quality_history_bytes],
+                  ["Ações e medições", data.storage.action_history_bytes],
+                ] as const
+              ).map(([label, bytes]) => (
+                <Card key={label} subtitle={label} title={formatBytes(bytes)} />
+              ))}
+            </div>
+          )}
 
           {data.notes && data.notes.length > 0 && (
             <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-amber-200/90">

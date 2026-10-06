@@ -78,7 +78,7 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM table_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) AND ($3='' OR schema_name=$3) AND ($4='' OR table_name=$4)`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table).Scan(&d.TotalTables); err != nil {
 		return d, err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT f.id::text,f.finding_type,e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title,e.summary,e.recommendation,e.confidence,e.evidence::text,e.rule_version FROM finding_event e JOIN finding f ON f.id=e.finding_id WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title LIMIT 2001`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity)
+	rows, err = s.pool.Query(ctx, `SELECT f.id::text,left(f.finding_type,128),e.severity,left(e.category,128),left(e.database_name,256),left(e.schema_name,256),left(e.object_name,256),left(e.title,512),left(e.summary,1024),left(e.recommendation,1024),e.confidence,left(e.evidence::text,500),left(e.rule_version,128) FROM finding_event e JOIN finding f ON f.id=e.finding_id WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title LIMIT 2001`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity)
 	if err != nil {
 		return d, err
 	}
@@ -87,9 +87,6 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 		if err = rows.Scan(&item.ID, &item.Type, &item.Severity, &item.Category, &item.Database, &item.Schema, &item.Object, &item.Title, &item.Summary, &item.Recommendation, &item.Confidence, &item.Evidence, &item.RuleVersion); err != nil {
 			rows.Close()
 			return d, err
-		}
-		if len(item.Evidence) > 500 {
-			item.Evidence = item.Evidence[:500] + "..."
 		}
 		d.Findings = append(d.Findings, item)
 	}

@@ -60,6 +60,13 @@ func TestLargeInventoryPDFIsBounded(t *testing.T) {
 	}
 }
 
+func TestPDFRejectsOversizedTextBeforeLayout(t *testing.T) {
+	d := Document{Type: "executive", Environment: strings.Repeat("x", maxReportTextBytes+1)}
+	if _, err := RenderPDF(d); err == nil || !strings.Contains(err.Error(), "limite de texto") {
+		t.Fatalf("expected a bounded report error, got %v", err)
+	}
+}
+
 func BenchmarkLargeInventoryPDF(b *testing.B) {
 	d := Document{Type: "technical", Environment: "large", RunID: "fixed", RunStarted: time.Unix(0, 0), RunStatus: "success", Coverage: "complete"}
 	for i := 0; i < 5000; i++ {

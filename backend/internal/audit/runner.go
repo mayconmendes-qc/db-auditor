@@ -130,6 +130,17 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	if environmentID == "" {
 		return RunResult{}, fmt.Errorf("environment id is required")
 	}
+	if resolver, ok := r.store.(interface {
+		GetEnvironmentEngine(context.Context, string) (string, error)
+	}); ok {
+		engine, err := resolver.GetEnvironmentEngine(ctx, environmentID)
+		if err != nil {
+			return RunResult{}, fmt.Errorf("resolve target engine: %w", err)
+		}
+		if engine != "postgresql" && engine != "timescaledb" {
+			return RunResult{}, fmt.Errorf("mecanismo %q sem adaptador de coleta; execução não aplicável", engine)
+		}
+	}
 	if profile == "" {
 		profile = ProfileManual
 	}

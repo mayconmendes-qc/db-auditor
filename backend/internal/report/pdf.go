@@ -8,16 +8,28 @@ import (
 )
 
 const maxPDFBytes = 16 << 20
+const maxPDFPages = 200
+const maxReportTextBytes = 8 << 20
 
 // RenderPDF writes a deterministic, paginated PDF 1.4 document with no
 // external font or native runtime dependency. All text is WinAnsi encoded.
 func RenderPDF(document Document) ([]byte, error) {
 	lines := BuildLines(document)
+	textBytes := 0
+	for _, line := range lines {
+		textBytes += len(line.Text)
+		if textBytes > maxReportTextBytes {
+			return nil, fmt.Errorf("relatório excede o limite de texto (%d bytes); reduza o escopo ou use filtros", maxReportTextBytes)
+		}
+	}
 	pages := [][]string{{}}
 	y := 790
 	for _, line := range lines {
 		if line.Style == "bar_bytes" {
 			if y < 75 {
+				if len(pages) >= maxPDFPages {
+					return nil, fmt.Errorf("relatório excede %d páginas; reduza o escopo ou use filtros", maxPDFPages)
+				}
 				pages = append(pages, []string{})
 				y = 790
 			}
@@ -39,6 +51,9 @@ func RenderPDF(document Document) ([]byte, error) {
 		}
 		if line.Style == "bar" {
 			if y < 75 {
+				if len(pages) >= maxPDFPages {
+					return nil, fmt.Errorf("relatório excede %d páginas; reduza o escopo ou use filtros", maxPDFPages)
+				}
 				pages = append(pages, []string{})
 				y = 790
 			}
@@ -85,6 +100,9 @@ func RenderPDF(document Document) ([]byte, error) {
 		}
 		for _, part := range wrapText(line.Text, width) {
 			if y < 55 {
+				if len(pages) >= maxPDFPages {
+					return nil, fmt.Errorf("relatório excede %d páginas; reduza o escopo ou use filtros", maxPDFPages)
+				}
 				pages = append(pages, []string{})
 				y = 790
 			}
@@ -116,7 +134,7 @@ func RenderPDF(document Document) ([]byte, error) {
 		offsets = append(offsets, out.Len())
 		fmt.Fprintf(&out, "%d 0 obj\n%s\nendobj\n", index+1, object)
 		if out.Len() > maxPDFBytes {
-			return nil, fmt.Errorf("report exceeds %d bytes", maxPDFBytes)
+			return nil, fmt.Errorf("relatório excede %d bytes; reduza o escopo ou use filtros", maxPDFBytes)
 		}
 	}
 	xref := out.Len()
@@ -126,7 +144,7 @@ func RenderPDF(document Document) ([]byte, error) {
 	}
 	fmt.Fprintf(&out, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(offsets), xref)
 	if out.Len() > maxPDFBytes {
-		return nil, fmt.Errorf("report exceeds %d bytes", maxPDFBytes)
+		return nil, fmt.Errorf("relatório excede %d bytes; reduza o escopo ou use filtros", maxPDFBytes)
 	}
 	return out.Bytes(), nil
 }
