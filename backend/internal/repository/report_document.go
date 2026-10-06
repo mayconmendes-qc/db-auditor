@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Store) LoadReportDocument(ctx context.Context, job ReportJob) (report.Document, error) {
-	d := report.Document{Type: job.Type, RunID: job.AuditRunID, RuleVersion: job.RuleVersion, RequestedBy: job.RequestedBy, DatabaseFilter: job.Filters.Database, SchemaFilter: job.Filters.Schema, TableFilter: job.Filters.Table, SeverityFilter: job.Filters.Severity, Databases: []report.Database{}, Tables: []report.Table{}, Findings: []report.Finding{}, CoverageNotes: []string{}}
+	d := report.Document{Type: job.Type, RunID: job.AuditRunID, RuleVersion: job.RuleVersion, RequestedBy: job.RequestedBy, DatabaseFilter: job.Filters.Database, SchemaFilter: job.Filters.Schema, TableFilter: job.Filters.Table, SeverityFilter: job.Filters.Severity, RedactionLevel: job.Filters.Redaction, Databases: []report.Database{}, Tables: []report.Table{}, Findings: []report.Finding{}, CoverageNotes: []string{}}
 	err := s.pool.QueryRow(ctx, `SELECT e.name,r.started_at,r.status,r.service_version FROM audit_run r JOIN audit_environment e ON e.id=r.environment_id WHERE r.id=$1::uuid AND r.environment_id=$2::uuid AND r.status IN ('success','partial_success')`, job.AuditRunID, job.EnvironmentID).Scan(&d.Environment, &d.RunStarted, &d.RunStatus, &d.ServiceVersion)
 	if err != nil {
 		return d, fmt.Errorf("report run: %w", err)
@@ -78,13 +78,13 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM table_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) AND ($3='' OR schema_name=$3) AND ($4='' OR table_name=$4)`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table).Scan(&d.TotalTables); err != nil {
 		return d, err
 	}
-	rows, err = s.pool.Query(ctx, `SELECT f.finding_type,e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title,e.summary,e.recommendation,e.confidence,e.evidence::text,e.rule_version FROM finding_event e JOIN finding f ON f.id=e.finding_id WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title LIMIT 2001`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity)
+	rows, err = s.pool.Query(ctx, `SELECT f.id::text,f.finding_type,e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title,e.summary,e.recommendation,e.confidence,e.evidence::text,e.rule_version FROM finding_event e JOIN finding f ON f.id=e.finding_id WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title LIMIT 2001`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity)
 	if err != nil {
 		return d, err
 	}
 	for rows.Next() {
 		var item report.Finding
-		if err = rows.Scan(&item.Type, &item.Severity, &item.Category, &item.Database, &item.Schema, &item.Object, &item.Title, &item.Summary, &item.Recommendation, &item.Confidence, &item.Evidence, &item.RuleVersion); err != nil {
+		if err = rows.Scan(&item.ID, &item.Type, &item.Severity, &item.Category, &item.Database, &item.Schema, &item.Object, &item.Title, &item.Summary, &item.Recommendation, &item.Confidence, &item.Evidence, &item.RuleVersion); err != nil {
 			rows.Close()
 			return d, err
 		}
@@ -119,13 +119,13 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 			d.CoverageNotes = append(d.CoverageNotes, "Score sem cobertura suficiente: "+strings.Join(score.MissingCollectors, ", "))
 		}
 	}
-	rows, err = s.pool.Query(ctx, `SELECT r.id::text,COALESCE(sum(t.total_size_bytes),0),count(t.id) FROM audit_run r LEFT JOIN table_snapshot t ON t.audit_run_id=r.id AND ($3='' OR t.database_name=$3) WHERE r.environment_id=$1::uuid AND r.status IN ('success','partial_success') AND r.started_at<=$2 GROUP BY r.id,r.started_at ORDER BY r.started_at DESC LIMIT 6`, job.EnvironmentID, d.RunStarted, job.Filters.Database)
+	rows, err = s.pool.Query(ctx, `SELECT r.id::text,r.started_at,r.status,COALESCE(sum(t.total_size_bytes),0),count(t.id) FROM audit_run r LEFT JOIN table_snapshot t ON t.audit_run_id=r.id AND ($3='' OR t.database_name=$3) WHERE r.environment_id=$1::uuid AND r.status IN ('success','partial_success') AND r.started_at<=$2 GROUP BY r.id,r.started_at,r.status ORDER BY r.started_at DESC LIMIT 6`, job.EnvironmentID, d.RunStarted, job.Filters.Database)
 	if err != nil {
 		return d, err
 	}
 	for rows.Next() {
 		var p report.GrowthPoint
-		if err = rows.Scan(&p.RunID, &p.SizeBytes, &p.Tables); err != nil {
+		if err = rows.Scan(&p.RunID, &p.At, &p.Status, &p.SizeBytes, &p.Tables); err != nil {
 			rows.Close()
 			return d, err
 		}

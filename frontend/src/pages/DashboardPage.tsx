@@ -117,13 +117,13 @@ function TrendBars({
             title={`Execução ${point.audit_run_id}`}
           >
             <MiniBar
-              label={`${when} · ${point.environment_name}${point.status === "partial_success" ? " · coleta parcial" : ""}`}
+              label={`${when} · ${point.environment_name}${point.coverage === "partial" ? " · coleta parcial" : ""}${!point.comparable && point.comparison_note ? ` · ${point.comparison_note}` : ""}`}
               value={value}
               max={max}
               valueLabel={
                 metric === "size_bytes" ? formatBytes(value) : String(value)
               }
-              tone={point.status === "partial_success" ? "amber" : "sky"}
+              tone={!point.comparable ? "amber" : "sky"}
             />
           </div>
         );

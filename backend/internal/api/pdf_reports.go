@@ -219,6 +219,9 @@ func validReportRequest(kind string, f repository.ReportFilters) bool {
 	if f.Severity != "" && f.Severity != "critical" && f.Severity != "high" && f.Severity != "medium" && f.Severity != "low" && f.Severity != "info" {
 		return false
 	}
+	if f.Redaction != "" && f.Redaction != "none" && f.Redaction != "identifiers" && f.Redaction != "strict" {
+		return false
+	}
 	for _, value := range []string{f.Database, f.Schema, f.Table} {
 		if len(value) > 128 || strings.ContainsAny(value, "\x00\n\r") {
 			return false

@@ -16,10 +16,11 @@ var ErrReportIneligible = errors.New("report run is not completed in the request
 var ErrReportConflict = errors.New("report job cannot transition from its current state")
 
 type ReportFilters struct {
-	Database string `json:"database,omitempty"`
-	Schema   string `json:"schema,omitempty"`
-	Table    string `json:"table,omitempty"`
-	Severity string `json:"severity,omitempty"`
+	Database  string `json:"database,omitempty"`
+	Schema    string `json:"schema,omitempty"`
+	Table     string `json:"table,omitempty"`
+	Severity  string `json:"severity,omitempty"`
+	Redaction string `json:"redaction,omitempty"`
 }
 type ReportRequest struct {
 	EnvironmentID  string        `json:"environment_id"`

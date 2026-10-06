@@ -1,10 +1,13 @@
 # Snapshot store schema
 
-O diretório tem dois scripts. O Postgres do Compose executa os `.sql` **somente na primeira inicialização** de um volume vazio, em ordem alfabética.
+O diretório contém o baseline, o seed local e migrações incrementais. O Postgres do Compose executa os `.sql` **somente na primeira inicialização** de um volume vazio, em ordem alfabética; a API registra e aplica as migrações incrementais pendentes em volumes existentes.
 
 - `01_baseline.sql`: schema completo. As migrations das sprints 13–20 foram incorporadas aqui.
 - `02_seed_demo.sql`: duas linhas locais de demonstração. A API não aplica este arquivo.
 - `03_audit_schedule.sql`: agenda persistente. A API aplica no boot se ainda não estiver registrada.
+- `04_p1.sql`: primeira ampliação incremental.
+- `05_p2.sql`: melhorias da primeira etapa.
+- `06_second_stage.sql`: planos de ação, eventos, anotações e regressões da segunda etapa.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 
@@ -15,7 +18,7 @@ make reset-volume   # destrutivo: apaga o volume snapshot-store
 make up
 ```
 
-Um volume que já existe **não** reaplica este diretório. A API cria as tabelas de login (`auditor_user`, sessão e log) se elas ainda não existirem, para o primeiro acesso funcionar sem migration extra. O restante do schema antigo permanece como está. Se o volume for anterior às sprints 13–19 e a API passar a falhar por coluna ausente, recrie o volume em desenvolvimento com `make reset-volume`.
+Um volume que já existe **não** reaplica o baseline. A API cria as tabelas de login (`auditor_user`, sessão e log) se elas ainda não existirem e executa migrações incrementais pendentes. Faça backup antes de atualizar um volume persistente; confira o registro `schema_migration` e não altere arquivos já aplicados. Veja [docs/second-stage-operations.md](../../docs/second-stage-operations.md) para o procedimento de implantação e restauração.
 
 ## Ambientes
 

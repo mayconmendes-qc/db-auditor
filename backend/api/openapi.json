@@ -164,7 +164,11 @@
         }
       }
     },
+    "/api/v1/auth/password": {
+      "post": {"description":"Troca a senha da própria conta e revoga todas as sessões.","responses":{"200":{"description":"Senha alterada; novo login necessário"},"403":{"description":"Senha atual incorreta"}}}
+    },
     "/api/v1/auth/users": {
+      "get": {"description":"Lista contas e escopos; somente operador.","responses":{"200":{"description":"Contas"}}},
       "post": {
         "responses": {
           "200": {
@@ -172,6 +176,12 @@
           }
         }
       }
+    },
+    "/api/v1/auth/users/{id}": {
+      "patch": {"description":"Atualiza papel, ativação, ambientes e opcionalmente senha; revoga sessões e preserva ao menos um operador ativo.","responses":{"200":{"description":"Conta atualizada"},"409":{"description":"Último operador ativo"}}}
+    },
+    "/api/v1/auth/users/{id}/sessions/revoke": {
+      "post": {"description":"Revoga todas as sessões da conta.","responses":{"200":{"description":"Sessões revogadas"}}}
     },
     "/api/v1/compare": {
       "post": {
@@ -224,6 +234,10 @@
           }
         }
       }
+    },
+    "/api/v1/environments/{id}/annotations": {
+      "get":{"description":"Lista eventos operacionais anotados no ambiente.","responses":{"200":{"description":"Anotações"}}},
+      "post":{"description":"Registra implantação, manutenção, incidente ou nota; exige auditor.","responses":{"201":{"description":"Anotação registrada"}}}
     },
     "/api/v1/environments/{id}/chunks": {
       "get": {
@@ -344,6 +358,12 @@
           }
         }
       }
+    },
+    "/api/v1/environments/{id}/regressions": {
+      "get":{"description":"Lista alertas persistentes calculados somente com execuções completas e analisadas.","responses":{"200":{"description":"Alertas"}}}
+    },
+    "/api/v1/environments/{id}/regressions/{alert}/acknowledge": {
+      "post":{"description":"Reconhece alerta com motivo e ator; exige auditor.","responses":{"200":{"description":"Alerta reconhecido"}}}
     },
     "/api/v1/environments/{id}/reports": {
       "post": {
@@ -492,6 +512,9 @@
         }
       }
     },
+    "/api/v1/environments/{id}/runs/{run}/score/compare": {
+      "get":{"description":"Compara o score scope-v2 com baseline aprovado quando cobertura, análise e versão são compatíveis.","responses":{"200":{"description":"Comparação ou motivo de indisponibilidade"}}}
+    },
     "/api/v1/environments/{id}/runs/{run}/scores": {
       "get": {
         "responses": {
@@ -623,6 +646,13 @@
         }
       }
     },
+    "/api/v1/findings/{id}/action": {
+      "get":{"description":"Plano de investigação e ação assistida, nunca executada pelo auditor.","responses":{"200":{"description":"Plano e estado"}}},
+      "patch":{"description":"Registra decisão, responsável e resultado; exige auditor.","responses":{"200":{"description":"Estado salvo"}}}
+    },
+    "/api/v1/findings/{id}/action/events": {
+      "get":{"description":"Histórico auditável das decisões da ação.","responses":{"200":{"description":"Eventos"}}}
+    },
     "/api/v1/findings/{id}/timeline": {
       "get": {
         "responses": {
@@ -707,9 +737,10 @@
     "schemas": {
       "ScopeScoreCategory": {
         "type": "object",
-        "required": ["category", "score", "penalty", "findings"],
+        "required": ["category", "weight", "score", "penalty", "findings"],
         "properties": {
           "category": { "type": "string" },
+          "weight": { "type": "integer" },
           "score": { "type": "integer" },
           "penalty": { "type": "integer" },
           "findings": { "type": "integer" }
@@ -717,9 +748,12 @@
       },
       "ScopeScore": {
         "type": "object",
-        "required": ["version", "environment_id", "audit_run_id", "status", "score", "confidence", "categories", "missing_collectors"],
+        "required": ["version", "profile", "collector_version", "rule_version", "environment_id", "audit_run_id", "status", "score", "confidence", "categories", "missing_collectors", "explanation"],
         "properties": {
           "version": { "type": "string" },
+          "profile": { "type": "string" },
+          "collector_version": { "type": "string" },
+          "rule_version": { "type": "string" },
           "environment_id": { "type": "string" },
           "audit_run_id": { "type": "string" },
           "database_name": { "type": "string" },
@@ -728,6 +762,7 @@
           "status": { "type": "string" },
           "score": { "type": ["integer", "null"] },
           "confidence": { "type": "number" },
+          "explanation": { "type": "string" },
           "categories": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/ScopeScoreCategory" }

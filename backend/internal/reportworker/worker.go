@@ -68,6 +68,7 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 		return w.fail(workCtx, job.ID, err)
 	}
 	document.RedactMetadata(os.Getenv("AUDITOR_REPORT_REDACT_METADATA"))
+	document.RedactSensitive(job.Filters.Redaction)
 	pdf, err := report.RenderPDF(document)
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)

@@ -16,6 +16,27 @@ func RenderPDF(document Document) ([]byte, error) {
 	pages := [][]string{{}}
 	y := 790
 	for _, line := range lines {
+		if line.Style == "bar_bytes" {
+			if y < 75 {
+				pages = append(pages, []string{})
+				y = 790
+			}
+			parts := strings.Split(line.Text, "|")
+			if len(parts) == 3 {
+				value, valueErr := strconv.ParseInt(parts[1], 10, 64)
+				maximum, maxErr := strconv.ParseInt(parts[2], 10, 64)
+				if valueErr == nil && maxErr == nil && value >= 0 && maximum >= 0 {
+					width := 0
+					if maximum > 0 {
+						width = int(300 * float64(value) / float64(maximum))
+					}
+					command := fmt.Sprintf("0.94 0.96 0.97 rg 42 %d 68 11 re f 0.90 0.93 0.94 rg 165 %d 250 11 re f 0.09 0.55 0.42 rg 165 %d %d 11 re f 0.12 0.18 0.24 rg BT /F1 8 Tf 43 %d Td (%s) Tj ET BT /F1 9 Tf 425 %d Td (%d B) Tj ET\n", y-2, y-2, y-2, width*250/300, y, escapePDFText(parts[0]), y, value)
+					pages[len(pages)-1] = append(pages[len(pages)-1], command)
+					y -= 20
+					continue
+				}
+			}
+		}
 		if line.Style == "bar" {
 			if y < 75 {
 				pages = append(pages, []string{})

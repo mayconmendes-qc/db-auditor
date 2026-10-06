@@ -8,10 +8,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const scopeScoreVersion = "scope-v1"
+const scopeScoreVersion = "scope-v2"
 
 type ScoreCategory struct {
 	Category string `json:"category"`
+	Weight   int    `json:"weight"`
 	Score    int    `json:"score"`
 	Penalty  int    `json:"penalty"`
 	Findings int    `json:"findings"`
@@ -19,6 +20,9 @@ type ScoreCategory struct {
 
 type ScopeScore struct {
 	Version           string          `json:"version"`
+	Profile           string          `json:"profile"`
+	CollectorVersion  string          `json:"collector_version"`
+	RuleVersion       string          `json:"rule_version"`
 	EnvironmentID     string          `json:"environment_id"`
 	AuditRunID        string          `json:"audit_run_id"`
 	DatabaseName      string          `json:"database_name,omitempty"`
@@ -29,6 +33,22 @@ type ScopeScore struct {
 	Confidence        float64         `json:"confidence"`
 	Categories        []ScoreCategory `json:"categories"`
 	MissingCollectors []string        `json:"missing_collectors"`
+	Explanation       string          `json:"explanation"`
+}
+
+var scoreWeights = map[string]int{"security": 35, "performance": 30, "structure": 20, "maintenance": 15}
+
+func scoreGroup(category string) string {
+	switch category {
+	case "security", "privilege", "rls", "config":
+		return "security"
+	case "performance", "index", "workload":
+		return "performance"
+	case "storage", "vacuum", "policy", "job", "chunk", "cagg":
+		return "maintenance"
+	default:
+		return "structure"
+	}
 }
 
 var scoreCollectors = []string{"postgres.tables", "postgres.columns", "postgres.constraints", "postgres.indexes"}
@@ -50,16 +70,12 @@ func severityPenalty(severity string) int {
 
 func calculateScopeCategories(observations [][2]string) ([]ScoreCategory, int) {
 	byCategory := map[string]*ScoreCategory{}
+	for name, weight := range scoreWeights {
+		byCategory[name] = &ScoreCategory{Category: name, Weight: weight, Score: 100}
+	}
 	for _, o := range observations {
-		category := o[0]
-		if category == "" {
-			category = "other"
-		}
+		category := scoreGroup(o[0])
 		item := byCategory[category]
-		if item == nil {
-			item = &ScoreCategory{Category: category, Score: 100}
-			byCategory[category] = item
-		}
 		item.Findings++
 		item.Penalty += severityPenalty(o[1])
 		if item.Penalty > 100 {
@@ -68,28 +84,29 @@ func calculateScopeCategories(observations [][2]string) ([]ScoreCategory, int) {
 		item.Score = 100 - item.Penalty
 	}
 	out := make([]ScoreCategory, 0, len(byCategory))
-	sum := 0
+	weighted := 0
 	for _, v := range byCategory {
 		out = append(out, *v)
-		sum += v.Score
+		weighted += v.Score * v.Weight
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Category < out[j].Category })
-	if len(out) == 0 {
-		return out, 100
-	}
-	return out, sum / len(out)
+	return out, weighted / 100
 }
 
 func (s *Store) GetScopeScore(ctx context.Context, environmentID, runID, database, schema, table string) (*ScopeScore, error) {
 	var runStatus string
-	err := s.pool.QueryRow(ctx, `SELECT status FROM audit_run WHERE id=$1::uuid AND environment_id=$2::uuid AND status IN ('success','partial_success')`, runID, environmentID).Scan(&runStatus)
+	var profile, collectorVersion, ruleVersion string
+	err := s.pool.QueryRow(ctx, `SELECT r.status,r.profile,r.collector_version,COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version,'')
+FROM audit_run r LEFT JOIN analysis_run a ON a.audit_run_id=r.id
+WHERE r.id=$1::uuid AND r.environment_id=$2::uuid AND r.status IN ('success','partial_success')`, runID, environmentID).Scan(&runStatus, &profile, &collectorVersion, &ruleVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	out := &ScopeScore{Version: scopeScoreVersion, EnvironmentID: environmentID, AuditRunID: runID, DatabaseName: database, SchemaName: schema, TableName: table, Status: "available", Categories: []ScoreCategory{}, MissingCollectors: []string{}}
+	out := &ScopeScore{Version: scopeScoreVersion, EnvironmentID: environmentID, AuditRunID: runID, DatabaseName: database, SchemaName: schema, TableName: table, Status: "available", Categories: []ScoreCategory{}, MissingCollectors: []string{}, Explanation: "Nota ponderada por segurança (35%), performance (30%), estrutura (20%) e manutenção (15%). Cada achado desconta pontos conforme a severidade; ausência de achados só conta quando a análise e a cobertura estão completas."}
+	out.Profile, out.CollectorVersion, out.RuleVersion = profile, collectorVersion, ruleVersion
 	rows, err := s.pool.Query(ctx, `SELECT database_name FROM database_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) ORDER BY database_name`, runID, database)
 	if err != nil {
 		return nil, err
@@ -162,8 +179,15 @@ func (s *Store) GetScopeScore(ctx context.Context, environmentID, runID, databas
 	}
 	var score int
 	out.Categories, score = calculateScopeCategories(observations)
-	if len(out.MissingCollectors) > 0 || runStatus != "success" {
+	var analysisStatus string
+	if err = s.pool.QueryRow(ctx, `SELECT COALESCE((SELECT status FROM analysis_run WHERE audit_run_id=$1::uuid),'')`, runID).Scan(&analysisStatus); err != nil {
+		return nil, err
+	}
+	if len(out.MissingCollectors) > 0 || runStatus != "success" || analysisStatus != "success" {
 		out.Status = "insufficient_coverage"
+		if analysisStatus != "success" {
+			out.MissingCollectors = append(out.MissingCollectors, "analysis")
+		}
 		return out, nil
 	}
 	out.Score = &score
