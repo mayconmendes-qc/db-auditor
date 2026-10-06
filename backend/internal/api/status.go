@@ -1,24 +1,27 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/osmendes/db-auditor/internal/buildinfo"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 // StatusResponse is the operational snapshot for the Status page.
 type StatusResponse struct {
-	Service      string      `json:"service"`
-	Version      string      `json:"version"`
-	TimeUTC      time.Time   `json:"time_utc"`
-	API          string      `json:"api_status"`
-	Database     string      `json:"database_status"`
-	Environments int         `json:"environments_count"`
-	RecentRuns   []StatusRun `json:"recent_runs"`
-	OpenFindings int         `json:"open_findings"`
-	FailedRuns   int         `json:"failed_runs_recent"`
-	Notes        []string    `json:"notes,omitempty"`
+	Service      string                       `json:"service"`
+	Version      string                       `json:"version"`
+	TimeUTC      time.Time                    `json:"time_utc"`
+	API          string                       `json:"api_status"`
+	Database     string                       `json:"database_status"`
+	Environments int                          `json:"environments_count"`
+	RecentRuns   []StatusRun                  `json:"recent_runs"`
+	OpenFindings int                          `json:"open_findings"`
+	FailedRuns   int                          `json:"failed_runs_recent"`
+	Notes        []string                     `json:"notes,omitempty"`
+	Storage      *repository.StorageFootprint `json:"storage,omitempty"`
 }
 
 // StatusRun is a compact audit run summary.
@@ -50,6 +53,16 @@ func getStatus(store InventoryStore) http.HandlerFunc {
 			res.Notes = append(res.Notes, "snapshot store ping failed")
 		} else {
 			res.Database = "ready"
+			if stats, ok := store.(interface {
+				GetStorageFootprint(context.Context) (*repository.StorageFootprint, error)
+			}); ok {
+				footprint, err := stats.GetStorageFootprint(ctx)
+				if err != nil {
+					res.Notes = append(res.Notes, "control store size unavailable")
+				} else {
+					res.Storage = footprint
+				}
+			}
 		}
 
 		envs, err := store.ListEnvironmentsAPI(ctx)

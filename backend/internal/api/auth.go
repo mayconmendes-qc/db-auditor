@@ -410,6 +410,12 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 		if strings.Contains(path, "/annotations") || strings.Contains(path, "/regressions/") {
 			minimum = "auditor"
 		}
+		if strings.Contains(path, "/quality-scans") || strings.Contains(path, "/quality-issues/") {
+			minimum = "auditor"
+		}
+		if strings.HasSuffix(path, "/action/measurements") && r.Method == http.MethodPost {
+			minimum = "auditor"
+		}
 		if (parts[0] == "findings" && (r.Method == http.MethodPatch || len(parts) > 1 && parts[1] == "analyze")) ||
 			parts[0] == "mappings" || strings.Contains(path, "/reports") {
 			minimum = "auditor"

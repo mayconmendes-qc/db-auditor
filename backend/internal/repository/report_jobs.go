@@ -91,28 +91,30 @@ func (s *Store) CreateReportJob(ctx context.Context, req ReportRequest) (*Report
 	if err != nil {
 		return nil, err
 	}
-	var id string
-	err = s.pool.QueryRow(ctx, `INSERT INTO report_job(environment_id,audit_run_id,report_type,filters,requested_by,rule_version,idempotency_key) VALUES($1::uuid,$2::uuid,$3,$4::jsonb,$5,$6,$7)
+	for rotation := 0; rotation < 128; rotation++ {
+		var id string
+		err = s.pool.QueryRow(ctx, `INSERT INTO report_job(environment_id,audit_run_id,report_type,filters,requested_by,rule_version,idempotency_key) VALUES($1::uuid,$2::uuid,$3,$4::jsonb,$5,$6,$7)
 ON CONFLICT(environment_id,idempotency_key) DO UPDATE SET idempotency_key=report_job.idempotency_key
 RETURNING id::text`, req.EnvironmentID, req.AuditRunID, req.Type, filters, req.RequestedBy, ruleVersion, req.IdempotencyKey).Scan(&id)
-	if err != nil {
-		return nil, err
-	}
-	job, err := s.GetReportJob(ctx, req.EnvironmentID, id)
-	if err != nil {
-		return nil, err
-	}
-	if job == nil || job.AuditRunID != req.AuditRunID || job.Type != req.Type || job.Filters != req.Filters || job.RuleVersion != ruleVersion {
-		return nil, ErrReportConflict
-	}
-	if job.ExpiresAt.Before(time.Now()) {
-		_, err = s.pool.Exec(ctx, `UPDATE report_job SET status='queued',attempts=0,error=NULL,created_at=now(),started_at=NULL,finished_at=NULL,expires_at=now()+interval '30 days' WHERE id=$1::uuid AND expires_at<=now()`, id)
 		if err != nil {
 			return nil, err
 		}
-		return s.GetReportJob(ctx, req.EnvironmentID, id)
+		job, err := s.GetReportJob(ctx, req.EnvironmentID, id)
+		if err != nil {
+			return nil, err
+		}
+		if job == nil || job.AuditRunID != req.AuditRunID || job.Type != req.Type || job.Filters != req.Filters || job.RuleVersion != ruleVersion {
+			return nil, ErrReportConflict
+		}
+		if job.ExpiresAt.After(time.Now()) {
+			return job, nil
+		}
+		// Rotate the idempotency key to create a fresh job, preserving the
+		// expired job's immutable provenance and its former attempts/result.
+		digest := sha256.Sum256([]byte(req.IdempotencyKey + ":" + job.ID))
+		req.IdempotencyKey = hex.EncodeToString(digest[:])
 	}
-	return job, nil
+	return nil, fmt.Errorf("too many expired report generations")
 }
 
 func (s *Store) GetReportJob(ctx context.Context, environmentID, id string) (*ReportJob, error) {
@@ -237,9 +239,8 @@ func (s *Store) CleanupExpiredReports(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err = s.pool.Exec(ctx, `DELETE FROM report_job WHERE expires_at<now()-interval '90 days'`); err != nil {
-		return 0, err
-	}
+	// Jobs are the provenance trail. Artifact expiry never removes this trail;
+	// archival of jobs requires an explicit, backed-up retention policy.
 	return cmd.RowsAffected(), nil
 }
 

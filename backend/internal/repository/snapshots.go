@@ -13,6 +13,7 @@ type Environment struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
 	Type          string    `json:"type"`
+	Engine        string    `json:"engine"`
 	DiscoveryMode string    `json:"discovery_mode"`
 	Active        bool      `json:"active"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -60,6 +61,7 @@ func (s *Store) ListEnvironmentsAPI(ctx context.Context) ([]Environment, error) 
 			ID:            uuidString(r.ID),
 			Name:          r.Name,
 			Type:          r.Type,
+			Engine:        r.Engine,
 			DiscoveryMode: r.DiscoveryMode,
 			Active:        r.Active,
 			CreatedAt:     r.CreatedAt.Time,
