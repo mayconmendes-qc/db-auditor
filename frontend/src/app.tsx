@@ -4,6 +4,7 @@ import { AppProvider, useApp } from "./context/AppContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { formatError } from "./lib/errors";
 import {
+  AccountsPage,
   AuditRunsPage,
   DashboardPage,
   DocsPage,
@@ -11,6 +12,7 @@ import {
   FindingsPage,
   InventoryPage,
   MappingsPage,
+  MonitoringPage,
   PerformancePage,
   ReportsPage,
   RulesPage,
@@ -53,6 +55,10 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     content = <RulesPage />;
   } else if (section === "Status") {
     content = <StatusPage />;
+  } else if (section === "Contas") {
+    content = <AccountsPage />;
+  } else if (section === "Acompanhamento") {
+    content = <MonitoringPage />;
   }
 
   return (

@@ -73,8 +73,8 @@ func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
 			t.Errorf("openapi missing %s %s", method, path)
 		}
 	}
-	if strings.Contains(string(raw), "dsn") || strings.Contains(strings.ToLower(string(raw)), "password") {
-		t.Fatal("spec must not publish DSN or password fields")
+	if strings.Contains(strings.ToLower(string(raw)), `"password_hash"`) || strings.Contains(strings.ToLower(string(raw)), `"dsn"`) {
+		t.Fatal("spec must not publish secret fields")
 	}
 }
 

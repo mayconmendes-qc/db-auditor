@@ -1,8 +1,11 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
+  ActionEvent,
   AnalysisRun,
   AnalyzeResult,
+  AuditAnnotation,
   AuditBaseline,
+  AuditorAccount,
   AuditRun,
   AuditRunCoverage,
   BaselineComparison,
@@ -22,6 +25,7 @@ import type {
   EffectiveRule,
   EnvironmentsResponse,
   Finding,
+  FindingAction,
   FindingEvent,
   FindingsTrendResponse,
   FunctionSnapshot,
@@ -36,6 +40,7 @@ import type {
   ObjectMapping,
   PagedResponse,
   PolicySnapshot,
+  RegressionAlert,
   RelationshipGraph,
   ReportFilters,
   ReportJob,
@@ -299,6 +304,36 @@ export const api = {
       reportToken = "";
     }
   },
+  changePassword: async (current: string, next: string) => {
+    const result = await postJSON<{ status: string; next: string }>(
+      "/api/v1/auth/password",
+      { current, new: next },
+    );
+    clearSession();
+    window.dispatchEvent(new Event("auditor:session-expired"));
+    return result;
+  },
+  accounts: () => getJSON<ItemsResponse<AuditorAccount>>("/api/v1/auth/users"),
+  createAccount: (body: {
+    username: string;
+    password: string;
+    role: AuditorAccount["role"];
+    environments: string[];
+  }) => postJSON<{ user: AuditorAccount }>("/api/v1/auth/users", body),
+  updateAccount: (
+    id: string,
+    body: {
+      role: AuditorAccount["role"];
+      active: boolean;
+      environments: string[];
+      new_password?: string;
+    },
+  ) => patchJSON<{ user: AuditorAccount }>(`/api/v1/auth/users/${id}`, body),
+  revokeAccountSessions: (id: string) =>
+    postJSON<{ status: string }>(
+      `/api/v1/auth/users/${id}/sessions/revoke`,
+      {},
+    ),
   setReportToken: (value: string) => {
     reportToken = value;
   },
@@ -621,6 +656,32 @@ export const api = {
     getJSON<ItemsResponse<BaselineComparison>>(
       `/api/v1/environments/${environmentId}/baseline/comparisons${qs({ audit_run_id: auditRunId })}`,
     ),
+  annotations: (environmentId: string) =>
+    getJSON<ItemsResponse<AuditAnnotation>>(
+      `/api/v1/environments/${environmentId}/annotations`,
+    ),
+  createAnnotation: (
+    environmentId: string,
+    body: {
+      audit_run_id?: string;
+      kind: AuditAnnotation["kind"];
+      note: string;
+      occurred_at: string;
+    },
+  ) =>
+    postJSON<AuditAnnotation>(
+      `/api/v1/environments/${environmentId}/annotations`,
+      body,
+    ),
+  regressions: (environmentId: string) =>
+    getJSON<ItemsResponse<RegressionAlert>>(
+      `/api/v1/environments/${environmentId}/regressions`,
+    ),
+  acknowledgeRegression: (environmentId: string, id: string, reason: string) =>
+    postJSON<{ status: string }>(
+      `/api/v1/environments/${environmentId}/regressions/${id}/acknowledge`,
+      { reason },
+    ),
   scopeScore: (
     environmentId: string,
     runId: string,
@@ -630,6 +691,22 @@ export const api = {
   ) =>
     getJSON<ScopeScore>(
       `/api/v1/environments/${environmentId}/runs/${runId}/score${qs({ database, schema, table })}`,
+    ),
+  compareScopeScore: (
+    environmentId: string,
+    runId: string,
+    database?: string,
+    schema?: string,
+    table?: string,
+  ) =>
+    getJSON<{
+      status: string;
+      reason: string;
+      delta?: number;
+      current?: ScopeScore;
+      baseline?: ScopeScore;
+    }>(
+      `/api/v1/environments/${environmentId}/runs/${runId}/score/compare${qs({ database, schema, table })}`,
     ),
   scopeScores: (environmentId: string, runId: string) =>
     getJSON<{ items: ScopeAggregate[]; version: string }>(
@@ -777,6 +854,19 @@ export const api = {
       `/api/v1/finding-categories/${category}${qs(params)}`,
     ),
   finding: (id: string) => getJSON<Finding>(`/api/v1/findings/${id}`),
+  findingAction: (id: string) =>
+    getJSON<FindingAction>(`/api/v1/findings/${id}/action`),
+  findingActionEvents: (id: string) =>
+    getJSON<ItemsResponse<ActionEvent>>(`/api/v1/findings/${id}/action/events`),
+  updateFindingAction: (
+    id: string,
+    body: {
+      status: string;
+      owner: string;
+      justification: string;
+      result: string;
+    },
+  ) => patchJSON<FindingAction>(`/api/v1/findings/${id}/action`, body),
   findingTimeline: (id: string) =>
     getJSON<ItemsResponse<FindingEvent>>(`/api/v1/findings/${id}/timeline`),
   suppressFinding: (id: string, reason: string, suppressedUntil: string) =>

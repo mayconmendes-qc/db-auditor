@@ -12,6 +12,8 @@ export type NavigationSection =
   | "Performance"
   | "Segurança"
   | "Regras"
+  | "Contas"
+  | "Acompanhamento"
   | "Status";
 
 export interface HealthResponse {
@@ -104,10 +106,86 @@ export interface RunTrendPoint {
   audit_run_id: string;
   at: string;
   status: "success" | "partial_success";
+  profile: string;
+  collector_version: string;
+  rule_version?: string;
+  coverage: "complete" | "partial";
+  comparable: boolean;
+  comparison_note?: string;
   size_bytes?: number;
   findings?: number;
   critical?: number;
   high?: number;
+}
+
+export interface FindingAction {
+  finding_id: string;
+  environment_id: string;
+  source_run_id?: string;
+  rule_id: string;
+  target: string;
+  severity: string;
+  confidence: number;
+  evidence: Record<string, unknown>;
+  coverage: string;
+  suggestion: string;
+  plan: {
+    category: string;
+    expected_benefit: string;
+    risk: string;
+    prerequisites: string;
+    confirmation: string;
+    validation: string;
+    false_positive_risk: string;
+    read_only_query?: string;
+  };
+  status: string;
+  owner: string;
+  justification: string;
+  result: string;
+  updated_by?: string;
+  updated_at?: string;
+}
+
+export interface ActionEvent {
+  status: string;
+  owner: string;
+  justification: string;
+  result: string;
+  actor: string;
+  recorded_at: string;
+}
+
+export interface AuditorAccount {
+  id: string;
+  username: string;
+  role: "viewer" | "auditor" | "operator";
+  active: boolean;
+  environments: string[];
+  updated_at: string;
+}
+
+export interface AuditAnnotation {
+  id: string;
+  environment_id: string;
+  audit_run_id?: string;
+  kind: "deployment" | "maintenance" | "incident" | "note";
+  note: string;
+  actor: string;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface RegressionAlert {
+  id: string;
+  environment_id: string;
+  baseline_run_id: string;
+  audit_run_id: string;
+  category: "structure" | "findings";
+  evidence: Record<string, unknown>;
+  status: "open" | "acknowledged";
+  reason: string;
+  created_at: string;
 }
 
 export interface JobHealthItem {
@@ -591,6 +669,7 @@ export interface ReportFilters {
   schema?: string;
   table?: string;
   severity?: string;
+  redaction?: "none" | "identifiers" | "strict";
 }
 
 export interface ReportJob {

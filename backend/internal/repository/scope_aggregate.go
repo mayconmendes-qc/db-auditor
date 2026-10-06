@@ -8,8 +8,8 @@ import (
 )
 
 // ScopeAggregate is one schema or database score derived from covered tables.
-// It uses the same category penalties as structural-v1 / scope-v1. A missing
-// index collector nulls the score instead of reporting 100.
+// It uses the same category penalties as scope-v2. Missing collection or
+// analysis nulls the score instead of reporting 100.
 type ScopeAggregate struct {
 	DatabaseName      string   `json:"database_name"`
 	SchemaName        string   `json:"schema_name,omitempty"`
@@ -61,6 +61,10 @@ func (s *Store) ListScopeAggregates(ctx context.Context, environmentID, runID st
 		return []ScopeAggregate{}, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	var analyzed bool
+	if err = s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM analysis_run WHERE audit_run_id=$1::uuid AND status='success')`, runID).Scan(&analyzed); err != nil {
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
@@ -131,7 +135,14 @@ ORDER BY database_name, schema_name`, runID)
 	partial := runStatus != "success"
 	out := make([]ScopeAggregate, 0, len(order))
 	for _, k := range order {
-		out = append(out, AggregateScopeScores(k.db, k.schema, obs[k], tables[k], !covered[k.db], partial))
+		item := AggregateScopeScores(k.db, k.schema, obs[k], tables[k], !covered[k.db], partial)
+		if !analyzed {
+			item.Status = "insufficient_coverage"
+			item.MissingCollectors = append(item.MissingCollectors, "analysis")
+			item.Score = nil
+			item.Confidence = 0
+		}
+		out = append(out, item)
 	}
 	return out, nil
 }

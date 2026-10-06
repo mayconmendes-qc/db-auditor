@@ -1,3 +1,4 @@
+export { AccountsPage } from "./AccountsPage";
 export { AuditRunsPage } from "./AuditRunsPage";
 export { DashboardPage } from "./DashboardPage";
 export { DocsPage } from "./DocsPage";
@@ -5,6 +6,7 @@ export { EnvironmentsPage } from "./EnvironmentsPage";
 export { FindingsPage } from "./FindingsPage";
 export { InventoryPage } from "./InventoryPage";
 export { MappingsPage } from "./MappingsPage";
+export { MonitoringPage } from "./MonitoringPage";
 export { PerformancePage } from "./PerformancePage";
 export { ReportsPage } from "./ReportsPage";
 export { RulesPage } from "./RulesPage";
