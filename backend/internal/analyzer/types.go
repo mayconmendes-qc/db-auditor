@@ -68,6 +68,7 @@ type Finding struct {
 type SnapshotFacts struct {
 	EnvironmentID      string
 	AuditRunID         string
+	Engine             string
 	RulePolicies       []RulePolicy
 	Tables             []TableFact
 	Columns            []ColumnFact

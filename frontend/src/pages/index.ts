@@ -1,4 +1,5 @@
 export { AccountsPage } from "./AccountsPage";
+export { AssistedActionsPage } from "./AssistedActionsPage";
 export { AuditRunsPage } from "./AuditRunsPage";
 export { DashboardPage } from "./DashboardPage";
 export { DocsPage } from "./DocsPage";

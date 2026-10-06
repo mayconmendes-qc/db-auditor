@@ -14,6 +14,7 @@ export type NavigationSection =
   | "Regras"
   | "Contas"
   | "Acompanhamento"
+  | "Ações assistidas"
   | "Status";
 
 export interface HealthResponse {
@@ -50,6 +51,13 @@ export interface StatusResponse {
   open_findings: number;
   failed_runs_recent: number;
   notes?: string[];
+  storage?: {
+    snapshots_bytes: number;
+    report_jobs_bytes: number;
+    pdf_artifacts_bytes: number;
+    quality_history_bytes: number;
+    action_history_bytes: number;
+  };
 }
 
 export interface DashboardKPIs {
@@ -165,6 +173,99 @@ export interface AuditorAccount {
   updated_at: string;
 }
 
+export interface EngineCapability {
+  name: string;
+  applicable: boolean;
+  reason?: string;
+}
+
+export interface EnvironmentCapabilities {
+  environment_id: string;
+  engine: string;
+  audit_run_id?: string;
+  items: EngineCapability[];
+}
+
+export interface QualityPlan {
+  meaning: string;
+  confirmation: string;
+  external_steps: string;
+  validation: string;
+  risk: string;
+}
+
+export interface QualityIssue {
+  id: string;
+  check_kind: "null" | "duplicate" | "orphan" | "date_range" | "distribution";
+  column_name: string;
+  affected_rows: number;
+  sampled_rows: number;
+  status: string;
+  owner: string;
+  justification: string;
+  result: string;
+  updated_by: string;
+  plan: QualityPlan;
+  previous_affected_rows?: number;
+  comparable: boolean;
+  comparison_note: string;
+}
+
+export interface QualityScan {
+  id: string;
+  environment_id: string;
+  database: string;
+  schema: string;
+  table: string;
+  sample_limit: number;
+  sampled_rows: number;
+  sample_method: string;
+  actor: string;
+  created_at: string;
+  issues: QualityIssue[];
+}
+
+export interface QualityRequest {
+  database: string;
+  schema: string;
+  table: string;
+  limit: number;
+  expected_non_null: string[];
+  candidate_keys: string[];
+  date_ranges: Array<{ column: string; from: string; to: string }>;
+}
+
+export interface ActionMeasurement {
+  id: string;
+  finding_id: string;
+  before_run_id: string;
+  after_run_id: string;
+  metric: "table_size_bytes" | "finding_observed";
+  before_value: number | null;
+  after_value: number | null;
+  comparable: boolean;
+  comparison_note: string;
+  hypothesis: string;
+  window_note: string;
+  recorded_by: string;
+  recorded_at: string;
+}
+
+export interface TrackedAction {
+  finding_id: string;
+  environment_id: string;
+  title: string;
+  severity: string;
+  status: string;
+  owner: string;
+  result: string;
+  recurrences: number;
+  due_at?: string;
+  latest_measurement?: ActionMeasurement;
+  potential_reclaim_bytes?: number;
+  estimate_note: string;
+}
+
 export interface AuditAnnotation {
   id: string;
   environment_id: string;
@@ -205,6 +306,7 @@ export interface Environment {
   id: string;
   name: string;
   type: string;
+  engine: string;
   discovery_mode: string;
   active: boolean;
   created_at: string;

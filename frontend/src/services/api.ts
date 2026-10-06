@@ -1,6 +1,7 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
   ActionEvent,
+  ActionMeasurement,
   AnalysisRun,
   AnalyzeResult,
   AuditAnnotation,
@@ -23,6 +24,7 @@ import type {
   DependencySnapshot,
   DimensionSnapshot,
   EffectiveRule,
+  EnvironmentCapabilities,
   EnvironmentsResponse,
   Finding,
   FindingAction,
@@ -40,6 +42,8 @@ import type {
   ObjectMapping,
   PagedResponse,
   PolicySnapshot,
+  QualityRequest,
+  QualityScan,
   RegressionAlert,
   RelationshipGraph,
   ReportFilters,
@@ -55,6 +59,7 @@ import type {
   TableAssessment,
   TableHistoryPoint,
   TableSnapshot,
+  TrackedAction,
   TriggerSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
@@ -407,6 +412,34 @@ export const api = {
   reportFindings: (params?: AnalyticsParams) =>
     getJSON<Record<string, unknown>>(`/api/v1/reports/findings${qs(params)}`),
   environments: () => getJSON<EnvironmentsResponse>("/api/v1/environments"),
+  environmentCapabilities: (env: string) =>
+    getJSON<EnvironmentCapabilities>(
+      `/api/v1/environments/${env}/capabilities`,
+    ),
+  qualityScans: (env: string) =>
+    getJSON<ItemsResponse<QualityScan> & { enabled: boolean }>(
+      `/api/v1/environments/${env}/quality-scans`,
+    ),
+  runQualityScan: (env: string, body: QualityRequest) =>
+    postJSON<QualityScan>(`/api/v1/environments/${env}/quality-scans`, body),
+  updateQualityIssue: (
+    env: string,
+    issue: string,
+    body: {
+      status: string;
+      owner: string;
+      justification: string;
+      result: string;
+    },
+  ) =>
+    patchJSON<QualityScan>(
+      `/api/v1/environments/${env}/quality-issues/${issue}`,
+      body,
+    ),
+  trackedActions: (env: string) =>
+    getJSON<ItemsResponse<TrackedAction>>(
+      `/api/v1/environments/${env}/actions`,
+    ),
   databases: (environmentId: string) =>
     getJSON<ItemsResponse<DatabaseSnapshot>>(
       `/api/v1/environments/${environmentId}/databases`,
@@ -858,6 +891,24 @@ export const api = {
     getJSON<FindingAction>(`/api/v1/findings/${id}/action`),
   findingActionEvents: (id: string) =>
     getJSON<ItemsResponse<ActionEvent>>(`/api/v1/findings/${id}/action/events`),
+  actionMeasurements: (id: string) =>
+    getJSON<ItemsResponse<ActionMeasurement>>(
+      `/api/v1/findings/${id}/action/measurements`,
+    ),
+  recordActionMeasurement: (
+    id: string,
+    body: {
+      before_run_id: string;
+      after_run_id: string;
+      metric: ActionMeasurement["metric"];
+      hypothesis: string;
+      window_note: string;
+    },
+  ) =>
+    postJSON<ActionMeasurement>(
+      `/api/v1/findings/${id}/action/measurements`,
+      body,
+    ),
   updateFindingAction: (
     id: string,
     body: {

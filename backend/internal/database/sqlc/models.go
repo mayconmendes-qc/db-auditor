@@ -58,6 +58,7 @@ type AuditEnvironment struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	ExpectsReplica bool
+	Engine         string
 }
 
 type AuditRun struct {
@@ -407,6 +408,22 @@ type FindingActionEvent struct {
 	RecordedAt    pgtype.Timestamptz
 }
 
+type FindingActionMeasurement struct {
+	ID             pgtype.UUID
+	FindingID      pgtype.UUID
+	BeforeRunID    pgtype.UUID
+	AfterRunID     pgtype.UUID
+	Metric         string
+	BeforeValue    pgtype.Int8
+	AfterValue     pgtype.Int8
+	Comparable     bool
+	ComparisonNote string
+	Hypothesis     string
+	WindowNote     string
+	RecordedBy     string
+	RecordedAt     pgtype.Timestamptz
+}
+
 type FindingEvent struct {
 	ID             pgtype.UUID
 	FindingID      pgtype.UUID
@@ -590,6 +607,46 @@ type PolicySnapshot struct {
 	NextStart        pgtype.Timestamptz
 	OwnerName        pgtype.Text
 	CollectedAt      pgtype.Timestamptz
+}
+
+type QualityIssue struct {
+	ID            pgtype.UUID
+	ScanID        pgtype.UUID
+	CheckKind     string
+	ColumnName    string
+	AffectedRows  int32
+	SampledRows   int32
+	Status        string
+	OwnerName     string
+	Justification string
+	ResultNote    string
+	UpdatedBy     string
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type QualityIssueEvent struct {
+	ID             pgtype.UUID
+	IssueID        pgtype.UUID
+	PreviousStatus string
+	NewStatus      string
+	Actor          string
+	OwnerName      string
+	Justification  string
+	ResultNote     string
+	RecordedAt     pgtype.Timestamptz
+}
+
+type QualityScan struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	SchemaName    string
+	TableName     string
+	SampleLimit   int32
+	SampledRows   int32
+	SampleMethod  string
+	Actor         string
+	CreatedAt     pgtype.Timestamptz
 }
 
 type RegressionAlert struct {

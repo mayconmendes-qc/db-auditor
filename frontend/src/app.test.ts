@@ -19,6 +19,7 @@ describe("navigationSections", () => {
       "Regras",
       "Contas",
       "Acompanhamento",
+      "Ações assistidas",
       "Status",
     ]);
   });
