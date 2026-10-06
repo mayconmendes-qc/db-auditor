@@ -67,6 +67,8 @@ Release MVP: `docs/mvp-release.md`.
 
 ### Relatórios PDF (Sprints 18–19)
 
+As funcionalidades da segunda etapa (planos de ação, gestão de contas, redação de PDFs, acompanhamento e regressões) estão descritas em [docs/second-stage-operations.md](docs/second-stage-operations.md). As recomendações são orientações para revisão humana: o auditor não executa alterações no banco analisado.
+
 Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local. O primeiro acesso está na seção acima. Use HTTPS em produção.
 
 Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; os metadados do histórico são preservados por mais 90 dias. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.

@@ -38,6 +38,7 @@ type Document struct {
 	TotalFindings   int
 	Baseline        *Baseline
 	Truncated       bool
+	RedactionLevel  string
 }
 
 type Database struct {
@@ -55,6 +56,7 @@ type Table struct {
 	HasPrimaryKey bool
 }
 type Finding struct {
+	ID             string
 	Type           string
 	Severity       string
 	Category       string
@@ -78,6 +80,8 @@ type Baseline struct {
 
 type GrowthPoint struct {
 	RunID     string
+	At        time.Time
+	Status    string
 	SizeBytes int64
 	Tables    int
 }
@@ -112,7 +116,11 @@ func BuildLines(d Document) []Line {
 		}
 		return a.Severity+a.Category+a.Database+a.Schema+a.Object+a.Title < b.Severity+b.Category+b.Database+b.Schema+b.Object+b.Title
 	})
-	lines := []Line{{"DB Auditor - Relatório " + reportTypeLabel(d.Type), "title"}, {"Ambiente: " + d.Environment, "body"}, {"Execução: " + d.RunID, "body"}, {"Início: " + d.RunStarted.UTC().Format(time.RFC3339) + " | Estado: " + d.RunStatus, "body"}, {"Versão do serviço: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
+	redaction := d.RedactionLevel
+	if redaction == "" {
+		redaction = "none"
+	}
+	lines := []Line{{"DB Auditor - Relatório " + reportTypeLabel(d.Type), "title"}, {"Nível de redação: " + redaction, "body"}, {"Ambiente: " + d.Environment, "body"}, {"Execução: " + d.RunID, "body"}, {"Início: " + d.RunStarted.UTC().Format(time.RFC3339) + " | Estado: " + d.RunStatus, "body"}, {"Versão do serviço: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
 	critical, high := 0, 0
 	severityCounts := map[string]int{}
 	for _, f := range d.Findings {
@@ -125,6 +133,7 @@ func BuildLines(d Document) []Line {
 		}
 	}
 	lines = append(lines, Line{fmt.Sprintf("%d bancos | %d tabelas | %d %s (%d %s, %d %s)", len(d.Databases), d.TotalTables, d.TotalFindings, plural(d.TotalFindings, "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), "body"})
+	lines = append(lines, Line{"Como ler: confirme primeiro a cobertura e os itens críticos; a nota resume sinais observados, não substitui a investigação.", "body"})
 	lines = append(lines, Line{Text: "Achados por severidade (itens incluídos no PDF)", Style: "subheading"})
 	for _, severity := range []struct{ key, label string }{{"critical", "Críticos"}, {"high", "Altos"}, {"medium", "Médios"}, {"low", "Baixos"}, {"info", "Informativos"}} {
 		lines = append(lines, Line{Text: fmt.Sprintf("%s|%d|%d", severity.label, severityCounts[severity.key], len(d.Findings)), Style: "bar"})
@@ -148,13 +157,49 @@ func BuildLines(d Document) []Line {
 		lines = append(lines, Line{"Histórico e referência de comparação", "heading"}, Line{fmt.Sprintf("Referência %s | %s | +%d / -%d tabelas, %d alteradas", d.Baseline.RunID, d.Baseline.Status, d.Baseline.AddedTables, d.Baseline.RemovedTables, d.Baseline.ChangedTables), "body"})
 	}
 	if len(d.Growth) > 0 {
-		lines = append(lines, Line{"Evolução de armazenamento", "heading"})
+		lines = append(lines, Line{"Evolução de armazenamento", "heading"}, Line{"Barras: tamanho total das tabelas na execução (bytes); período e coleta parcial estão identificados em cada linha.", "body"})
+		var maximum int64
 		for _, point := range d.Growth {
-			lines = append(lines, Line{fmt.Sprintf("Execução %s: %d bytes / %d tabelas", point.RunID, point.SizeBytes, point.Tables), "body"})
+			if point.SizeBytes > maximum {
+				maximum = point.SizeBytes
+			}
+		}
+		for _, point := range d.Growth {
+			at := point.At.UTC().Format("02/01/2006")
+			if point.At.IsZero() {
+				at = "data indisponível"
+			}
+			shortID := point.RunID
+			if len(shortID) > 8 {
+				shortID = shortID[:8]
+			}
+			label := at + " " + shortID
+			if point.Status == "partial_success" {
+				label += " (parcial)"
+			}
+			lines = append(lines, Line{fmt.Sprintf("%s|%d|%d", label, point.SizeBytes, maximum), "bar_bytes"}, Line{fmt.Sprintf("Execução %s: %d bytes em %d tabelas", point.RunID, point.SizeBytes, point.Tables), "body"})
+		}
+		if len(d.Growth) > 1 {
+			first, last := d.Growth[0], d.Growth[len(d.Growth)-1]
+			lines = append(lines, Line{fmt.Sprintf("Variação entre o primeiro e o último ponto: %+d bytes. Confirme que perfil e cobertura são comparáveis antes de atribuir a mudança a uma ação.", last.SizeBytes-first.SizeBytes), "body"})
+		}
+	}
+	lines = append(lines, Line{"Riscos e prioridades", "heading"})
+	lines = append(lines, Line{"Matriz de decisão (impacto / esforço / risco): impacto é a severidade observada; esforço e risco operacional exigem avaliação da equipe responsável.", "body"})
+	if len(d.Findings) == 0 {
+		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
+	}
+	for _, f := range d.Findings {
+		friendly := guidance.For(f.Type)
+		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(f.Severity), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
+		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço: não estimado | risco da mudança: avaliar", f.ID, severityLabel(f.Severity)), "body"})
+		lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"}, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
+		if d.Type == "technical" || d.Type == "table" {
+			lines = append(lines, Line{"Resumo original da regra: " + f.Summary, "body"}, Line{"Recomendação técnica original: " + f.Recommendation, "body"})
 		}
 	}
 	if d.Type == "technical" || d.Type == "table" {
-		lines = append(lines, Line{"Inventário técnico", "heading"})
+		lines = append(lines, Line{"Inventário técnico (apêndice)", "heading"})
 		for _, db := range d.Databases {
 			lines = append(lines, Line{fmt.Sprintf("Banco %s: %d esquemas, %d tabelas, %d bytes", db.Name, db.Schemas, db.Tables, db.SizeBytes), "body"})
 		}
@@ -164,18 +209,6 @@ func BuildLines(d Document) []Line {
 				primaryKey = "Sim"
 			}
 			lines = append(lines, Line{fmt.Sprintf("%s.%s.%s | %d bytes | %d linhas estimadas | PK: %s", table.Database, table.Schema, table.Name, table.SizeBytes, table.Rows, primaryKey), "body"})
-		}
-	}
-	lines = append(lines, Line{"Riscos e prioridades", "heading"})
-	if len(d.Findings) == 0 {
-		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
-	}
-	for _, f := range d.Findings {
-		friendly := guidance.For(f.Type)
-		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(f.Severity), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
-		lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"}, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
-		if d.Type == "technical" || d.Type == "table" {
-			lines = append(lines, Line{"Resumo original da regra: " + f.Summary, "body"}, Line{"Recomendação técnica original: " + f.Recommendation, "body"})
 		}
 	}
 	lines = append(lines, Line{Text: "Análise final e próximos passos", Style: "heading"})

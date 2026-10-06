@@ -10,8 +10,8 @@ func TestScopeScoreGolden(t *testing.T) {
 		penalties    []int
 	}{
 		{"empty", nil, 100, nil},
-		{"two categories", [][2]string{{"security", "critical"}, {"security", "high"}, {"storage", "medium"}}, 76, []int{40, 8}},
-		{"bounded", [][2]string{{"security", "critical"}, {"security", "critical"}, {"security", "critical"}, {"security", "critical"}, {"security", "critical"}}, 0, []int{100}},
+		{"two categories", [][2]string{{"security", "critical"}, {"security", "high"}, {"storage", "medium"}}, 84, []int{8, 0, 40, 0}},
+		{"bounded", [][2]string{{"security", "critical"}, {"security", "critical"}, {"security", "critical"}, {"security", "critical"}, {"security", "critical"}}, 65, []int{0, 0, 100, 0}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -21,6 +21,8 @@ export const navigationSections: NavigationSection[] = [
   "Performance",
   "Segurança",
   "Regras",
+  "Contas",
+  "Acompanhamento",
   "Status",
 ];
 
@@ -47,7 +49,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
       "Regras",
     ],
   },
-  { label: "Sistema", items: ["Status"] },
+  { label: "Sistema", items: ["Acompanhamento", "Contas", "Status"] },
 ];
 
 export interface ShellProps {

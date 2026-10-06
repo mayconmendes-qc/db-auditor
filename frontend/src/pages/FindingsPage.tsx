@@ -22,7 +22,12 @@ import { labels } from "../lib/labels";
 import { fetchAllPages } from "../lib/pagination";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
-import type { Finding, FindingEvent } from "../types";
+import type {
+  ActionEvent,
+  Finding,
+  FindingAction,
+  FindingEvent,
+} from "../types";
 
 function severityTone(
   severity: string,
@@ -97,16 +102,26 @@ export function FindingsPage() {
     setSearch,
     findingId,
     openFinding,
+    openInventory,
   } = useApp();
   const [items, setItems] = useState<Finding[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<PageSize>(20);
   const [error, setError] = useState<string | null>(null);
+  const [emptyMessage, setEmptyMessage] = useState(
+    "Nenhum achado observado nesta execução.",
+  );
   const [busy, setBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [timeline, setTimeline] = useState<FindingEvent[]>([]);
+  const [action, setAction] = useState<FindingAction | null>(null);
+  const [actionEvents, setActionEvents] = useState<ActionEvent[]>([]);
+  const [actionStatus, setActionStatus] = useState("suggested");
+  const [actionOwner, setActionOwner] = useState("");
+  const [actionJustification, setActionJustification] = useState("");
+  const [actionResult, setActionResult] = useState("");
   const [suppressionReason, setSuppressionReason] = useState("");
   const [suppressedUntil, setSuppressedUntil] = useState("");
 
@@ -123,6 +138,34 @@ export function FindingsPage() {
       })
       .catch(() => {
         if (active) setTimeline([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selected?.id]);
+  useEffect(() => {
+    if (!selected) {
+      setAction(null);
+      setActionEvents([]);
+      return;
+    }
+    let active = true;
+    void Promise.all([
+      api.findingAction(selected.id),
+      api.findingActionEvents(selected.id),
+    ])
+      .then(([item, events]) => {
+        if (!active) return;
+        setAction(item);
+        setActionEvents(events.items);
+        setActionStatus(item.status);
+        setActionOwner(item.owner);
+        setActionJustification(item.justification);
+        setActionResult(item.result);
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(formatError(cause, "Falha ao carregar plano de ação"));
       });
     return () => {
       active = false;
@@ -148,12 +191,14 @@ export function FindingsPage() {
         assignee: mine ? "me" : undefined,
         overdue: overdueOnly ? "1" : undefined,
       };
+      let count = 0;
       if (pageSize === "all") {
         const rows = await fetchAllPages((pageOffset, limit) =>
           api.findingsPage({ ...filters, offset: pageOffset, limit }),
         );
         setItems(rows);
         setTotal(rows.length);
+        count = rows.length;
       } else {
         const res = await api.findingsPage({
           ...filters,
@@ -162,6 +207,31 @@ export function FindingsPage() {
         });
         setItems(res.items);
         setTotal(res.page.total);
+        count = res.page.total;
+      }
+      if (count === 0) {
+        const unfiltered = await api.findingsPage({
+          environment_id: environmentId || undefined,
+          offset: 0,
+          limit: 1,
+        });
+        if (unfiltered.page.total > 0) {
+          setEmptyMessage(
+            "Nenhum achado corresponde aos filtros. Limpe os filtros para ver os demais.",
+          );
+        } else {
+          const runs = await api.auditRuns({
+            environment_id: environmentId || undefined,
+          });
+          setEmptyMessage(
+            runs.items.some(
+              (run) =>
+                run.status === "success" || run.status === "partial_success",
+            )
+              ? "Nenhum achado observado. Confira a cobertura e a análise da execução antes de concluir que não há riscos."
+              : "Ainda não há coleta concluída. Execute uma auditoria para gerar diagnósticos.",
+          );
+        }
       }
       setSelectedIds(new Set());
     } catch (err: unknown) {
@@ -242,6 +312,23 @@ export function FindingsPage() {
       setSelected(updated);
     } catch (err: unknown) {
       setError(formatError(err, "Falha ao salvar responsável ou prazo"));
+    }
+  };
+
+  const saveAction = async () => {
+    if (!selected) return;
+    try {
+      const item = await api.updateFindingAction(selected.id, {
+        status: actionStatus,
+        owner: actionOwner.trim(),
+        justification: actionJustification.trim(),
+        result: actionResult.trim(),
+      });
+      setAction(item);
+      setActionEvents((await api.findingActionEvents(selected.id)).items);
+      setError(null);
+    } catch (cause) {
+      setError(formatError(cause, "Falha ao salvar plano de ação"));
     }
   };
 
@@ -573,10 +660,10 @@ export function FindingsPage() {
         ) : null}
         {busy ? <Skeleton className="h-40 w-full" /> : null}
 
-        {!busy && items.length === 0 ? (
+        {!busy && !error && items.length === 0 ? (
           <EmptyState
-            title="Sem findings"
-            description="Nenhum resultado após filtros. Execute uma auditoria ou limpe os filtros."
+            title="Nenhum achado para mostrar"
+            description={emptyMessage}
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button
@@ -632,6 +719,8 @@ export function FindingsPage() {
               {sortedItems.map((f) => (
                 <tr
                   key={f.id}
+                  tabIndex={0}
+                  aria-label={`Abrir achado: ${f.friendly_meaning ?? f.title}`}
                   className="cursor-pointer border-t border-slate-800 hover:bg-slate-900/50"
                   onClick={() => {
                     setSelected(f);
@@ -750,7 +839,156 @@ export function FindingsPage() {
                 {selected.friendly_next ??
                   findingGuidance(selected.finding_type).next}
               </li>
+              {selected.audit_run_id ? (
+                <li>Execução de origem: {selected.audit_run_id}</li>
+              ) : null}
             </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selected.object_type === "table" &&
+              selected.database_name &&
+              selected.schema_name &&
+              selected.object_name ? (
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    openInventory({
+                      database: selected.database_name ?? "",
+                      schema: selected.schema_name ?? "",
+                      table: selected.object_name ?? "",
+                    })
+                  }
+                >
+                  Abrir objeto no inventário
+                </Button>
+              ) : null}
+              <Button variant="secondary" onClick={() => setSection("Regras")}>
+                Ver catálogo de regras
+              </Button>
+            </div>
+            {action ? (
+              <section
+                className="mt-5 rounded border border-slate-700 bg-slate-950/50 p-4"
+                aria-labelledby="action-heading"
+              >
+                <h3
+                  id="action-heading"
+                  className="text-sm font-semibold text-slate-100"
+                >
+                  Plano de ação sugerido
+                </h3>
+                <p className="mt-2 text-sm text-slate-200">
+                  {action.suggestion}
+                </p>
+                <p className="mt-1 text-xs text-amber-300">
+                  Cobertura: {action.coverage}.{" "}
+                  {action.coverage !== "complete"
+                    ? "Confirme com nova coleta antes de decidir."
+                    : "A sugestão ainda exige validação humana."}
+                </p>
+                <dl className="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+                  <div>
+                    <dt className="font-semibold">Benefício esperado</dt>
+                    <dd>{action.plan.expected_benefit}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">Risco</dt>
+                    <dd>{action.plan.risk}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">Pré-requisitos</dt>
+                    <dd>{action.plan.prerequisites}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">Como confirmar</dt>
+                    <dd>{action.plan.confirmation}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">Como validar depois</dt>
+                    <dd>{action.plan.validation}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">Possível falso positivo</dt>
+                    <dd>{action.plan.false_positive_risk}</dd>
+                  </div>
+                </dl>
+                {action.plan.read_only_query ? (
+                  <details className="mt-3 text-xs text-slate-400">
+                    <summary>
+                      Consulta de confirmação para revisão externa
+                    </summary>
+                    <pre className="mt-2 overflow-auto">
+                      {action.plan.read_only_query}
+                    </pre>
+                  </details>
+                ) : null}
+                <p className="mt-3 text-xs text-slate-400">
+                  O auditor não executa alterações no banco analisado. Registre
+                  o resultado após a ação externa.
+                </p>
+                {api.hasRole("auditor") ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs text-slate-300">
+                      Estado
+                      <select
+                        value={actionStatus}
+                        onChange={(e) => setActionStatus(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 p-2"
+                      >
+                        <option value="suggested">Sugerida</option>
+                        <option value="in_review">Em análise</option>
+                        <option value="planned">Planejada</option>
+                        <option value="executed_externally">
+                          Executada externamente
+                        </option>
+                        <option value="validated">Validada</option>
+                        <option value="discarded">Descartada</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-slate-300">
+                      Responsável
+                      <input
+                        value={actionOwner}
+                        onChange={(e) => setActionOwner(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 p-2"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-300">
+                      Justificativa
+                      <textarea
+                        value={actionJustification}
+                        onChange={(e) => setActionJustification(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 p-2"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-300">
+                      Resultado ou evidência posterior
+                      <textarea
+                        value={actionResult}
+                        onChange={(e) => setActionResult(e.target.value)}
+                        className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 p-2"
+                      />
+                    </label>
+                    <Button onClick={() => void saveAction()}>
+                      Salvar decisão
+                    </Button>
+                  </div>
+                ) : null}
+                {actionEvents.length ? (
+                  <details className="mt-3 text-xs text-slate-400">
+                    <summary>Histórico da ação ({actionEvents.length})</summary>
+                    <ul className="mt-2 space-y-1">
+                      {actionEvents.map((event, index) => (
+                        <li key={`${event.recorded_at}-${index}`}>
+                          {new Date(event.recorded_at).toLocaleString()} ·{" "}
+                          {event.actor} · {event.status}{" "}
+                          {event.result ? `· ${event.result}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </section>
+            ) : null}
             <details className="mt-3 text-xs text-slate-400">
               <summary className="cursor-pointer">
                 Detalhes técnicos da regra

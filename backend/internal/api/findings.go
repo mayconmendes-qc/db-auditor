@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/osmendes/db-auditor/internal/repository"
@@ -84,7 +85,76 @@ func registerFindingRoutes(mux *http.ServeMux, store FindingStore, analysis Anal
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 	mux.HandleFunc("PATCH /api/v1/findings/{id}", patchFinding(store))
+	registerFindingActionRoutes(mux, store)
 	mux.HandleFunc("POST /api/v1/findings/analyze", analyzeFindings(analysis))
+}
+
+func registerFindingActionRoutes(mux *http.ServeMux, store FindingStore) {
+	backend, ok := store.(interface {
+		GetFindingAction(context.Context, string) (*repository.FindingAction, error)
+		UpdateFindingAction(context.Context, string, string, repository.ActionProgress) (*repository.FindingAction, error)
+		ListFindingActionEvents(context.Context, string) ([]repository.ActionEvent, error)
+	})
+	if !ok {
+		return
+	}
+	mux.HandleFunc("GET /api/v1/findings/{id}/action", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Achado inválido.")
+			return
+		}
+		item, err := backend.GetFindingAction(r.Context(), id)
+		if err == repository.ErrActionNotFound {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Achado não encontrado.")
+		} else if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível preparar a ação.")
+		} else {
+			writeJSON(w, http.StatusOK, item)
+		}
+	})
+	mux.HandleFunc("GET /api/v1/findings/{id}/action/events", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Achado inválido.")
+			return
+		}
+		items, err := backend.ListFindingActionEvents(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível carregar o histórico da ação.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+	mux.HandleFunc("PATCH /api/v1/findings/{id}/action", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		var body repository.ActionProgress
+		if !uuidPattern.MatchString(id) || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Ação inválida.")
+			return
+		}
+		body.Owner, body.Justification, body.Result = strings.TrimSpace(body.Owner), strings.TrimSpace(body.Justification), strings.TrimSpace(body.Result)
+		validStatus := body.Status == "suggested" || body.Status == "in_review" || body.Status == "planned" || body.Status == "executed_externally" || body.Status == "validated" || body.Status == "discarded"
+		if !validStatus || len(body.Owner) > 128 || len(body.Justification) > 2000 || len(body.Result) > 2000 ||
+			(body.Status == "planned" && body.Owner == "") ||
+			(body.Status == "discarded" && body.Justification == "") ||
+			((body.Status == "executed_externally" || body.Status == "validated") && body.Result == "") {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Informe estado, responsável e justificativa ou resultado conforme a etapa.")
+			return
+		}
+		actor := "local"
+		if user := requestIdentity(r); user != nil {
+			actor = user.Username
+		}
+		item, err := backend.UpdateFindingAction(r.Context(), id, actor, body)
+		if err == repository.ErrActionNotFound {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Achado não encontrado.")
+		} else if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível salvar a ação.")
+		} else {
+			writeJSON(w, http.StatusOK, item)
+		}
+	})
 }
 
 func listFindings(store FindingStore) http.HandlerFunc {
