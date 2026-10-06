@@ -130,7 +130,7 @@ func Run(ctx context.Context, dsn string, request Request) (Result, error) {
 	}
 	for _, date := range request.DateRanges {
 		kind, ok := columns[date.Column]
-		if !ok || !(strings.HasPrefix(kind, "date") || strings.HasPrefix(kind, "timestamp")) {
+		if !ok || (!strings.HasPrefix(kind, "date") && !strings.HasPrefix(kind, "timestamp")) {
 			return result, fmt.Errorf("coluna de data fora do escopo")
 		}
 	}
