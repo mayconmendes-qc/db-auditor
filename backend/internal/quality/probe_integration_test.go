@@ -19,17 +19,29 @@ func TestReadOnlyAggregateProbeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Close(ctx)
+	defer func() {
+		if closeErr := admin.Close(ctx); closeErr != nil {
+			t.Error(closeErr)
+		}
+	}()
 	schema := "quality_test_" + time.Now().UTC().Format("150405000000")
 	role := "quality_reader_" + time.Now().UTC().Format("150405000000")
 	if _, err = admin.Exec(ctx, `CREATE ROLE `+pgx.Identifier{role}.Sanitize()+` LOGIN`); err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Exec(context.Background(), `DROP ROLE `+pgx.Identifier{role}.Sanitize())
+	defer func() {
+		if _, cleanupErr := admin.Exec(context.Background(), `DROP ROLE `+pgx.Identifier{role}.Sanitize()); cleanupErr != nil {
+			t.Error(cleanupErr)
+		}
+	}()
 	if _, err = admin.Exec(ctx, `CREATE SCHEMA `+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
-	defer admin.Exec(context.Background(), `DROP SCHEMA `+pgx.Identifier{schema}.Sanitize()+` CASCADE`)
+	defer func() {
+		if _, cleanupErr := admin.Exec(context.Background(), `DROP SCHEMA `+pgx.Identifier{schema}.Sanitize()+` CASCADE`); cleanupErr != nil {
+			t.Error(cleanupErr)
+		}
+	}()
 	qualified := pgx.Identifier{schema, "orders"}.Sanitize()
 	if _, err = admin.Exec(ctx, `CREATE TABLE `+qualified+` (key text, date_value timestamptz)`); err != nil {
 		t.Fatal(err)
