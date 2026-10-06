@@ -246,6 +246,13 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("reconcile completed run: %w", err)
 		}
 	}
+	if evaluator, ok := r.store.(interface {
+		EvaluateRegressionAlerts(context.Context, string, string) error
+	}); ok {
+		if err := evaluator.EvaluateRegressionAlerts(finalCtx, environmentID, auditRunID); err != nil {
+			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("evaluate regressions: %w", err)
+		}
+	}
 	if status == RunStatusFailed || status == RunStatusPartialSuccess {
 		notifyRun(finalCtx, r.store, environmentID, auditRunID, status)
 	}

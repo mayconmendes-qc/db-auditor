@@ -91,15 +91,21 @@ SELECT count(*) FILTER (WHERE status IN ('success','partial_success')),
 // RunTrendPoint is one representative completed run per UTC calendar bucket.
 // A nil SizeBytes means that the run had no database inventory.
 type RunTrendPoint struct {
-	EnvironmentID   string    `json:"environment_id"`
-	EnvironmentName string    `json:"environment_name"`
-	AuditRunID      string    `json:"audit_run_id"`
-	At              time.Time `json:"at"`
-	Status          string    `json:"status"`
-	SizeBytes       *int64    `json:"size_bytes,omitempty"`
-	Findings        *int      `json:"findings,omitempty"`
-	Critical        *int      `json:"critical,omitempty"`
-	High            *int      `json:"high,omitempty"`
+	EnvironmentID    string    `json:"environment_id"`
+	EnvironmentName  string    `json:"environment_name"`
+	AuditRunID       string    `json:"audit_run_id"`
+	At               time.Time `json:"at"`
+	Status           string    `json:"status"`
+	Profile          string    `json:"profile"`
+	CollectorVersion string    `json:"collector_version"`
+	RuleVersion      string    `json:"rule_version,omitempty"`
+	Coverage         string    `json:"coverage"`
+	Comparable       bool      `json:"comparable"`
+	ComparisonNote   string    `json:"comparison_note,omitempty"`
+	SizeBytes        *int64    `json:"size_bytes,omitempty"`
+	Findings         *int      `json:"findings,omitempty"`
+	Critical         *int      `json:"critical,omitempty"`
+	High             *int      `json:"high,omitempty"`
 }
 
 type StorageConsumer struct {
@@ -140,20 +146,22 @@ ORDER BY total_size_bytes DESC,database_name,schema_name,table_name LIMIT $2`, e
 // partial runs visible prevents an apparent gap from masquerading as zero.
 func (s *Store) ListStorageTrend(ctx context.Context, environmentID string, from, to time.Time, granularity string) ([]RunTrendPoint, error) {
 	rows, err := s.pool.Query(ctx, `WITH ranked AS (
- SELECT ar.id, ar.environment_id, e.name, ar.status, ar.started_at,
+ SELECT ar.id, ar.environment_id, e.name, ar.status, ar.started_at,ar.profile,ar.collector_version,
+ COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version,'') AS rule_version,
+ CASE WHEN ar.status='success' AND NOT EXISTS(SELECT 1 FROM audit_run_coverage c WHERE c.audit_run_id=ar.id AND c.status IN ('failed','skipped','attempted')) THEN 'complete' ELSE 'partial' END AS coverage,
  row_number() OVER (PARTITION BY ar.environment_id,
    date_trunc($4, ar.started_at AT TIME ZONE 'UTC')
    ORDER BY ar.started_at DESC, ar.id DESC) AS position
- FROM audit_run ar JOIN audit_environment e ON e.id=ar.environment_id
+ FROM audit_run ar JOIN audit_environment e ON e.id=ar.environment_id LEFT JOIN analysis_run a ON a.audit_run_id=ar.id
  WHERE ar.status IN ('success','partial_success')
    AND ar.started_at >= $2 AND ar.started_at < $3
    AND ($1='' OR ar.environment_id=$1::uuid)
 )
-SELECT r.environment_id::text, r.name, r.id::text, r.started_at, r.status,
+SELECT r.environment_id::text, r.name, r.id::text, r.started_at, r.status,r.profile,r.collector_version,r.rule_version,r.coverage,
        CASE WHEN count(d.id)=0 THEN NULL ELSE sum(d.size_bytes)::bigint END
 FROM ranked r LEFT JOIN database_snapshot d ON d.audit_run_id=r.id AND NOT d.is_template
 WHERE r.position=1
-GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status
+GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status,r.profile,r.collector_version,r.rule_version,r.coverage
 ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	if err != nil {
 		return nil, err
@@ -162,19 +170,25 @@ ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	out := []RunTrendPoint{}
 	for rows.Next() {
 		var p RunTrendPoint
-		if err := rows.Scan(&p.EnvironmentID, &p.EnvironmentName, &p.AuditRunID, &p.At, &p.Status, &p.SizeBytes); err != nil {
+		if err := rows.Scan(&p.EnvironmentID, &p.EnvironmentName, &p.AuditRunID, &p.At, &p.Status, &p.Profile, &p.CollectorVersion, &p.RuleVersion, &p.Coverage, &p.SizeBytes); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	markTrendComparability(out)
+	return out, nil
 }
 
 // ListFindingTrend only includes runs with a successful analysis. A completed
 // analysis with no observed events is a genuine zero; missing analysis is a gap.
 func (s *Store) ListFindingTrend(ctx context.Context, environmentID string, from, to time.Time, granularity string) ([]RunTrendPoint, error) {
 	rows, err := s.pool.Query(ctx, `WITH ranked AS (
- SELECT ar.id, ar.environment_id, e.name, ar.status, ar.started_at,
+ SELECT ar.id, ar.environment_id, e.name, ar.status, ar.started_at,ar.profile,ar.collector_version,
+ COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version,'') AS rule_version,
+ CASE WHEN ar.status='success' AND NOT EXISTS(SELECT 1 FROM audit_run_coverage c WHERE c.audit_run_id=ar.id AND c.status IN ('failed','skipped','attempted')) THEN 'complete' ELSE 'partial' END AS coverage,
  row_number() OVER (PARTITION BY ar.environment_id,
    date_trunc($4, ar.started_at AT TIME ZONE 'UTC')
    ORDER BY ar.started_at DESC, ar.id DESC) AS position
@@ -184,13 +198,13 @@ func (s *Store) ListFindingTrend(ctx context.Context, environmentID string, from
    AND ar.started_at >= $2 AND ar.started_at < $3
    AND ($1='' OR ar.environment_id=$1::uuid)
 )
-SELECT r.environment_id::text, r.name, r.id::text, r.started_at, r.status,
+SELECT r.environment_id::text, r.name, r.id::text, r.started_at, r.status,r.profile,r.collector_version,r.rule_version,r.coverage,
  count(f.id)::integer,
  count(f.id) FILTER (WHERE f.severity='critical')::integer,
  count(f.id) FILTER (WHERE f.severity='high')::integer
 FROM ranked r LEFT JOIN finding_event f ON f.audit_run_id=r.id AND f.event_type='observed'
 WHERE r.position=1
-GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status
+GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status,r.profile,r.collector_version,r.rule_version,r.coverage
 ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	if err != nil {
 		return nil, err
@@ -199,10 +213,42 @@ ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	out := []RunTrendPoint{}
 	for rows.Next() {
 		var p RunTrendPoint
-		if err := rows.Scan(&p.EnvironmentID, &p.EnvironmentName, &p.AuditRunID, &p.At, &p.Status, &p.Findings, &p.Critical, &p.High); err != nil {
+		if err := rows.Scan(&p.EnvironmentID, &p.EnvironmentName, &p.AuditRunID, &p.At, &p.Status, &p.Profile, &p.CollectorVersion, &p.RuleVersion, &p.Coverage, &p.Findings, &p.Critical, &p.High); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	markTrendComparability(out)
+	return out, nil
+}
+
+func markTrendComparability(points []RunTrendPoint) {
+	previous := map[string]RunTrendPoint{}
+	for i := range points {
+		point := &points[i]
+		point.Comparable = point.Coverage == "complete"
+		if !point.Comparable {
+			point.ComparisonNote = "Coleta parcial"
+		}
+		if prior, ok := previous[point.EnvironmentID]; ok && point.Comparable {
+			switch {
+			case prior.Coverage != "complete":
+				point.Comparable = false
+				point.ComparisonNote = "Coleta anterior parcial"
+			case prior.Profile != point.Profile:
+				point.Comparable = false
+				point.ComparisonNote = "Perfil de coleta diferente"
+			case prior.CollectorVersion != point.CollectorVersion:
+				point.Comparable = false
+				point.ComparisonNote = "Versão do coletor diferente"
+			case prior.RuleVersion != point.RuleVersion:
+				point.Comparable = false
+				point.ComparisonNote = "Versão das regras diferente"
+			}
+		}
+		previous[point.EnvironmentID] = *point
+	}
 }

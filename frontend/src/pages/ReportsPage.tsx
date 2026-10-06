@@ -52,6 +52,9 @@ export function ReportsPage() {
   const [schema, setSchema] = useState("");
   const [table, setTable] = useState("");
   const [severity, setSeverity] = useState("");
+  const [redaction, setRedaction] = useState<"none" | "identifiers" | "strict">(
+    "none",
+  );
   const [jobs, setJobs] = useState<ReportJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -112,6 +115,7 @@ export function ReportsPage() {
       schema: schema.trim() || undefined,
       table: table.trim() || undefined,
       severity: severity || undefined,
+      redaction,
     };
     if (
       !reportFormReady(
@@ -215,6 +219,26 @@ export function ReportsPage() {
                 ...["critical", "high", "medium", "low", "info"].map(
                   (value) => ({ value, label: value }),
                 ),
+              ]}
+            />
+            <Select
+              label="Redação de dados sensíveis"
+              value={redaction}
+              onChange={(event) =>
+                setRedaction(
+                  event.target.value as "none" | "identifiers" | "strict",
+                )
+              }
+              options={[
+                { value: "none", label: "Sem redação" },
+                {
+                  value: "identifiers",
+                  label: "Ocultar identificadores e textos livres",
+                },
+                {
+                  value: "strict",
+                  label: "Rigorosa: ocultar também notas de cobertura",
+                },
               ]}
             />
             <input

@@ -17,10 +17,14 @@ export type ApiPath =
   | "/api/v1/auth/login"
   | "/api/v1/auth/logout"
   | "/api/v1/auth/me"
+  | "/api/v1/auth/password"
   | "/api/v1/auth/users"
+  | "/api/v1/auth/users/{id}"
+  | "/api/v1/auth/users/{id}/sessions/revoke"
   | "/api/v1/compare"
   | "/api/v1/environments"
   | "/api/v1/environments/connection-status"
+  | "/api/v1/environments/{id}/annotations"
   | "/api/v1/environments/{id}/baseline"
   | "/api/v1/environments/{id}/baseline/comparisons"
   | "/api/v1/environments/{id}/chunks"
@@ -37,6 +41,8 @@ export type ApiPath =
   | "/api/v1/environments/{id}/indexes"
   | "/api/v1/environments/{id}/jobs"
   | "/api/v1/environments/{id}/policies"
+  | "/api/v1/environments/{id}/regressions"
+  | "/api/v1/environments/{id}/regressions/{alert}/acknowledge"
   | "/api/v1/environments/{id}/reports"
   | "/api/v1/environments/{id}/reports/{job}"
   | "/api/v1/environments/{id}/reports/{job}/cancel"
@@ -52,6 +58,7 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/rls-policies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/triggers"
   | "/api/v1/environments/{id}/runs/{run}/score"
+  | "/api/v1/environments/{id}/runs/{run}/score/compare"
   | "/api/v1/environments/{id}/runs/{run}/scores"
   | "/api/v1/environments/{id}/schedules"
   | "/api/v1/environments/{id}/schemas"
@@ -65,6 +72,8 @@ export type ApiPath =
   | "/api/v1/findings"
   | "/api/v1/findings/analyze"
   | "/api/v1/findings/{id}"
+  | "/api/v1/findings/{id}/action"
+  | "/api/v1/findings/{id}/action/events"
   | "/api/v1/findings/{id}/timeline"
   | "/api/v1/mappings"
   | "/api/v1/mappings/suggest"
@@ -76,6 +85,9 @@ export type ApiPath =
 
 export interface ScopeScore {
   version: string;
+  profile: string;
+  collector_version: string;
+  rule_version: string;
   environment_id: string;
   audit_run_id: string;
   database_name?: string;
@@ -84,12 +96,14 @@ export interface ScopeScore {
   status: string;
   score: number | null;
   confidence: number;
+  explanation: string;
   categories: ScopeScoreCategory[];
   missing_collectors: string[];
 }
 
 export interface ScopeScoreCategory {
   category: string;
+  weight: number;
   score: number;
   penalty: number;
   findings: number;

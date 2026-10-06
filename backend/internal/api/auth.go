@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -190,6 +191,124 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"user": user})
 	})
+	registerAccountRoutes(mux, store)
+}
+
+type accountStore interface {
+	ListAuditorAccounts(context.Context) ([]repository.AuditorAccount, error)
+	ChangeAuditorPassword(context.Context, string, string) error
+	UpdateAuditorAccount(context.Context, string, repository.AccountChange) (*repository.AuditorAccount, error)
+	RevokeAuditorSessions(context.Context, string) error
+}
+
+func registerAccountRoutes(mux *http.ServeMux, store AuthStore) {
+	backend, ok := store.(accountStore)
+	if !ok {
+		return
+	}
+	mux.HandleFunc("POST /api/v1/auth/password", func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Current, New string }
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Informe a senha atual e a nova senha.")
+			return
+		}
+		user := requestIdentity(r)
+		if user == nil || !repository.CheckAuditorPassword(body.Current, user.PasswordHash) {
+			writeError(w, http.StatusForbidden, CodeUnavailable, "Senha atual incorreta.")
+			return
+		}
+		hash, err := repository.HashAuditorPassword(body.New)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "A nova senha precisa ter entre 16 e 1024 caracteres.")
+			return
+		}
+		if err = backend.ChangeAuditorPassword(r.Context(), user.ID, hash); err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao trocar a senha.")
+			return
+		}
+		clearSessionCookie(w, r)
+		writeJSON(w, http.StatusOK, map[string]string{"status": "password_changed", "next": "login_required"})
+	})
+	mux.HandleFunc("GET /api/v1/auth/users", func(w http.ResponseWriter, r *http.Request) {
+		items, err := backend.ListAuditorAccounts(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao listar contas.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	})
+	mux.HandleFunc("PATCH /api/v1/auth/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		var body struct {
+			Role         string   `json:"role"`
+			Active       *bool    `json:"active"`
+			Environments []string `json:"environments"`
+			NewPassword  string   `json:"new_password"`
+		}
+		if !uuidPattern.MatchString(id) || json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&body) != nil ||
+			(body.Role != "viewer" && body.Role != "auditor" && body.Role != "operator") || body.Active == nil || len(body.Environments) > 100 {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Conta ou papel inválido.")
+			return
+		}
+		for _, env := range body.Environments {
+			if !uuidPattern.MatchString(env) {
+				writeError(w, http.StatusBadRequest, CodeValidation, "Ambiente inválido.")
+				return
+			}
+		}
+		change := repository.AccountChange{Role: body.Role, Active: *body.Active, Environments: body.Environments}
+		if body.NewPassword != "" {
+			var err error
+			change.PasswordHash, err = repository.HashAuditorPassword(body.NewPassword)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, CodeValidation, "Senha inválida; use pelo menos 16 caracteres.")
+				return
+			}
+		}
+		item, err := backend.UpdateAuditorAccount(r.Context(), id, change)
+		if errors.Is(err, repository.ErrLastOperator) {
+			writeError(w, http.StatusConflict, CodeValidation, "Mantenha ao menos uma conta de operador ativa.")
+			return
+		}
+		if errors.Is(err, repository.ErrAccountNotFound) {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Conta não encontrada.")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Não foi possível atualizar a conta.")
+			return
+		}
+		if user := requestIdentity(r); user != nil {
+			_ = store.LogAuditorOperation(r.Context(), user, "account.updated", "", id, "success")
+			if user.ID == id {
+				clearSessionCookie(w, r)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"user": item})
+	})
+	mux.HandleFunc("POST /api/v1/auth/users/{id}/sessions/revoke", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if !uuidPattern.MatchString(id) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Conta inválida.")
+			return
+		}
+		if err := backend.RevokeAuditorSessions(r.Context(), id); err != nil {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Conta não encontrada.")
+			return
+		}
+		if user := requestIdentity(r); user != nil {
+			_ = store.LogAuditorOperation(r.Context(), user, "account.sessions_revoked", "", id, "success")
+			if user.ID == id {
+				clearSessionCookie(w, r)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
+	})
+}
+
+func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
 }
 
 func authMiddleware(next http.Handler, store AuthStore) http.Handler {
@@ -285,6 +404,12 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 	}
 	if r.Method != http.MethodGet {
 		minimum := "operator"
+		if path == "auth/password" {
+			minimum = "viewer"
+		}
+		if strings.Contains(path, "/annotations") || strings.Contains(path, "/regressions/") {
+			minimum = "auditor"
+		}
 		if (parts[0] == "findings" && (r.Method == http.MethodPatch || len(parts) > 1 && parts[1] == "analyze")) ||
 			parts[0] == "mappings" || strings.Contains(path, "/reports") {
 			minimum = "auditor"

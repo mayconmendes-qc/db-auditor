@@ -28,6 +28,17 @@ type AnalysisRun struct {
 	RuleManifestHash string
 }
 
+type AuditAnnotation struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	AuditRunID    pgtype.UUID
+	Kind          string
+	Note          string
+	Actor         string
+	OccurredAt    pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
 type AuditBaseline struct {
 	EnvironmentID pgtype.UUID
 	DatabaseName  string
@@ -375,6 +386,27 @@ type Finding struct {
 	DueAt             pgtype.Timestamptz
 }
 
+type FindingAction struct {
+	FindingID     pgtype.UUID
+	Status        string
+	OwnerName     string
+	Justification string
+	ResultNote    string
+	UpdatedBy     string
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type FindingActionEvent struct {
+	ID            int64
+	FindingID     pgtype.UUID
+	Status        string
+	OwnerName     string
+	Justification string
+	ResultNote    string
+	Actor         string
+	RecordedAt    pgtype.Timestamptz
+}
+
 type FindingEvent struct {
 	ID             pgtype.UUID
 	FindingID      pgtype.UUID
@@ -558,6 +590,20 @@ type PolicySnapshot struct {
 	NextStart        pgtype.Timestamptz
 	OwnerName        pgtype.Text
 	CollectedAt      pgtype.Timestamptz
+}
+
+type RegressionAlert struct {
+	ID             pgtype.UUID
+	EnvironmentID  pgtype.UUID
+	BaselineRunID  pgtype.UUID
+	AuditRunID     pgtype.UUID
+	Category       string
+	Evidence       []byte
+	Status         string
+	Reason         string
+	AcknowledgedBy string
+	CreatedAt      pgtype.Timestamptz
+	AcknowledgedAt pgtype.Timestamptz
 }
 
 type ReplicationSnapshot struct {

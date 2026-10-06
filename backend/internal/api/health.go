@@ -83,6 +83,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerInventoryRoutes(mux, store)
 	registerAssessmentRoutes(mux, store)
 	registerBaselineRoutes(mux, store)
+	registerMonitoringRoutes(mux, store)
 	registerScopeScoreRoutes(mux, store)
 	registerPDFReportRoutes(mux, store)
 	registerHistoryRoutes(mux, store)
