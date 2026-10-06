@@ -731,6 +731,135 @@
           }
         }
       }
+    },
+    "/api/v1/environments/{id}/capabilities": {
+      "get": {
+        "description": "Matriz de capacidades observadas para o mecanismo e a execução mais recente.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-scans": {
+      "get": {
+        "description": "Lista até 50 diagnósticos agregados; nenhuma linha é retornada.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      },
+      "post": {
+        "description": "Executa diagnóstico de leitura autorizado, com limite de 1.000 linhas e 20 segundos; exige auditor e opt-in operacional.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-issues/{issue}": {
+      "patch": {
+        "description": "Registra decisão e evidência de uma ação de saneamento externa; exige auditor.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/actions": {
+      "get": {
+        "description": "Lista até 100 ações de achados com a medição mais recente.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}/action/measurements": {
+      "get": {
+        "description": "Lista medições antes e depois com ressalvas de comparabilidade.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      },
+      "post": {
+        "description": "Registra hipótese, janela e observação entre duas execuções; exige auditor.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
     }
   },
   "components": {

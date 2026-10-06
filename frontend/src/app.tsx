@@ -5,6 +5,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { formatError } from "./lib/errors";
 import {
   AccountsPage,
+  AssistedActionsPage,
   AuditRunsPage,
   DashboardPage,
   DocsPage,
@@ -59,6 +60,8 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     content = <AccountsPage />;
   } else if (section === "Acompanhamento") {
     content = <MonitoringPage />;
+  } else if (section === "Ações assistidas") {
+    content = <AssistedActionsPage />;
   }
 
   return (

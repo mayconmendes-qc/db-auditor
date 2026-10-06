@@ -3,6 +3,8 @@ package analyzer
 import (
 	"context"
 	"fmt"
+
+	"github.com/osmendes/db-auditor/internal/capabilities"
 )
 
 // Runner executes all registered analyzers against snapshot facts.
@@ -29,7 +31,12 @@ func (r *Runner) Run(ctx context.Context, facts SnapshotFacts) ([]Finding, error
 		if err != nil {
 			return all, fmt.Errorf("analyzer %s: %w", a.Name(), err)
 		}
-		all = append(all, items...)
+		timescaleObserved := facts.TimescaleVersion != "" || len(facts.Hypertables) > 0 || len(facts.Chunks) > 0 || len(facts.CAGGs) > 0 || len(facts.Policies) > 0 || len(facts.Jobs) > 0
+		for _, item := range items {
+			if capabilities.RuleApplicable(facts.Engine, item.FindingType, timescaleObserved) {
+				all = append(all, item)
+			}
+		}
 	}
 	return EnrichFindings(facts, all), nil
 }

@@ -1,0 +1,27 @@
+# Terceira etapa — capacidades, diagnóstico e resultados
+
+## Implantação e retorno
+
+Faça backup verificável do banco de controle antes da implantação. A API aplica `07_third_stage.sql` uma vez e registra o checksum em `schema_migration`. A migração adiciona `audit_environment.engine` com valor padrão `postgresql` e tabelas de diagnósticos, eventos e medições. Não executa DDL no banco auditado. Confira o estado da migração, o boot da API e as rotas de capacidades após atualizar. Em caso de falha, interrompa a API, restaure o backup em instância separada, valide a versão do binário e só então aponte o serviço para a restauração. Não apague tabelas para tentar reverter: elas guardam decisões e evidências.
+
+## Contrato de mecanismos
+
+O contrato `capabilities.Fact` separa fato, escopo, valor e confiança; `Adapter` declara mecanismo e capacidades. O coletor atual permanece PostgreSQL e TimescaleDB. A matriz de capacidades identifica regras Timescale como aplicáveis apenas quando a extensão foi observada na execução. Mecanismos desconhecidos não são coletados por um conector PostgreSQL. Um novo mecanismo exige adaptador, testes de leitura, mapeamento de fatos, regras aplicáveis e versão de contrato antes da habilitação. Ausência de capacidade não equivale a ausência de problema.
+
+## Diagnóstico opcional de qualidade
+
+`AUDITOR_DATA_QUALITY_ENABLED=1` habilita a criação de diagnósticos; o padrão é desligado. Um auditor escolhe banco, esquema, tabela, até 1.000 linhas, colunas esperadas não nulas, chaves candidatas e intervalos de data. Há no máximo 32 verificações, oito relações simples e 20 segundos por solicitação, com limite de 5 segundos por instrução. O conector abre transação somente leitura e recusa papéis administrativos ou com permissão de escrita na tabela. Configure uma conta dedicada de leitura mínima em `AUDITOR_TARGET_N_*`; conceda acesso apenas aos objetos aprovados. A solicitação pode ser cancelada pela conexão HTTP.
+
+São persistidos apenas escopo, contagens, usuário, data, decisões e evidências textuais inseridas pelo usuário. Valores e linhas da amostra não saem do banco auditado. Não inclua dados pessoais em justificativas ou evidências. O método usa as primeiras linhas físicas dentro do limite, sem amostragem estatística; alterações de plano e ordem podem trocar a amostra. Contagens de diagnósticos diferentes só aparecem como comparáveis quando limite e quantidade de linhas coincidem, ainda com ressalva de amostra. Confirme a população e a regra de negócio antes de agir. Chaves estrangeiras simples visíveis ao papel de leitura permitem contagem de órfãos; relações compostas ficam fora deste diagnóstico.
+
+## Plano externo de saneamento
+
+Cada contagem gera roteiro de significado, confirmação, execução externa, validação e risco para nulos, duplicidades, órfãos, datas anômalas ou concentração. O auditor registra estado, responsável, justificativa, resultado e evento de decisão. Antes de alterar dados em outro sistema, confirme dependências e proprietário da regra, obtenha backup restaurável, planeje lotes e janela, teste o procedimento e documente rollback. O auditor nunca executa correção, DDL, DML ou configuração no banco analisado. Para validar, registre evidência externa e repita o diagnóstico quando possível; diferenças de amostra não demonstram por si só que o saneamento funcionou.
+
+## Medições de ações
+
+Uma medição liga um achado a duas execuções cronológicas do mesmo ambiente. O auditor aceita `finding_observed` (0/1) e `table_size_bytes`, e armazena hipótese e janela informadas pelo usuário. A comparação só é marcada válida com valores presentes, execuções e análises concluídas, cobertura completa, mesmo perfil, coletor e conjunto de regras. A diferença observada não prova causalidade: documente carga, mudanças simultâneas e período de observação. Para `index.unused` com tamanho coletado, o painel mostra o tamanho do índice como limite superior de espaço candidato, nunca como economia garantida; demais ações ficam sem número quando não há base defensável. Se um achado volta a ser observado após uma medição comparável, uma ação validada ou executada externamente retorna para análise com evento na trilha. O painel mostra responsável, prazo, recorrência, medição e exportação JSON/CSV das 100 ações mais recentes.
+
+## PDF, retenção e capacidade
+
+O renderizador impõe 8 MiB de texto de entrada, 200 páginas e 16 MiB ao PDF final, com erro amigável quando o escopo excede o limite. Artefatos expiram após 30 dias: a limpeza remove o binário, mas preserva o job como trilha de proveniência. O worker recupera jobs interrompidos após reinício conforme a política existente de três tentativas. Monitore volume, duração, falhas de geração e crescimento de `report_job`, `quality_scan`, `quality_issue_event` e `finding_action_measurement` no banco de controle. O histórico não tem exclusão automática. Defina retenção conforme obrigação de auditoria: faça `pg_dump -Fc`, restaure em instância isolada, documente janela e versão, preserve referências a baselines, achados e medições, e só então arquive dados fora da aplicação com procedimento aprovado. Uma expiração de PDF não elimina histórico nem constitui autorização para apagar runs.

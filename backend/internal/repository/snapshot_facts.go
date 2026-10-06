@@ -11,6 +11,12 @@ import (
 // LoadSnapshotFacts loads every analyzer input from one explicitly selected run.
 func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID string) (analyzer.SnapshotFacts, error) {
 	f := analyzer.SnapshotFacts{EnvironmentID: environmentID, AuditRunID: auditRunID}
+	if err := s.pool.QueryRow(ctx, `SELECT engine FROM audit_environment WHERE id=$1::uuid`, environmentID).Scan(&f.Engine); err != nil {
+		return f, err
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE((SELECT extension_version FROM timescale_version_snapshot WHERE audit_run_id=$1::uuid AND extension_name='timescaledb' ORDER BY database_name LIMIT 1),'')`, auditRunID).Scan(&f.TimescaleVersion); err != nil {
+		return f, err
+	}
 	queries := []func() error{
 		func() error {
 			rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,table_name,total_size_bytes,collected_at,n_live_tup,n_dead_tup,COALESCE(last_vacuum::text,''),COALESCE(last_autovacuum::text,''),n_tup_ins,n_tup_upd,n_tup_del,stats_reset,row_estimate,column_count,has_primary_key,COALESCE(table_comment,''),seq_scan,last_analyze,is_partition,COALESCE(relation_class,'') FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND schema_name <> '_timescaledb_internal'`, environmentID, auditRunID)

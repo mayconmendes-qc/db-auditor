@@ -27,6 +27,7 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Regras: "rules",
   Contas: "accounts",
   Acompanhamento: "monitoring",
+  "Ações assistidas": "assisted-actions",
   Status: "status",
 };
 
