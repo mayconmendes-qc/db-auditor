@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -39,11 +40,12 @@ type StorageSeriesPoint struct {
 
 // StorageGrowthResponse groups storage by environment/database.
 type StorageGrowthResponse struct {
-	GeneratedAtUTC time.Time            `json:"generated_at_utc"`
-	ByEnvironment  []StorageSeriesPoint `json:"by_environment"`
-	ByDatabase     []StorageSeriesPoint `json:"by_database"`
-	TopConsumers   []StorageSeriesPoint `json:"top_consumers"`
-	Notes          []string             `json:"notes,omitempty"`
+	GeneratedAtUTC time.Time                  `json:"generated_at_utc"`
+	ByEnvironment  []StorageSeriesPoint       `json:"by_environment"`
+	ByDatabase     []StorageSeriesPoint       `json:"by_database"`
+	TopConsumers   []StorageSeriesPoint       `json:"top_consumers"`
+	Series         []repository.RunTrendPoint `json:"series"`
+	Notes          []string                   `json:"notes,omitempty"`
 }
 
 // FindingTrendBucket aggregates findings by severity or status.
@@ -54,11 +56,12 @@ type FindingTrendBucket struct {
 
 // FindingsTrendResponse is the findings summary for the dashboard.
 type FindingsTrendResponse struct {
-	GeneratedAtUTC time.Time            `json:"generated_at_utc"`
-	BySeverity     []FindingTrendBucket `json:"by_severity"`
-	ByStatus       []FindingTrendBucket `json:"by_status"`
-	ByType         []FindingTrendBucket `json:"by_type"`
-	Total          int                  `json:"total"`
+	GeneratedAtUTC time.Time                  `json:"generated_at_utc"`
+	BySeverity     []FindingTrendBucket       `json:"by_severity"`
+	ByStatus       []FindingTrendBucket       `json:"by_status"`
+	ByType         []FindingTrendBucket       `json:"by_type"`
+	Total          int                        `json:"total"`
+	Series         []repository.RunTrendPoint `json:"series"`
 }
 
 // JobHealthItem summarizes job/policy health for an environment.
@@ -118,7 +121,8 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 
 		envs, err := store.ListEnvironmentsAPI(ctx)
 		if err != nil {
-			res.Notes = append(res.Notes, "list environments failed")
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os ambientes.")
+			return
 		} else if envID != "" {
 			found := false
 			for _, environment := range envs {
@@ -136,35 +140,23 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			res.Environments = len(envs)
 		}
 
-		findings, err := store.ListFindings(ctx, envID, "", "", "", 2000)
+		findings, err := store.CountFindings(ctx, envID)
 		if err != nil {
-			res.Notes = append(res.Notes, "list findings failed")
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível contar os achados.")
+			return
 		} else {
-			for _, f := range findings {
-				st := strings.ToLower(f.Status)
-				if st == "open" || st == "acknowledged" {
-					res.OpenFindings++
-				}
-				switch strings.ToLower(f.Severity) {
-				case "critical":
-					res.CriticalFindings++
-				case "high":
-					res.HighFindings++
-				}
-			}
+			res.OpenFindings = findings.Open
+			res.CriticalFindings = findings.Critical
+			res.HighFindings = findings.High
 		}
 
-		runs, err := store.ListAuditRuns(ctx, envID, "", "", 50)
+		successful, failed, err := store.CountRecentRuns(ctx, envID)
 		if err != nil {
-			res.Notes = append(res.Notes, "list audit runs failed")
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível contar as execuções recentes.")
+			return
 		} else {
-			for _, run := range runs {
-				if isFailedRunStatus(run.Status) {
-					res.FailedRunsRecent++
-				} else if isSuccessfulRunStatus(run.Status) {
-					res.SuccessfulRunsRecent++
-				}
-			}
+			res.SuccessfulRunsRecent = successful
+			res.FailedRunsRecent = failed
 		}
 
 		for _, e := range envs {
@@ -176,7 +168,7 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			}); ok {
 				counts, countErr := counter.CountLatestInventory(ctx, e.ID)
 				if countErr != nil {
-					res.Notes = append(res.Notes, "inventory counts failed for "+e.ID)
+					res.Notes = append(res.Notes, "Não foi possível contar o inventário do ambiente "+e.ID)
 					res.InventoryStatus = "partial"
 				} else if counts == nil {
 					res.InventoryStatus = "partial"
@@ -194,28 +186,15 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 					}
 				}
 			}
-			dbs, err := store.ListDatabaseSnapshots(ctx, e.ID)
-			if err == nil {
-				for _, d := range dbs {
-					res.TotalStorageBytes += d.SizeBytes
-				}
+			capabilities, err := store.CountLatestCapabilities(ctx, e.ID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível resumir as capacidades do ambiente.")
+				return
 			}
-			hts, err := store.ListHypertableSnapshots(ctx, e.ID)
-			if err == nil {
-				res.Hypertables += len(hts)
-			}
-			jobs, err := store.ListJobSnapshots(ctx, e.ID)
-			if err == nil {
-				for _, j := range jobs {
-					if j.Scheduled {
-						res.JobsScheduled++
-					}
-				}
-			}
-			pols, err := store.ListPolicySnapshots(ctx, e.ID)
-			if err == nil {
-				res.Policies += len(pols)
-			}
+			res.TotalStorageBytes += capabilities.TotalStorageBytes
+			res.Hypertables += capabilities.Hypertables
+			res.JobsScheduled += capabilities.JobsScheduled
+			res.Policies += capabilities.Policies
 		}
 
 		writeJSON(w, http.StatusOK, res)
@@ -226,16 +205,27 @@ func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		envID := envFilter(r)
+		from, to, granularity, err := analyticsWindow(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, err.Error())
+			return
+		}
 		res := StorageGrowthResponse{
 			GeneratedAtUTC: time.Now().UTC(),
 			ByEnvironment:  []StorageSeriesPoint{},
 			ByDatabase:     []StorageSeriesPoint{},
 			TopConsumers:   []StorageSeriesPoint{},
+			Series:         []repository.RunTrendPoint{},
+		}
+		res.Series, err = store.ListStorageTrend(ctx, envID, from, to, granularity)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível consultar o histórico de armazenamento.")
+			return
 		}
 
 		envs, err := store.ListEnvironmentsAPI(ctx)
 		if err != nil {
-			res.Notes = append(res.Notes, "list environments failed")
+			res.Notes = append(res.Notes, "Não foi possível listar os ambientes.")
 			writeJSON(w, http.StatusOK, res)
 			return
 		}
@@ -263,15 +253,12 @@ func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 				ObjectKind: "environment",
 			})
 
-			tables, _, err := store.ListTableSnapshots(ctx, repository.InventoryFilter{
-				EnvironmentID: e.ID,
-				Limit:         30,
-			})
+			tables, err := store.ListTopTableConsumers(ctx, e.ID, 15)
 			if err == nil {
 				for _, t := range tables {
 					res.TopConsumers = append(res.TopConsumers, StorageSeriesPoint{
-						Label:      t.SchemaName + "." + t.TableName,
-						SizeBytes:  t.TotalSizeBytes,
+						Label:      e.Name + "/" + t.DatabaseName + "." + t.SchemaName + "." + t.TableName,
+						SizeBytes:  t.SizeBytes,
 						ObjectKind: "table",
 					})
 				}
@@ -292,31 +279,63 @@ func getFindingsTrends(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		envID := envFilter(r)
+		from, to, granularity, err := analyticsWindow(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, err.Error())
+			return
+		}
 		res := FindingsTrendResponse{
 			GeneratedAtUTC: time.Now().UTC(),
 			BySeverity:     []FindingTrendBucket{},
 			ByStatus:       []FindingTrendBucket{},
 			ByType:         []FindingTrendBucket{},
+			Series:         []repository.RunTrendPoint{},
 		}
-		items, err := store.ListFindings(ctx, envID, "", "", "", 5000)
+		counts, err := store.CountFindings(ctx, envID)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "list findings failed"})
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível contar os achados.")
 			return
 		}
-		sev := map[string]int{}
-		st := map[string]int{}
-		ty := map[string]int{}
-		for _, f := range items {
-			res.Total++
-			sev[strings.ToLower(f.Severity)]++
-			st[strings.ToLower(f.Status)]++
-			ty[f.FindingType]++
+		res.Series, err = store.ListFindingTrend(ctx, envID, from, to, granularity)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível consultar o histórico de achados.")
+			return
 		}
-		res.BySeverity = bucketsFromMap(sev)
-		res.ByStatus = bucketsFromMap(st)
-		res.ByType = bucketsFromMap(ty)
+		res.Total = counts.Total
+		res.BySeverity = bucketsFromMap(counts.BySeverity)
+		res.ByStatus = bucketsFromMap(counts.ByStatus)
+		res.ByType = bucketsFromMap(counts.ByType)
 		writeJSON(w, http.StatusOK, res)
 	}
+}
+
+func analyticsWindow(r *http.Request) (time.Time, time.Time, string, error) {
+	now := time.Now().UTC()
+	from, to := now.AddDate(0, 0, -90), now
+	query := r.URL.Query()
+	for _, field := range []struct {
+		key string
+		dst *time.Time
+	}{{"from", &from}, {"to", &to}} {
+		if raw := query.Get(field.key); raw != "" {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return time.Time{}, time.Time{}, "", fmt.Errorf("%s deve usar RFC3339", field.key)
+			}
+			*field.dst = parsed.UTC()
+		}
+	}
+	granularity := query.Get("granularity")
+	if granularity == "" {
+		granularity = "day"
+	}
+	if granularity != "hour" && granularity != "day" && granularity != "week" && granularity != "month" {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("granularidade inválida")
+	}
+	if !from.Before(to) || to.Sub(from) > 366*24*time.Hour || (granularity == "hour" && to.Sub(from) > 7*24*time.Hour) {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("intervalo inválido ou maior que o limite")
+	}
+	return from, to, granularity, nil
 }
 
 func bucketsFromMap(m map[string]int) []FindingTrendBucket {
@@ -377,7 +396,7 @@ func getInventoryReport(store InventoryStore) http.HandlerFunc {
 		res := InventoryReportResponse{GeneratedAtUTC: time.Now().UTC()}
 		envs, err := store.ListEnvironmentsAPI(ctx)
 		if err != nil {
-			res.Notes = append(res.Notes, "list environments failed")
+			res.Notes = append(res.Notes, "Não foi possível listar os ambientes.")
 			writeJSON(w, http.StatusOK, res)
 			return
 		}

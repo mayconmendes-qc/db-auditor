@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/osmendes/db-auditor/internal/guidance"
 )
 
 // Finding is a persisted diagnostic.
@@ -33,6 +34,8 @@ type Finding struct {
 	Impact            string          `json:"impact"`
 	Risk              string          `json:"risk"`
 	Recommendation    string          `json:"recommendation"`
+	FriendlyMeaning   string          `json:"friendly_meaning"`
+	FriendlyNext      string          `json:"friendly_next"`
 	Validation        string          `json:"validation"`
 	References        json.RawMessage `json:"references"`
 	RuleParameters    json.RawMessage `json:"rule_parameters"`
@@ -324,5 +327,8 @@ func scanFinding(row scannable) (*Finding, error) {
 	} else {
 		f.Evidence = evidence
 	}
+	friendly := guidance.For(f.FindingType)
+	f.FriendlyMeaning = friendly.Meaning
+	f.FriendlyNext = friendly.Next
 	return &f, nil
 }

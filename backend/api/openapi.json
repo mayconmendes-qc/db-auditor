@@ -7,6 +7,13 @@
   "paths": {
     "/api/v1/analytics/findings-trends": {
       "get": {
+        "description": "Contagens atuais exatas e série de achados observados na última execução analisada de cada período. Pontos parciais são identificados; períodos sem análise não viram zero.",
+        "parameters": [
+          {"name": "environment_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+          {"name": "from", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+          {"name": "to", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+          {"name": "granularity", "in": "query", "schema": {"type": "string", "enum": ["hour", "day", "week", "month"]}}
+        ],
         "responses": {
           "200": {
             "description": "ok"
@@ -34,6 +41,13 @@
     },
     "/api/v1/analytics/storage": {
       "get": {
+        "description": "Distribuição atual e série de armazenamento da última execução por ambiente e período UTC. from/to aceitam RFC3339; janela máxima de 366 dias, ou 7 dias para hora.",
+        "parameters": [
+          {"name": "environment_id", "in": "query", "schema": {"type": "string", "format": "uuid"}},
+          {"name": "from", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+          {"name": "to", "in": "query", "schema": {"type": "string", "format": "date-time"}},
+          {"name": "granularity", "in": "query", "schema": {"type": "string", "enum": ["hour", "day", "week", "month"]}}
+        ],
         "responses": {
           "200": {
             "description": "ok"
@@ -122,6 +136,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
+        "description": "Com ?mode=cookie cria sessão HttpOnly/SameSite e retorna csrf_token sem bearer token. Sem o modo, mantém o contrato de token bearer para clientes de API.",
         "responses": {
           "200": {
             "description": "ok"
@@ -131,6 +146,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "description": "Revoga a sessão e remove o cookie. Sessões por cookie exigem cabeçalho X-CSRF-Token em mutações.",
         "responses": {
           "200": {
             "description": "ok"
@@ -140,6 +156,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
+        "description": "Retorna o usuário autenticado e, para sessões por cookie, o csrf_token necessário às mutações.",
         "responses": {
           "200": {
             "description": "ok"
@@ -244,6 +261,12 @@
         }
       }
     },
+    "/api/v1/environments/{id}/continuous-aggregates/page": {
+      "get": {
+        "description": "Lista paginada e filtrável dos agregados contínuos do último snapshot elegível.",
+        "responses": {"200": {"description": "Página com items e page.total"}}
+      }
+    },
     "/api/v1/environments/{id}/databases": {
       "get": {
         "responses": {
@@ -287,6 +310,12 @@
             "description": "ok"
           }
         }
+      }
+    },
+    "/api/v1/environments/{id}/hypertables/page": {
+      "get": {
+        "description": "Lista paginada e filtrável das hypertables do último snapshot elegível.",
+        "responses": {"200": {"description": "Página com items e page.total"}}
       }
     },
     "/api/v1/environments/{id}/indexes": {

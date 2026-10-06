@@ -674,7 +674,8 @@ export function FindingsPage() {
                     </Badge>
                   </td>
                   <td className="px-3 py-1.5 text-slate-100">
-                    {findingGuidance(f.finding_type).meaning}
+                    {f.friendly_meaning ??
+                      findingGuidance(f.finding_type).meaning}
                   </td>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
                     {f.object_key || "—"}
@@ -704,7 +705,10 @@ export function FindingsPage() {
         {selected ? (
           <Card
             title={`Detalhe · ${labels.severity(selected.severity)}`}
-            subtitle={findingGuidance(selected.finding_type).meaning}
+            subtitle={
+              selected.friendly_meaning ??
+              findingGuidance(selected.finding_type).meaning
+            }
           >
             <ul className="mt-3 space-y-1 text-sm text-slate-300">
               <li>Status: {labels.findingStatus(selected.status)}</li>
@@ -742,7 +746,9 @@ export function FindingsPage() {
                   : "não informada"}
               </li>
               <li>
-                Próximo passo: {findingGuidance(selected.finding_type).next}
+                Próximo passo:{" "}
+                {selected.friendly_next ??
+                  findingGuidance(selected.finding_type).next}
               </li>
             </ul>
             <details className="mt-3 text-xs text-slate-400">
