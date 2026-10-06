@@ -99,6 +99,12 @@ func (s *Store) EnsureIdentitySchema(ctx context.Context) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS auditor_session_user_idx ON auditor_session (user_id)`,
 		`CREATE INDEX IF NOT EXISTS auditor_session_expiry_idx ON auditor_session (expires_at)`,
+		`CREATE TABLE IF NOT EXISTS auditor_login_attempt (
+		  key_hash bytea PRIMARY KEY,
+		  window_start timestamptz NOT NULL,
+		  attempts integer NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS auditor_login_attempt_window_idx ON auditor_login_attempt (window_start)`,
 		`CREATE TABLE IF NOT EXISTS auditor_operation_log (
 		  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 		  user_id uuid REFERENCES auditor_user(id) ON DELETE SET NULL,
@@ -207,6 +213,28 @@ func (s *Store) DeleteAuditorSession(ctx context.Context, tokenHash []byte) erro
 
 func (s *Store) DeleteExpiredAuditorSessions(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM auditor_session WHERE expires_at <= now()`)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `DELETE FROM auditor_login_attempt WHERE window_start < now()-interval '5 minutes'`)
+	return err
+}
+
+// RecordLoginAttempt is atomic across API replicas. Keys are digests of an IP
+// or account name; raw identifiers and passwords are never persisted here.
+func (s *Store) RecordLoginAttempt(ctx context.Context, keyHash []byte, window time.Duration) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `INSERT INTO auditor_login_attempt(key_hash,window_start,attempts)
+VALUES($1,now(),1)
+ON CONFLICT(key_hash) DO UPDATE SET
+  attempts=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN 1 ELSE auditor_login_attempt.attempts+1 END,
+  window_start=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN now() ELSE auditor_login_attempt.window_start END
+RETURNING attempts`, keyHash, int(window.Seconds())).Scan(&count)
+	return count, err
+}
+
+func (s *Store) ClearLoginAttempt(ctx context.Context, keyHash []byte) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM auditor_login_attempt WHERE key_hash=$1`, keyHash)
 	return err
 }
 

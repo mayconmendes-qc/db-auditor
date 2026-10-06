@@ -15,6 +15,7 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
 ```
 
 O compose falha se faltarem `POSTGRES_PASSWORD`, `AUDITOR_BOOTSTRAP_USER`, `AUDITOR_BOOTSTRAP_PASSWORD`, `AUDITOR_CORS_ORIGINS` ou `AUDITOR_TARGET_ALLOWED_HOSTS`. Os DSNs não entram no YAML. O Postgres interno não publica porta. `GET /metrics` não passa pelo Caddy; o scrape fica em `api:9090`, dentro da rede do compose.
+Mantenha `VITE_API_BASE_URL=/` e encaminhe `/api/*` pelo proxy HTTPS da mesma origem da interface. A sessão da UI usa cookie HttpOnly e cabeçalho CSRF para alterações; o proxy deve preservar `Set-Cookie`, `Cookie` e `X-CSRF-Token`. A API cria a tabela de contagem de login em volumes existentes no boot, sem reaplicar o baseline.
 O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
 
 Após alterar o baseline em desenvolvimento:

@@ -2,9 +2,10 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Inside compose the browser still uses VITE_API_BASE_URL (host localhost:8080).
-// Proxy targets are for same-origin requests when BASE_URL is empty.
-const apiProxyTarget = "http://localhost:8080";
+// The browser calls this dev server on the same origin; Compose sets its API target.
+const apiProxyTarget =
+  (globalThis as { process?: { env?: Record<string, string> } }).process?.env
+    ?.VITE_API_PROXY_TARGET ?? "http://localhost:8080";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
