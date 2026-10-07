@@ -425,7 +425,8 @@ export function FindingsPage() {
   const sortedItems = useMemo(
     () =>
       sortBy(items, sort, {
-        type: (f) => f.finding_type,
+        type: (f) =>
+          labels.findingCategory(f.category || f.finding_type.split(".")[0]),
         severity: (f) => f.severity,
         status: (f) => f.status,
         title: (f) => f.title,
@@ -750,7 +751,9 @@ export function FindingsPage() {
                     />
                   </td>
                   <td className="px-3 py-1.5 font-mono text-xs text-slate-300">
-                    {f.finding_type}
+                    {labels.findingCategory(
+                      f.category || f.finding_type.split(".")[0],
+                    )}
                   </td>
                   <td className="px-3 py-1.5">
                     <Badge tone={severityTone(f.severity)}>

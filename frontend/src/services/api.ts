@@ -233,6 +233,7 @@ export type InventoryListParams = {
   database?: string;
   schema?: string;
   table?: string;
+  order_by?: string;
 };
 
 export type AnalyticsParams = {
@@ -903,6 +904,7 @@ export const api = {
       metric: ActionMeasurement["metric"];
       hypothesis: string;
       window_note: string;
+      workload_comparable: boolean;
     },
   ) =>
     postJSON<ActionMeasurement>(

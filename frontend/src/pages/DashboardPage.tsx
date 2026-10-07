@@ -94,7 +94,7 @@ function TrendBars({
   metric,
 }: {
   points: RunTrendPoint[];
-  metric: "size_bytes" | "findings";
+  metric: "size_bytes" | "findings" | "score" | "score_confidence";
 }) {
   const available = points.filter((point) => point[metric] != null);
   const visible = available.slice(-60);
@@ -117,11 +117,17 @@ function TrendBars({
             title={`Execução ${point.audit_run_id}`}
           >
             <MiniBar
-              label={`${when} · ${point.environment_name}${point.coverage === "partial" ? " · coleta parcial" : ""}${!point.comparable && point.comparison_note ? ` · ${point.comparison_note}` : ""}`}
+              label={`${when} · ${point.environment_name}${point.coverage === "partial" ? " · coleta parcial" : ""}${point.counter_reset ? " · contadores reiniciados" : ""}${!point.comparable && point.comparison_note ? ` · ${point.comparison_note}` : ""}`}
               value={value}
               max={max}
               valueLabel={
-                metric === "size_bytes" ? formatBytes(value) : String(value)
+                metric === "size_bytes"
+                  ? formatBytes(value)
+                  : metric === "score_confidence"
+                    ? `${Math.round(value * 100)}%`
+                    : metric === "score"
+                      ? `${value}/100`
+                      : String(value)
               }
               tone={!point.comparable ? "amber" : "sky"}
             />
@@ -557,6 +563,21 @@ export function DashboardPage() {
             </Card>
             <Card title="Achados observados por execução">
               <TrendBars points={trends.series ?? []} metric="findings" />
+            </Card>
+            <Card
+              title="Score ao longo do tempo"
+              subtitle="A nota só aparece quando a coleta e a análise têm cobertura suficiente."
+            >
+              <TrendBars points={trends.series ?? []} metric="score" />
+            </Card>
+            <Card
+              title="Cobertura do score"
+              subtitle="Percentual dos coletores necessários que concluíram com sucesso."
+            >
+              <TrendBars
+                points={trends.series ?? []}
+                metric="score_confidence"
+              />
             </Card>
           </div>
         </section>

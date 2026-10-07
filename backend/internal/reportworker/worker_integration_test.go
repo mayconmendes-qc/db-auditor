@@ -88,6 +88,31 @@ func TestReportJobLifecycleIntegration(t *testing.T) {
 	if got, err := store.GetReportArtifact(ctx, env, cancelled.ID); err != nil || got != nil {
 		t.Fatalf("cancelled artifact: %#v %v", got, err)
 	}
+	interrupted, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: env, AuditRunID: run, Type: "executive", IdempotencyKey: "interrupted-case"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := store.ClaimReportJob(ctx)
+	if err != nil || claimed == nil || claimed.ID != interrupted.ID {
+		t.Fatalf("claim interrupted job: %#v %v", claimed, err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE report_job SET started_at=now()-interval '4 minutes' WHERE id=$1::uuid`, interrupted.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.RequeueInterruptedReports(ctx); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := store.GetReportJob(ctx, env, interrupted.ID)
+	if err != nil || recovered == nil || recovered.Status != "queued" {
+		t.Fatalf("interrupted job not requeued: %#v %v", recovered, err)
+	}
+	if err = (Worker{Store: store}).ProcessOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err = store.GetReportJob(ctx, env, interrupted.ID)
+	if err != nil || recovered == nil || recovered.Status != "success" || recovered.Attempts != 2 {
+		t.Fatalf("interrupted job not finished: %#v %v", recovered, err)
+	}
 	failedReq := repository.ReportRequest{EnvironmentID: env, AuditRunID: run, Type: "table", Filters: repository.ReportFilters{Database: "db", Schema: "public", Table: "missing"}}
 	failedJob, err := store.CreateReportJob(ctx, failedReq)
 	if err != nil {
@@ -118,7 +143,7 @@ func TestReportJobLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := store.ClaimReportJob(ctx)
+	claimed, err = store.ClaimReportJob(ctx)
 	if err != nil || claimed.ID != badHash.ID {
 		t.Fatalf("claim: %#v %v", claimed, err)
 	}

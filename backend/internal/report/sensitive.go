@@ -27,4 +27,19 @@ func (d *Document) RedactSensitive(level string) {
 	for i := range d.CoverageNotes {
 		d.CoverageNotes[i] = "Detalhes de cobertura omitidos neste nível de redação."
 	}
+	for i := range d.Regressions {
+		d.Regressions[i].Object = mask
+	}
+	if level == "strict" {
+		if d.TotalDatabases == 0 {
+			d.TotalDatabases = len(d.Databases)
+		}
+		// The strict copy keeps counts and provenance, but removes object lists,
+		// storage evolution and baseline details that could reveal topology.
+		d.Databases = nil
+		d.Tables = nil
+		d.Growth = nil
+		d.Baseline = nil
+		d.Regressions = nil
+	}
 }

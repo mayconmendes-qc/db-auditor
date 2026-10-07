@@ -41,6 +41,29 @@ const discoveryMode: Record<string, string> = {
   multi_database: "Múltiplos bancos",
 };
 
+const findingCategory: Record<string, string> = {
+  security: "Segurança",
+  privilege: "Permissões",
+  rls: "Controle de acesso",
+  config: "Configuração",
+  performance: "Desempenho",
+  index: "Índices",
+  workload: "Consultas",
+  storage: "Armazenamento",
+  vacuum: "Manutenção",
+  maintenance: "Manutenção",
+  policy: "Políticas",
+  job: "Tarefas agendadas",
+  chunk: "Dados por período",
+  cagg: "Agregados",
+  integrity: "Integridade",
+  model: "Modelo de dados",
+  inactivity: "Uso de objetos",
+  sequence: "Sequências",
+  replication: "Replicação",
+  timescale: "TimescaleDB",
+};
+
 function mapLabel(
   table: Record<string, string>,
   value: string | null | undefined,
@@ -58,4 +81,5 @@ export const labels = {
   mappingStatus: (v: string) => mapLabel(mappingStatus, v),
   envType: (v: string) => mapLabel(envType, v),
   discoveryMode: (v: string) => mapLabel(discoveryMode, v),
+  findingCategory: (v: string) => mapLabel(findingCategory, v),
 };

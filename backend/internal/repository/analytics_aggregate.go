@@ -106,6 +106,10 @@ type RunTrendPoint struct {
 	Findings         *int      `json:"findings,omitempty"`
 	Critical         *int      `json:"critical,omitempty"`
 	High             *int      `json:"high,omitempty"`
+	Score            *int      `json:"score,omitempty"`
+	ScoreVersion     string    `json:"score_version,omitempty"`
+	ScoreConfidence  float64   `json:"score_confidence,omitempty"`
+	CounterReset     bool      `json:"counter_reset,omitempty"`
 }
 
 type StorageConsumer struct {
@@ -179,6 +183,9 @@ ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 		return nil, err
 	}
 	markTrendComparability(out)
+	if err := s.markTrendResets(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -222,6 +229,12 @@ ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 		return nil, err
 	}
 	markTrendComparability(out)
+	if err := s.markTrendResets(ctx, out); err != nil {
+		return nil, err
+	}
+	if err := s.addTrendScores(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

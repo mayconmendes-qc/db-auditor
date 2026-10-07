@@ -1,5 +1,7 @@
 # DB Auditor
 
+**Comece pelo [guia do usuário](docs/guia-do-usuario.md)** para aprender a usar inventário, achados, histórico, ações assistidas, qualidade de dados e relatórios em linguagem simples.
+
 Serviço **read-only** de inventário, comparação e diagnóstico de ambientes PostgreSQL/TimescaleDB (ex.: Tiger Cloud e datacenter self-hosted).
 
 **MVP 0.12** — sprints 0–12 no backlog concluídas no repositório (fundação → inventário → findings → performance → ops → dashboard → release).
@@ -71,7 +73,7 @@ As funcionalidades da segunda etapa (planos de ação, gestão de contas, redaç
 
 Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local. O primeiro acesso está na seção acima. Use HTTPS em produção.
 
-Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; os metadados do histórico são preservados por mais 90 dias. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.
+Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; o registro do pedido permanece como trilha de proveniência até que uma política de arquivamento aprovada seja aplicada. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.
 
 Em uma instalação com volume PostgreSQL existente, não rode `make reset-volume`: ele apaga snapshots, findings e relatórios. A API cria as tabelas de login se o volume for anterior a elas. Veja [o guia operacional da Sprint 20](docs/sprint20-operations.md) e `backend/migrations/README.md`.
 

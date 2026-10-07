@@ -4,7 +4,7 @@ import { useApp } from "../../context/AppContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
-import { Select } from "../ui";
+import { Select } from "../ui/Select";
 import { Input } from "../ui/Input";
 
 export const navigationSections: NavigationSection[] = [

@@ -26,7 +26,7 @@ func PlanFor(kind string) Plan {
 	case "date_range":
 		common.Meaning = "A amostra contém datas fora do intervalo informado."
 		common.Confirmation = "Confirme fuso, período válido e exceções históricas com a área responsável."
-		common.ExternalSteps = "Planeje revisão da origem e correção por lotes; não descarte linhas sem política de retenção aprovada."
+		common.ExternalSteps = "Registre contagem total e dependências. Se houver política de retenção aprovada, planeje cópia para arquivo com verificação de integridade e teste de restauração antes de qualquer exclusão externa; se não houver, apenas investigue a origem e corrija datas por lotes."
 	default:
 		common.Meaning = "Uma distribuição concentrada foi observada na amostra."
 		common.Confirmation = "Confirme se a concentração é esperada no período e na população."

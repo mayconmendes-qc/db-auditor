@@ -17,6 +17,7 @@ type InventoryFilter struct {
 	Q             string
 	Limit         int
 	Offset        int
+	OrderBy       string
 }
 
 type TableSnapshotRow struct {
@@ -120,7 +121,7 @@ func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]Ta
 	if err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.q.ListTableSnapshotsFiltered(ctx, sqlc.ListTableSnapshotsFilteredParams{
+	params := sqlc.ListTableSnapshotsFilteredParams{
 		Column1: env,
 		Column2: f.AuditRunID,
 		Column3: f.Database,
@@ -130,7 +131,13 @@ func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]Ta
 		Column7: q,
 		Limit:   int32(limit),
 		Offset:  int32(offset),
-	})
+	}
+	var rows []sqlc.ListTableSnapshotsFilteredRow
+	if f.OrderBy == "" {
+		rows, err = s.q.ListTableSnapshotsFiltered(ctx, params)
+	} else {
+		rows, err = s.listOrderedTableSnapshots(ctx, f, env, q, limit)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

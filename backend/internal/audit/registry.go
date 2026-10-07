@@ -25,6 +25,10 @@ type CollectorSpec struct {
 	Version  string
 	Profiles map[string]struct{}
 	Run      CollectorFunc
+	// Additional engine adapters must declare their read-only contract and
+	// an upper bound for rows returned to the snapshot store.
+	ReadOnly bool
+	MaxRows  int64
 }
 
 // Registry holds named collectors available to the AuditRunner.

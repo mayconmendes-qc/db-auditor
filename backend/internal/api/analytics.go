@@ -115,7 +115,8 @@ func envFilter(r *http.Request) string {
 
 func getKPIs(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
 		envID := envFilter(r)
 		res := DashboardKPIs{GeneratedAtUTC: time.Now().UTC(), InventoryStatus: "empty"}
 
@@ -163,33 +164,51 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 			if envID != "" && e.ID != envID {
 				continue
 			}
+			var counts *repository.InventoryCounts
+			var capabilities repository.CapabilityAggregate
 			if counter, ok := store.(interface {
-				CountLatestInventory(context.Context, string) (*repository.InventoryCounts, error)
+				CountLatestEnvironmentSnapshot(context.Context, string) (*repository.LatestEnvironmentSnapshot, error)
 			}); ok {
-				counts, countErr := counter.CountLatestInventory(ctx, e.ID)
-				if countErr != nil {
-					res.Notes = append(res.Notes, "Não foi possível contar o inventário do ambiente "+e.ID)
-					res.InventoryStatus = "partial"
-				} else if counts == nil {
-					res.InventoryStatus = "partial"
-				} else {
-					if res.Databases == nil {
-						res.Databases, res.Schemas, res.Tables = new(int), new(int), new(int)
-					}
-					*res.Databases += counts.Databases
-					*res.Schemas += counts.Schemas
-					*res.Tables += counts.Tables
-					if counts.Status != "complete" {
-						res.InventoryStatus = "partial"
-					} else if res.InventoryStatus == "empty" {
-						res.InventoryStatus = "complete"
+				snapshot, snapshotErr := counter.CountLatestEnvironmentSnapshot(ctx, e.ID)
+				if snapshotErr != nil {
+					writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível resumir o inventário do ambiente.")
+					return
+				}
+				if snapshot != nil {
+					counts = &snapshot.Inventory
+					capabilities = snapshot.Capabilities
+				}
+			} else {
+				if counter, ok := store.(interface {
+					CountLatestInventory(context.Context, string) (*repository.InventoryCounts, error)
+				}); ok {
+					var countErr error
+					counts, countErr = counter.CountLatestInventory(ctx, e.ID)
+					if countErr != nil {
+						res.Notes = append(res.Notes, "Não foi possível contar o inventário do ambiente "+e.ID)
 					}
 				}
+				var capabilityErr error
+				capabilities, capabilityErr = store.CountLatestCapabilities(ctx, e.ID)
+				if capabilityErr != nil {
+					writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível resumir as capacidades do ambiente.")
+					return
+				}
 			}
-			capabilities, err := store.CountLatestCapabilities(ctx, e.ID)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível resumir as capacidades do ambiente.")
-				return
+			if counts == nil {
+				res.InventoryStatus = "partial"
+			} else {
+				if res.Databases == nil {
+					res.Databases, res.Schemas, res.Tables = new(int), new(int), new(int)
+				}
+				*res.Databases += counts.Databases
+				*res.Schemas += counts.Schemas
+				*res.Tables += counts.Tables
+				if counts.Status != "complete" {
+					res.InventoryStatus = "partial"
+				} else if res.InventoryStatus == "empty" {
+					res.InventoryStatus = "complete"
+				}
 			}
 			res.TotalStorageBytes += capabilities.TotalStorageBytes
 			res.Hypertables += capabilities.Hypertables
@@ -203,7 +222,8 @@ func getKPIs(store InventoryStore) http.HandlerFunc {
 
 func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
 		envID := envFilter(r)
 		from, to, granularity, err := analyticsWindow(r)
 		if err != nil {
@@ -277,7 +297,8 @@ func getStorageGrowth(store InventoryStore) http.HandlerFunc {
 
 func getFindingsTrends(store InventoryStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
 		envID := envFilter(r)
 		from, to, granularity, err := analyticsWindow(r)
 		if err != nil {

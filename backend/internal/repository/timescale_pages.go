@@ -19,7 +19,9 @@ AND ($5='' OR hypertable_name ILIKE $5 OR schema_name ILIKE $5)`
 	rows, err := s.pool.Query(ctx, `SELECT id::text,audit_run_id::text,environment_id::text,database_name,schema_name,hypertable_name,
 owner_name,num_dimensions,num_chunks,compression_enabled,is_distributed,total_size_bytes,data_size_bytes,index_size_bytes,collected_at
 FROM hypertable_snapshot WHERE `+where+`
-ORDER BY database_name,schema_name,hypertable_name,id LIMIT $6 OFFSET $7`, append(args, limit, offset)...)
+ORDER BY `+inventoryOrder(f.OrderBy, map[string]string{
+		"schema": "schema_name", "name": "hypertable_name", "size": "total_size_bytes", "chunks": "num_chunks", "compressed": "compression_enabled",
+	}, "database_name,schema_name,hypertable_name,id")+` LIMIT $6 OFFSET $7`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -54,7 +56,9 @@ AND ($5='' OR view_name ILIKE $5 OR schema_name ILIKE $5)`
 	rows, err := s.pool.Query(ctx, `SELECT id::text,database_name,schema_name,view_name,owner_name,
 materialization_schema,materialization_hypertable,materialized_only,compression_enabled,collected_at
 FROM continuous_aggregate_snapshot WHERE `+where+`
-ORDER BY database_name,schema_name,view_name,id LIMIT $6 OFFSET $7`, append(args, limit, offset)...)
+ORDER BY `+inventoryOrder(f.OrderBy, map[string]string{
+		"schema": "schema_name", "name": "view_name", "owner": "owner_name", "compressed": "compression_enabled",
+	}, "database_name,schema_name,view_name,id")+` LIMIT $6 OFFSET $7`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
