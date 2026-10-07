@@ -8,7 +8,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `04_p1.sql`: primeira ampliação incremental.
 - `05_p2.sql`: melhorias da primeira etapa.
 - `06_second_stage.sql`: planos de ação, eventos, anotações e regressões da segunda etapa.
-- `07_third_stage.sql`: mecanismo do ambiente, diagnósticos agregados, decisões de saneamento e medições antes/depois.
+- `07_third_stage.sql`: mecanismo do ambiente, diagnósticos agregados, decisões de saneamento e medições antes/depois. A constraint `audit_environment_engine_format` é criada de forma idempotente (reaplicável após apply parcial).
 - `08_action_workload.sql`: registra a confirmação explícita de carga semelhante nas medições antes/depois; medições antigas permanecem como não confirmadas.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
@@ -21,6 +21,16 @@ make up
 ```
 
 Um volume que já existe **não** reaplica o baseline. A API cria as tabelas de login (`auditor_user`, sessão e log) se elas ainda não existirem, adiciona `blocked_until` ao contador de tentativas de login quando necessário e executa migrações incrementais pendentes. Faça backup antes de atualizar um volume persistente; confira o registro `schema_migration` e não altere arquivos já aplicados. Veja [docs/third-stage-operations.md](../../docs/third-stage-operations.md) para o procedimento de implantação e restauração.
+
+Se o checksum de um arquivo **já aplicado** mudar (por correção de idempotência), a API recusa subir. Em desenvolvimento, atualize o registro após validar o schema:
+
+```bash
+sha256sum backend/migrations/07_third_stage.sql
+# no snapshot store:
+# UPDATE schema_migration SET checksum = '<hex>' WHERE version = '07_third_stage.sql';
+```
+
+Volumes em que a migração **falhou a meio** (objeto já existe, versão ausente em `schema_migration`) podem subir de novo após o pull: o SQL idempotente completa o que faltava e grava o checksum.
 
 ## Ambientes
 
