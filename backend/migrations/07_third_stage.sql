@@ -1,8 +1,18 @@
 -- Third-stage diagnostics and measured outcomes live only in the control DB.
 -- Existing audit history is retained; this migration never touches targets.
+-- Statements are idempotent so a partial apply can be retried safely.
 ALTER TABLE audit_environment ADD COLUMN IF NOT EXISTS engine text NOT NULL DEFAULT 'postgresql';
-ALTER TABLE audit_environment ADD CONSTRAINT audit_environment_engine_format
-  CHECK (engine ~ '^[a-z][a-z0-9_]{1,31}$');
+
+DO $$
+BEGIN
+  ALTER TABLE audit_environment
+    ADD CONSTRAINT audit_environment_engine_format
+    CHECK (engine ~ '^[a-z][a-z0-9_]{1,31}$');
+EXCEPTION
+  WHEN duplicate_object THEN
+    NULL;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS quality_scan (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
