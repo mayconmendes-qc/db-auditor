@@ -4,8 +4,8 @@ import { useApp } from "../../context/AppContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
-import { Select } from "../ui/Select";
 import { Input } from "../ui/Input";
+import { Select } from "../ui/Select";
 
 export const navigationSections: NavigationSection[] = [
   "Dashboard",
