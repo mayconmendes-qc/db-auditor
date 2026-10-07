@@ -199,7 +199,7 @@ func TestCatalogVersionGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(encoded)
-	const golden = "ebd760140f3412ff42f60a182f50b509121c65de1ddc5516735f1da084887fbe"
+	const golden = "00471b0c5afe4c75bd9063c0d34c05c066a3a0944dcff9fca8f6ccec4a9ad019"
 	if got := hex.EncodeToString(digest[:]); got != golden {
 		t.Fatalf("catalog golden changed: %s", got)
 	}

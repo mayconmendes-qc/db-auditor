@@ -16,6 +16,7 @@ type fakeAuthStore struct {
 	user        *repository.AuditorUser
 	environment string
 	attempts    int
+	retryAfter  int
 }
 
 func (s fakeAuthStore) FindAuditorUser(context.Context, string) (*repository.AuditorUser, error) {
@@ -37,11 +38,11 @@ func (s fakeAuthStore) LogAuditorOperation(context.Context, *repository.AuditorU
 func (s fakeAuthStore) ResolveAuditorResourceEnvironment(context.Context, string, string) (string, error) {
 	return s.environment, nil
 }
-func (s fakeAuthStore) RecordLoginAttempt(context.Context, []byte, time.Duration) (int, error) {
+func (s fakeAuthStore) RecordLoginAttempt(context.Context, []byte, time.Duration, bool) (repository.LoginAttempt, error) {
 	if s.attempts > 0 {
-		return s.attempts, nil
+		return repository.LoginAttempt{Count: s.attempts, RetryAfter: s.retryAfter}, nil
 	}
-	return 1, nil
+	return repository.LoginAttempt{Count: 1}, nil
 }
 func (s fakeAuthStore) ClearLoginAttempt(context.Context, []byte) error { return nil }
 
@@ -151,5 +152,19 @@ func TestLoginRateLimitIsIndependentFromAPIRateLimit(t *testing.T) {
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"invalid"}`)))
 	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") == "" {
 		t.Fatalf("login limit: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestLoginProgressiveBackoffReturnsGenericResponse(t *testing.T) {
+	store := fakeAuthStore{attempts: 4, retryAfter: 2}
+	mux := http.NewServeMux()
+	registerAuthRoutes(mux, store)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"invalid"}`)))
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "2" {
+		t.Fatalf("backoff response: %d %q", response.Code, response.Header().Get("Retry-After"))
+	}
+	if strings.Contains(response.Body.String(), "admin") {
+		t.Fatal("rate limit response exposed account name")
 	}
 }

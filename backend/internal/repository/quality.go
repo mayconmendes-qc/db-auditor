@@ -49,7 +49,7 @@ func (s *Store) SaveQualityScan(ctx context.Context, env, actor string, request 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var id string
-	if err = tx.QueryRow(ctx, `INSERT INTO quality_scan(environment_id,database_name,schema_name,table_name,sample_limit,sampled_rows,actor) VALUES($1::uuid,$2,$3,$4,$5,$6,$7) RETURNING id::text`, env, request.Database, request.Schema, request.Table, request.Limit, result.SampledRows, actor).Scan(&id); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO quality_scan(environment_id,database_name,schema_name,table_name,sample_limit,sampled_rows,sample_method,actor) VALUES($1::uuid,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`, env, request.Database, request.Schema, request.Table, request.Limit, result.SampledRows, result.SampleMethod, actor).Scan(&id); err != nil {
 		return nil, err
 	}
 	for _, issue := range result.Issues {
@@ -92,7 +92,8 @@ func (s *Store) GetQualityScan(ctx context.Context, env, id string) (*QualitySca
 	for i := range item.Issues {
 		issue := &item.Issues[i]
 		var previousAffected, previousRows, previousLimit int
-		err = s.pool.QueryRow(ctx, `SELECT q.affected_rows,q.sampled_rows,s.sample_limit FROM quality_issue q JOIN quality_scan s ON s.id=q.scan_id WHERE s.environment_id=$1::uuid AND s.database_name=$2 AND s.schema_name=$3 AND s.table_name=$4 AND s.created_at<$5 AND q.check_kind=$6 AND q.column_name=$7 ORDER BY s.created_at DESC,s.id DESC LIMIT 1`, env, item.Database, item.Schema, item.Table, item.CreatedAt, issue.Kind, issue.Column).Scan(&previousAffected, &previousRows, &previousLimit)
+		var previousMethod string
+		err = s.pool.QueryRow(ctx, `SELECT q.affected_rows,q.sampled_rows,s.sample_limit,s.sample_method FROM quality_issue q JOIN quality_scan s ON s.id=q.scan_id WHERE s.environment_id=$1::uuid AND s.database_name=$2 AND s.schema_name=$3 AND s.table_name=$4 AND s.created_at<$5 AND q.check_kind=$6 AND q.column_name=$7 ORDER BY s.created_at DESC,s.id DESC LIMIT 1`, env, item.Database, item.Schema, item.Table, item.CreatedAt, issue.Kind, issue.Column).Scan(&previousAffected, &previousRows, &previousLimit, &previousMethod)
 		if errors.Is(err, pgx.ErrNoRows) {
 			issue.ComparisonNote = "Sem diagnóstico anterior comparável."
 			continue
@@ -102,11 +103,11 @@ func (s *Store) GetQualityScan(ctx context.Context, env, id string) (*QualitySca
 		}
 		// A prior count alone cannot establish a trend when sample sizes differ.
 		issue.PreviousAffected = &previousAffected
-		issue.Comparable = previousRows == issue.SampledRows && previousLimit == item.SampleLimit
+		issue.Comparable = previousRows == issue.SampledRows && previousLimit == item.SampleLimit && previousMethod == item.SampleMethod
 		if issue.Comparable {
-			issue.ComparisonNote = "Mesmo limite e número de linhas; a amostra por ordem física ainda pode mudar."
+			issue.ComparisonNote = "Mesmo limite e número de linhas; páginas amostradas podem mudar após alterações na tabela."
 		} else {
-			issue.ComparisonNote = "Limite ou número de linhas diferente; não compare contagens diretamente."
+			issue.ComparisonNote = "Método, limite ou número de linhas diferente; não compare contagens diretamente."
 		}
 	}
 	return &item, nil

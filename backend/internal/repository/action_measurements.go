@@ -11,34 +11,36 @@ import (
 var ErrMeasurementRun = errors.New("measurement run is outside finding scope")
 
 type ActionMeasurement struct {
-	ID             string    `json:"id"`
-	FindingID      string    `json:"finding_id"`
-	BeforeRunID    string    `json:"before_run_id"`
-	AfterRunID     string    `json:"after_run_id"`
-	Metric         string    `json:"metric"`
-	BeforeValue    *int64    `json:"before_value"`
-	AfterValue     *int64    `json:"after_value"`
-	Comparable     bool      `json:"comparable"`
-	ComparisonNote string    `json:"comparison_note"`
-	Hypothesis     string    `json:"hypothesis"`
-	WindowNote     string    `json:"window_note"`
-	RecordedBy     string    `json:"recorded_by"`
-	RecordedAt     time.Time `json:"recorded_at"`
+	ID                 string    `json:"id"`
+	FindingID          string    `json:"finding_id"`
+	BeforeRunID        string    `json:"before_run_id"`
+	AfterRunID         string    `json:"after_run_id"`
+	Metric             string    `json:"metric"`
+	BeforeValue        *int64    `json:"before_value"`
+	AfterValue         *int64    `json:"after_value"`
+	Comparable         bool      `json:"comparable"`
+	ComparisonNote     string    `json:"comparison_note"`
+	Hypothesis         string    `json:"hypothesis"`
+	WindowNote         string    `json:"window_note"`
+	WorkloadComparable bool      `json:"workload_comparable"`
+	RecordedBy         string    `json:"recorded_by"`
+	RecordedAt         time.Time `json:"recorded_at"`
 }
 
 type TrackedAction struct {
-	FindingID             string             `json:"finding_id"`
-	EnvironmentID         string             `json:"environment_id"`
-	Title                 string             `json:"title"`
-	Severity              string             `json:"severity"`
-	Status                string             `json:"status"`
-	Owner                 string             `json:"owner"`
-	Result                string             `json:"result"`
-	Recurrences           int                `json:"recurrences"`
-	DueAt                 *time.Time         `json:"due_at,omitempty"`
-	LatestMeasurement     *ActionMeasurement `json:"latest_measurement,omitempty"`
-	PotentialReclaimBytes *int64             `json:"potential_reclaim_bytes,omitempty"`
-	EstimateNote          string             `json:"estimate_note"`
+	FindingID             string              `json:"finding_id"`
+	EnvironmentID         string              `json:"environment_id"`
+	Title                 string              `json:"title"`
+	Severity              string              `json:"severity"`
+	Status                string              `json:"status"`
+	Owner                 string              `json:"owner"`
+	Result                string              `json:"result"`
+	Recurrences           int                 `json:"recurrences"`
+	DueAt                 *time.Time          `json:"due_at,omitempty"`
+	LatestMeasurement     *ActionMeasurement  `json:"latest_measurement,omitempty"`
+	Measurements          []ActionMeasurement `json:"measurements"`
+	PotentialReclaimBytes *int64              `json:"potential_reclaim_bytes,omitempty"`
+	EstimateNote          string              `json:"estimate_note"`
 }
 
 func (s *Store) ListTrackedActions(ctx context.Context, env string) ([]TrackedAction, error) {
@@ -76,18 +78,27 @@ FROM finding_action a JOIN finding f ON f.id=a.finding_id WHERE f.environment_id
 	for i := range out {
 		ids[i] = out[i].FindingID
 		positions[ids[i]] = i
+		out[i].Measurements = []ActionMeasurement{}
 	}
-	latest, err := s.pool.Query(ctx, `SELECT DISTINCT ON (finding_id) id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,recorded_by,recorded_at FROM finding_action_measurement WHERE finding_id=ANY($1::uuid[]) ORDER BY finding_id,recorded_at DESC,id DESC`, ids)
+	latest, err := s.pool.Query(ctx, `SELECT id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,workload_comparable,recorded_by,recorded_at FROM (
+SELECT m.*,row_number() OVER (PARTITION BY finding_id ORDER BY recorded_at DESC,id DESC) AS position
+FROM finding_action_measurement m WHERE finding_id=ANY($1::uuid[])) m
+WHERE position<=100 ORDER BY finding_id,recorded_at DESC,id DESC`, ids)
 	if err != nil {
 		return nil, err
 	}
 	for latest.Next() {
 		var item ActionMeasurement
-		if err = latest.Scan(&item.ID, &item.FindingID, &item.BeforeRunID, &item.AfterRunID, &item.Metric, &item.BeforeValue, &item.AfterValue, &item.Comparable, &item.ComparisonNote, &item.Hypothesis, &item.WindowNote, &item.RecordedBy, &item.RecordedAt); err != nil {
+		if err = latest.Scan(&item.ID, &item.FindingID, &item.BeforeRunID, &item.AfterRunID, &item.Metric, &item.BeforeValue, &item.AfterValue, &item.Comparable, &item.ComparisonNote, &item.Hypothesis, &item.WindowNote, &item.WorkloadComparable, &item.RecordedBy, &item.RecordedAt); err != nil {
 			latest.Close()
 			return nil, err
 		}
-		out[positions[item.FindingID]].LatestMeasurement = &item
+		position := positions[item.FindingID]
+		out[position].Measurements = append(out[position].Measurements, item)
+		if out[position].LatestMeasurement == nil {
+			copyOfLatest := item
+			out[position].LatestMeasurement = &copyOfLatest
+		}
 	}
 	err = latest.Err()
 	latest.Close()
@@ -98,7 +109,7 @@ FROM finding_action a JOIN finding f ON f.id=a.finding_id WHERE f.environment_id
 }
 
 func (s *Store) ListActionMeasurements(ctx context.Context, findingID string) ([]ActionMeasurement, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,recorded_by,recorded_at FROM finding_action_measurement WHERE finding_id=$1::uuid ORDER BY recorded_at DESC,id DESC LIMIT 100`, findingID)
+	rows, err := s.pool.Query(ctx, `SELECT id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,workload_comparable,recorded_by,recorded_at FROM finding_action_measurement WHERE finding_id=$1::uuid ORDER BY recorded_at DESC,id DESC LIMIT 100`, findingID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +117,7 @@ func (s *Store) ListActionMeasurements(ctx context.Context, findingID string) ([
 	out := []ActionMeasurement{}
 	for rows.Next() {
 		var item ActionMeasurement
-		if err = rows.Scan(&item.ID, &item.FindingID, &item.BeforeRunID, &item.AfterRunID, &item.Metric, &item.BeforeValue, &item.AfterValue, &item.Comparable, &item.ComparisonNote, &item.Hypothesis, &item.WindowNote, &item.RecordedBy, &item.RecordedAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.FindingID, &item.BeforeRunID, &item.AfterRunID, &item.Metric, &item.BeforeValue, &item.AfterValue, &item.Comparable, &item.ComparisonNote, &item.Hypothesis, &item.WindowNote, &item.WorkloadComparable, &item.RecordedBy, &item.RecordedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -114,7 +125,7 @@ func (s *Store) ListActionMeasurements(ctx context.Context, findingID string) ([
 	return out, rows.Err()
 }
 
-func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, after, metric, hypothesis, window, actor string) (*ActionMeasurement, error) {
+func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, after, metric, hypothesis, window string, workloadComparable bool, actor string) (*ActionMeasurement, error) {
 	var env, db, schema, table string
 	err := s.pool.QueryRow(ctx, `SELECT environment_id::text,database_name,schema_name,object_name FROM finding WHERE id=$1::uuid`, findingID).Scan(&env, &db, &schema, &table)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -181,10 +192,10 @@ func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, 
 	if err != nil {
 		return nil, err
 	}
-	comparable := beforeValue != nil && afterValue != nil && b.status == "success" && a.status == "success" && b.profile == a.profile && b.collector == a.collector && b.rules == a.rules && b.rules != "" && beforeCoverage != nil && afterCoverage != nil && beforeCoverage.Completeness == "complete" && afterCoverage.Completeness == "complete" && beforeCoverage.AnalysisStatus != nil && afterCoverage.AnalysisStatus != nil && *beforeCoverage.AnalysisStatus == "success" && *afterCoverage.AnalysisStatus == "success"
-	note := "Comparação indisponível: cobertura, análise, objeto, perfil ou versão incompatível."
+	comparable := workloadComparable && beforeValue != nil && afterValue != nil && b.status == "success" && a.status == "success" && b.profile == a.profile && b.collector == a.collector && b.rules == a.rules && b.rules != "" && beforeCoverage != nil && afterCoverage != nil && beforeCoverage.Completeness == "complete" && afterCoverage.Completeness == "complete" && beforeCoverage.AnalysisStatus != nil && afterCoverage.AnalysisStatus != nil && *beforeCoverage.AnalysisStatus == "success" && *afterCoverage.AnalysisStatus == "success"
+	note := "Comparação indisponível: cobertura, análise, objeto, perfil, versão ou carga não confirmada como semelhante."
 	if comparable {
-		note = "Métrica observada em runs comparáveis; a diferença não comprova causalidade da ação."
+		note = "Métrica observada em runs tecnicamente comparáveis, com carga declarada semelhante pelo operador; a diferença não comprova causalidade da ação."
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -192,7 +203,7 @@ func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var id string
-	err = tx.QueryRow(ctx, `INSERT INTO finding_action_measurement(finding_id,before_run_id,after_run_id,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,recorded_by) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(finding_id,before_run_id,after_run_id,metric) DO UPDATE SET before_value=EXCLUDED.before_value,after_value=EXCLUDED.after_value,comparable=EXCLUDED.comparable,comparison_note=EXCLUDED.comparison_note,hypothesis=EXCLUDED.hypothesis,window_note=EXCLUDED.window_note,recorded_by=EXCLUDED.recorded_by,recorded_at=now() RETURNING id::text`, findingID, before, after, metric, beforeValue, afterValue, comparable, note, hypothesis, window, actor).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO finding_action_measurement(finding_id,before_run_id,after_run_id,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,workload_comparable,recorded_by) VALUES($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(finding_id,before_run_id,after_run_id,metric) DO UPDATE SET before_value=EXCLUDED.before_value,after_value=EXCLUDED.after_value,comparable=EXCLUDED.comparable,comparison_note=EXCLUDED.comparison_note,hypothesis=EXCLUDED.hypothesis,window_note=EXCLUDED.window_note,workload_comparable=EXCLUDED.workload_comparable,recorded_by=EXCLUDED.recorded_by,recorded_at=now() RETURNING id::text`, findingID, before, after, metric, beforeValue, afterValue, comparable, note, hypothesis, window, workloadComparable, actor).Scan(&id)
 	if err != nil {
 		return nil, err
 	}

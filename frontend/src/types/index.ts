@@ -124,6 +124,10 @@ export interface RunTrendPoint {
   findings?: number;
   critical?: number;
   high?: number;
+  score?: number;
+  score_version?: string;
+  score_confidence?: number;
+  counter_reset?: boolean;
 }
 
 export interface FindingAction {
@@ -247,6 +251,7 @@ export interface ActionMeasurement {
   comparison_note: string;
   hypothesis: string;
   window_note: string;
+  workload_comparable: boolean;
   recorded_by: string;
   recorded_at: string;
 }
@@ -262,6 +267,7 @@ export interface TrackedAction {
   recurrences: number;
   due_at?: string;
   latest_measurement?: ActionMeasurement;
+  measurements: ActionMeasurement[];
   potential_reclaim_bytes?: number;
   estimate_note: string;
 }

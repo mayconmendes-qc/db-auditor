@@ -409,19 +409,20 @@ type FindingActionEvent struct {
 }
 
 type FindingActionMeasurement struct {
-	ID             pgtype.UUID
-	FindingID      pgtype.UUID
-	BeforeRunID    pgtype.UUID
-	AfterRunID     pgtype.UUID
-	Metric         string
-	BeforeValue    pgtype.Int8
-	AfterValue     pgtype.Int8
-	Comparable     bool
-	ComparisonNote string
-	Hypothesis     string
-	WindowNote     string
-	RecordedBy     string
-	RecordedAt     pgtype.Timestamptz
+	ID                 pgtype.UUID
+	FindingID          pgtype.UUID
+	BeforeRunID        pgtype.UUID
+	AfterRunID         pgtype.UUID
+	Metric             string
+	BeforeValue        pgtype.Int8
+	AfterValue         pgtype.Int8
+	Comparable         bool
+	ComparisonNote     string
+	Hypothesis         string
+	WindowNote         string
+	RecordedBy         string
+	RecordedAt         pgtype.Timestamptz
+	WorkloadComparable bool
 }
 
 type FindingEvent struct {

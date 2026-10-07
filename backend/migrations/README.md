@@ -9,6 +9,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `05_p2.sql`: melhorias da primeira etapa.
 - `06_second_stage.sql`: planos de ação, eventos, anotações e regressões da segunda etapa.
 - `07_third_stage.sql`: mecanismo do ambiente, diagnósticos agregados, decisões de saneamento e medições antes/depois.
+- `08_action_workload.sql`: registra a confirmação explícita de carga semelhante nas medições antes/depois; medições antigas permanecem como não confirmadas.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 
@@ -19,7 +20,7 @@ make reset-volume   # destrutivo: apaga o volume snapshot-store
 make up
 ```
 
-Um volume que já existe **não** reaplica o baseline. A API cria as tabelas de login (`auditor_user`, sessão e log) se elas ainda não existirem e executa migrações incrementais pendentes. Faça backup antes de atualizar um volume persistente; confira o registro `schema_migration` e não altere arquivos já aplicados. Veja [docs/third-stage-operations.md](../../docs/third-stage-operations.md) para o procedimento de implantação e restauração.
+Um volume que já existe **não** reaplica o baseline. A API cria as tabelas de login (`auditor_user`, sessão e log) se elas ainda não existirem, adiciona `blocked_until` ao contador de tentativas de login quando necessário e executa migrações incrementais pendentes. Faça backup antes de atualizar um volume persistente; confira o registro `schema_migration` e não altere arquivos já aplicados. Veja [docs/third-stage-operations.md](../../docs/third-stage-operations.md) para o procedimento de implantação e restauração.
 
 ## Ambientes
 

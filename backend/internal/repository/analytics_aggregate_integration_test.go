@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -58,17 +59,49 @@ VALUES($1::uuid,$2::uuid,'success','test')`, newer, env); err != nil {
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO finding(environment_id,audit_run_id,finding_type,severity,status,title,dedup_key)
 SELECT $1::uuid,$2::uuid,'security.test','high','open','test','finding-'||n
-FROM generate_series(1,600) AS n`, env, newer); err != nil {
+FROM generate_series(1,5100) AS n`, env, newer); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO finding_event(finding_id,audit_run_id,event_type,severity)
 SELECT id,$1::uuid,'observed','high' FROM finding WHERE environment_id=$2::uuid ORDER BY dedup_key LIMIT 2`, newer, env); err != nil {
 		t.Fatal(err)
 	}
+	for _, collector := range scoreCollectors {
+		if _, err := pool.Exec(ctx, `INSERT INTO audit_run_coverage(audit_run_id,environment_id,collector_name,database_name,status) VALUES($1::uuid,$2::uuid,$3,'db','success')`, newer, env, collector); err != nil {
+			t.Fatal(err)
+		}
+	}
 	aggregate, err := store.CountFindings(ctx, env)
-	if err != nil || aggregate.Total != 600 || aggregate.Open != 600 || aggregate.High != 600 {
+	if err != nil || aggregate.Total != 5100 || aggregate.Open != 5100 || aggregate.High != 5100 {
 		t.Fatalf("finding aggregate %+v: %v", aggregate, err)
 	}
+	latencies := make([]time.Duration, 20)
+	for i := range latencies {
+		started := time.Now()
+		if _, err := store.CountFindings(ctx, env); err != nil {
+			t.Fatal(err)
+		}
+		latencies[i] = time.Since(started)
+	}
+	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+	t.Logf("5,100 findings exact aggregate: p95=%s", latencies[18])
+	plan, err := pool.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT lower(severity),lower(status),finding_type,count(*) FROM finding WHERE environment_id=$1::uuid GROUP BY lower(severity),lower(status),finding_type`, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for plan.Next() {
+		var line string
+		if err := plan.Scan(&line); err != nil {
+			plan.Close()
+			t.Fatal(err)
+		}
+		t.Log(line)
+	}
+	if err := plan.Err(); err != nil {
+		plan.Close()
+		t.Fatal(err)
+	}
+	plan.Close()
 	from, to := time.Now().UTC().Add(-72*time.Hour), time.Now().UTC()
 	storage, err := store.ListStorageTrend(ctx, env, from, to, "day")
 	if err != nil || len(storage) != 2 || storage[0].SizeBytes == nil || *storage[0].SizeBytes != 100 ||
@@ -76,7 +109,7 @@ SELECT id,$1::uuid,'observed','high' FROM finding WHERE environment_id=$2::uuid 
 		t.Fatalf("storage trend %+v: %v", storage, err)
 	}
 	findings, err := store.ListFindingTrend(ctx, env, from, to, "day")
-	if err != nil || len(findings) != 1 || findings[0].Findings == nil || *findings[0].Findings != 2 {
+	if err != nil || len(findings) != 1 || findings[0].Findings == nil || *findings[0].Findings != 2 || findings[0].Score == nil || *findings[0].Score != 94 || findings[0].ScoreConfidence != 1 {
 		t.Fatalf("finding trend %+v: %v", findings, err)
 	}
 	for _, table := range []string{"hypertable_snapshot", "continuous_aggregate_snapshot"} {
@@ -102,16 +135,40 @@ SELECT id,$1::uuid,'observed','high' FROM finding WHERE environment_id=$2::uuid 
 	if err != nil || capabilities.TotalStorageBytes != 150 || capabilities.Hypertables != 3 {
 		t.Fatalf("capabilities %+v: %v", capabilities, err)
 	}
+	snapshot, err := store.CountLatestEnvironmentSnapshot(ctx, env)
+	if err != nil || snapshot == nil || snapshot.Inventory.AuditRunID != newer || snapshot.Capabilities.TotalStorageBytes != 150 || snapshot.Capabilities.Hypertables != 3 {
+		t.Fatalf("latest environment snapshot %+v: %v", snapshot, err)
+	}
 	successful, failed, err := store.CountRecentRuns(ctx, env)
 	if err != nil || successful != 2 || failed != 0 {
 		t.Fatalf("recent runs %d/%d: %v", successful, failed, err)
 	}
 	key := sha256.Sum256([]byte("integration-login-" + env))
-	if count, err := store.RecordLoginAttempt(ctx, key[:], time.Minute); err != nil || count != 1 {
-		t.Fatalf("first login count %d: %v", count, err)
+	if state, err := store.RecordLoginAttempt(ctx, key[:], time.Minute, false); err != nil || state.Count != 1 {
+		t.Fatalf("first login count %+v: %v", state, err)
 	}
-	if count, err := store.RecordLoginAttempt(ctx, key[:], time.Minute); err != nil || count != 2 {
-		t.Fatalf("second login count %d: %v", count, err)
+	if state, err := store.RecordLoginAttempt(ctx, key[:], time.Minute, false); err != nil || state.Count != 2 {
+		t.Fatalf("second login count %+v: %v", state, err)
+	}
+	if err := store.ClearLoginAttempt(ctx, key[:]); err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 4; n++ {
+		state, err := store.RecordLoginAttempt(ctx, key[:], 5*time.Minute, true)
+		if err != nil || state.Count != n || (n == 4 && state.RetryAfter < 1) {
+			t.Fatalf("account attempt %d: %+v %v", n, state, err)
+		}
+	}
+	state, err := store.RecordLoginAttempt(ctx, key[:], 5*time.Minute, true)
+	if err != nil || state.Count != 4 || state.RetryAfter < 1 {
+		t.Fatalf("blocked account attempt: %+v %v", state, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE auditor_login_attempt SET blocked_until=now()-interval '1 second' WHERE key_hash=$1`, key[:]); err != nil {
+		t.Fatal(err)
+	}
+	state, err = store.RecordLoginAttempt(ctx, key[:], 5*time.Minute, true)
+	if err != nil || state.Count != 5 || state.RetryAfter < 2 {
+		t.Fatalf("progressive backoff: %+v %v", state, err)
 	}
 	if err := store.ClearLoginAttempt(ctx, key[:]); err != nil {
 		t.Fatal(err)

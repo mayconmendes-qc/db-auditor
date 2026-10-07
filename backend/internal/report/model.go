@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/osmendes/db-auditor/internal/actions"
 	"github.com/osmendes/db-auditor/internal/guidance"
 )
 
@@ -35,8 +36,10 @@ type Document struct {
 	ScoreConfidence float64
 	ScoreCategories []ScoreCategory
 	TotalTables     int
+	TotalDatabases  int
 	TotalFindings   int
 	Baseline        *Baseline
+	Regressions     []Regression
 	Truncated       bool
 	RedactionLevel  string
 }
@@ -77,6 +80,12 @@ type Baseline struct {
 	RemovedTables int
 	ChangedTables int
 }
+type Regression struct {
+	FindingID string
+	Severity  string
+	Type      string
+	Object    string
+}
 
 type GrowthPoint struct {
 	RunID     string
@@ -98,6 +107,9 @@ type Line struct {
 }
 
 func BuildLines(d Document) []Line {
+	if d.TotalDatabases == 0 {
+		d.TotalDatabases = len(d.Databases)
+	}
 	if d.TotalTables == 0 {
 		d.TotalTables = len(d.Tables)
 	}
@@ -116,11 +128,7 @@ func BuildLines(d Document) []Line {
 		}
 		return a.Severity+a.Category+a.Database+a.Schema+a.Object+a.Title < b.Severity+b.Category+b.Database+b.Schema+b.Object+b.Title
 	})
-	redaction := d.RedactionLevel
-	if redaction == "" {
-		redaction = "none"
-	}
-	lines := []Line{{"DB Auditor - Relatório " + reportTypeLabel(d.Type), "title"}, {"Nível de redação: " + redaction, "body"}, {"Ambiente: " + d.Environment, "body"}, {"Execução: " + d.RunID, "body"}, {"Início: " + d.RunStarted.UTC().Format(time.RFC3339) + " | Estado: " + d.RunStatus, "body"}, {"Versão do serviço: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
+	lines := []Line{{"DB Auditor - Relatório " + reportTypeLabel(d.Type), "title"}, {"Nível de redação: " + redactionLabel(d.RedactionLevel), "body"}, {"Ambiente: " + d.Environment, "body"}, {"Execução: " + d.RunID, "body"}, {"Início: " + d.RunStarted.UTC().Format("02/01/2006 15:04 UTC") + " | Estado: " + runStatusLabel(d.RunStatus), "body"}, {"Versão do serviço: " + d.ServiceVersion + " | Regras: " + d.RuleVersion, "body"}, {"Solicitante: " + d.RequestedBy, "body"}, {"Escopo: " + scope(d), "body"}, {"", "body"}, {"Resumo executivo", "heading"}}
 	critical, high := 0, 0
 	severityCounts := map[string]int{}
 	for _, f := range d.Findings {
@@ -132,7 +140,7 @@ func BuildLines(d Document) []Line {
 			high++
 		}
 	}
-	lines = append(lines, Line{fmt.Sprintf("%d bancos | %d tabelas | %d %s (%d %s, %d %s)", len(d.Databases), d.TotalTables, d.TotalFindings, plural(d.TotalFindings, "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), "body"})
+	lines = append(lines, Line{fmt.Sprintf("%d bancos | %d tabelas | %d %s (%d %s, %d %s)", d.TotalDatabases, d.TotalTables, d.TotalFindings, plural(d.TotalFindings, "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), "body"})
 	lines = append(lines, Line{"Como ler: confirme primeiro a cobertura e os itens críticos; a nota resume sinais observados, não substitui a investigação.", "body"})
 	lines = append(lines, Line{Text: "Achados por severidade (itens incluídos no PDF)", Style: "subheading"})
 	for _, severity := range []struct{ key, label string }{{"critical", "Críticos"}, {"high", "Altos"}, {"medium", "Médios"}, {"low", "Baixos"}, {"info", "Informativos"}} {
@@ -154,7 +162,15 @@ func BuildLines(d Document) []Line {
 		lines = append(lines, Line{"Limite: inventário resumido para manter o consumo de memória previsível.", "body"})
 	}
 	if d.Baseline != nil {
-		lines = append(lines, Line{"Histórico e referência de comparação", "heading"}, Line{fmt.Sprintf("Referência %s | %s | +%d / -%d tabelas, %d alteradas", d.Baseline.RunID, d.Baseline.Status, d.Baseline.AddedTables, d.Baseline.RemovedTables, d.Baseline.ChangedTables), "body"})
+		lines = append(lines, Line{"Histórico e referência de comparação", "heading"}, Line{fmt.Sprintf("Referência %s | %s | +%d / -%d tabelas, %d alteradas", d.Baseline.RunID, coverageLabel(d.Baseline.Status), d.Baseline.AddedTables, d.Baseline.RemovedTables, d.Baseline.ChangedTables), "body"})
+		if len(d.Regressions) > 0 {
+			lines = append(lines, Line{"Novos achados de maior prioridade desde a referência", "subheading"})
+			for _, regression := range d.Regressions {
+				lines = append(lines, Line{fmt.Sprintf("%s · %s · objeto %s · achado %s", severityLabel(regression.Severity), guidance.For(regression.Type).Meaning, regression.Object, regression.FindingID), "body"})
+			}
+		} else {
+			lines = append(lines, Line{"Nenhum novo achado alto ou crítico identificado neste recorte; confirme a cobertura antes de concluir melhora.", "body"})
+		}
 	}
 	if len(d.Growth) > 0 {
 		lines = append(lines, Line{"Evolução de armazenamento", "heading"}, Line{"Barras: tamanho total das tabelas na execução (bytes); período e coleta parcial estão identificados em cada linha.", "body"})
@@ -185,14 +201,16 @@ func BuildLines(d Document) []Line {
 		}
 	}
 	lines = append(lines, Line{"Riscos e prioridades", "heading"})
-	lines = append(lines, Line{"Matriz de decisão (impacto / esforço / risco): impacto é a severidade observada; esforço e risco operacional exigem avaliação da equipe responsável.", "body"})
+	lines = append(lines, Line{"Matriz de decisão: impacto corresponde à severidade observada. Esforço depende das dependências e da janela de mudança; confirme estes fatores antes de priorizar.", "body"})
 	if len(d.Findings) == 0 {
 		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
 	}
 	for _, f := range d.Findings {
 		friendly := guidance.For(f.Type)
-		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(f.Severity), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
-		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço: não estimado | risco da mudança: avaliar", f.ID, severityLabel(f.Severity)), "body"})
+		plan := actions.For(f.Type)
+		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(severityLabel(f.Severity)), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
+		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço: avaliar pré-requisitos e janela", f.ID, severityLabel(f.Severity)), "body"})
+		lines = append(lines, Line{"Risco da mudança: " + plan.Risk, "body"}, Line{"Benefício esperado: " + plan.Benefit, "body"})
 		lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"}, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
 		if d.Type == "technical" || d.Type == "table" {
 			lines = append(lines, Line{"Resumo original da regra: " + f.Summary, "body"}, Line{"Recomendação técnica original: " + f.Recommendation, "body"})
@@ -249,6 +267,32 @@ func reportTypeLabel(kind string) string {
 	}
 }
 
+func redactionLabel(value string) string {
+	switch value {
+	case "", "none":
+		return "sem redação"
+	case "identifiers":
+		return "identificadores ocultos"
+	case "strict":
+		return "estrita"
+	default:
+		return "configuração desconhecida"
+	}
+}
+
+func runStatusLabel(value string) string {
+	switch value {
+	case "success":
+		return "concluída"
+	case "partial_success":
+		return "concluída parcialmente"
+	case "failed":
+		return "falhou"
+	default:
+		return value
+	}
+}
+
 func plural(count int, singular, many string) string {
 	if count == 1 {
 		return singular
@@ -292,6 +336,8 @@ func severityLabel(severity string) string {
 		return "média"
 	case "low":
 		return "baixa"
+	case "info":
+		return "informativa"
 	default:
 		return severity
 	}

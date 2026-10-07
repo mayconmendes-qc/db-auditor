@@ -14,7 +14,7 @@ func registerActionMeasurementRoutes(mux *http.ServeMux, store InventoryStore) {
 	backend, ok := store.(interface {
 		ListTrackedActions(context.Context, string) ([]repository.TrackedAction, error)
 		ListActionMeasurements(context.Context, string) ([]repository.ActionMeasurement, error)
-		RecordActionMeasurement(context.Context, string, string, string, string, string, string, string) (*repository.ActionMeasurement, error)
+		RecordActionMeasurement(context.Context, string, string, string, string, string, string, bool, string) (*repository.ActionMeasurement, error)
 	})
 	if !ok {
 		return
@@ -48,11 +48,12 @@ func registerActionMeasurementRoutes(mux *http.ServeMux, store InventoryStore) {
 	mux.HandleFunc("POST /api/v1/findings/{id}/action/measurements", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
 		var body struct {
-			Before     string `json:"before_run_id"`
-			After      string `json:"after_run_id"`
-			Metric     string `json:"metric"`
-			Hypothesis string `json:"hypothesis"`
-			Window     string `json:"window_note"`
+			Before             string `json:"before_run_id"`
+			After              string `json:"after_run_id"`
+			Metric             string `json:"metric"`
+			Hypothesis         string `json:"hypothesis"`
+			Window             string `json:"window_note"`
+			WorkloadComparable bool   `json:"workload_comparable"`
 		}
 		if !uuidPattern.MatchString(id) || json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil || !uuidPattern.MatchString(body.Before) || !uuidPattern.MatchString(body.After) {
 			writeError(w, 400, CodeValidation, "Execuções inválidas.")
@@ -67,7 +68,7 @@ func registerActionMeasurementRoutes(mux *http.ServeMux, store InventoryStore) {
 		if user := requestIdentity(r); user != nil {
 			actor = user.Username
 		}
-		item, err := backend.RecordActionMeasurement(r.Context(), id, body.Before, body.After, body.Metric, body.Hypothesis, body.Window, actor)
+		item, err := backend.RecordActionMeasurement(r.Context(), id, body.Before, body.After, body.Metric, body.Hypothesis, body.Window, body.WorkloadComparable, actor)
 		if errors.Is(err, repository.ErrMeasurementRun) || errors.Is(err, repository.ErrActionNotFound) {
 			writeError(w, 422, CodeValidation, "Execuções ou achado incompatíveis.")
 			return

@@ -32,6 +32,8 @@
     },
     "/api/v1/analytics/kpis": {
       "get": {
+        "description": "Contagens agregadas sem limite de lista. Cada ambiente usa uma execução de inventário coerente; inventory_status e notes indicam ausência ou coleta parcial.",
+        "parameters": [{"name":"environment_id","in":"query","schema":{"type":"string","format":"uuid"}}],
         "responses": {
           "200": {
             "description": "ok"
@@ -278,6 +280,7 @@
     "/api/v1/environments/{id}/continuous-aggregates/page": {
       "get": {
         "description": "Lista paginada e filtrável dos agregados contínuos do último snapshot elegível.",
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação estável antes da paginação.","schema":{"type":"string"}}],
         "responses": {"200": {"description": "Página com items e page.total"}}
       }
     },
@@ -301,6 +304,7 @@
     },
     "/api/v1/environments/{id}/functions": {
       "get": {
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação permitida pela API antes da paginação.","schema":{"type":"string"}}],
         "responses": {
           "200": {
             "description": "ok"
@@ -329,11 +333,13 @@
     "/api/v1/environments/{id}/hypertables/page": {
       "get": {
         "description": "Lista paginada e filtrável das hypertables do último snapshot elegível.",
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação estável antes da paginação.","schema":{"type":"string"}}],
         "responses": {"200": {"description": "Página com items e page.total"}}
       }
     },
     "/api/v1/environments/{id}/indexes": {
       "get": {
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação permitida pela API antes da paginação.","schema":{"type":"string"}}],
         "responses": {
           "200": {
             "description": "ok"
@@ -560,6 +566,7 @@
     },
     "/api/v1/environments/{id}/tables": {
       "get": {
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação estável antes da paginação; valores: database, schema, name, type, cols, rows, size, owner ou pk, seguidos de :asc ou :desc.","schema":{"type":"string"}}],
         "responses": {
           "200": {
             "description": "ok"
@@ -596,6 +603,7 @@
     },
     "/api/v1/environments/{id}/views": {
       "get": {
+        "parameters": [{"name":"order_by","in":"query","description":"Ordenação permitida pela API antes da paginação.","schema":{"type":"string"}}],
         "responses": {
           "200": {
             "description": "ok"
@@ -808,7 +816,7 @@
     },
     "/api/v1/environments/{id}/actions": {
       "get": {
-        "description": "Lista até 100 ações de achados com a medição mais recente.",
+        "description": "Lista até 100 ações de achados com até 100 medições por ação, incluindo confirmação explícita de carga comparável.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -827,7 +835,7 @@
     },
     "/api/v1/findings/{id}/action/measurements": {
       "get": {
-        "description": "Lista medições antes e depois com ressalvas de comparabilidade.",
+        "description": "Lista até 100 medições antes e depois com hipótese, janela, confirmação de carga e ressalvas de comparabilidade.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -844,7 +852,7 @@
         }
       },
       "post": {
-        "description": "Registra hipótese, janela e observação entre duas execuções; exige auditor.",
+        "description": "Registra hipótese, janela, workload_comparable e observação entre duas execuções; exige auditor.",
         "responses": {
           "200": {
             "description": "Resultado"

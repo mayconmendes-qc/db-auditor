@@ -23,7 +23,7 @@ func listHypertablesPage(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListHypertableSnapshotsPage(r.Context(), repository.InventoryFilter{
 			EnvironmentID: r.PathValue("id"), AuditRunID: q.AuditRunID,
-			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset,
+			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset, OrderBy: q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as hypertables.")
@@ -38,7 +38,7 @@ func listCAGGsPage(store InventoryStore) http.HandlerFunc {
 		q := parseInventoryQuery(r)
 		items, total, err := store.ListCAGGSnapshotsPage(r.Context(), repository.InventoryFilter{
 			EnvironmentID: r.PathValue("id"), AuditRunID: q.AuditRunID,
-			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset,
+			Database: q.Database, Schema: q.Schema, Q: q.Q, Limit: q.Limit, Offset: q.Offset, OrderBy: q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os agregados contínuos.")
@@ -81,6 +81,7 @@ func listTables(store InventoryStore) http.HandlerFunc {
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,
+			OrderBy:       q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as tabelas.")
@@ -114,6 +115,7 @@ func listColumns(store InventoryStore) http.HandlerFunc {
 			Q:             q.Q,
 			Limit:         limit,
 			Offset:        q.Offset,
+			OrderBy:       q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as colunas.")
@@ -143,6 +145,7 @@ func listIndexes(store InventoryStore) http.HandlerFunc {
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,
+			OrderBy:       q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os índices.")
@@ -171,6 +174,7 @@ func listViews(store InventoryStore) http.HandlerFunc {
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,
+			OrderBy:       q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as views.")
@@ -199,6 +203,7 @@ func listFunctions(store InventoryStore) http.HandlerFunc {
 			Q:             q.Q,
 			Limit:         q.Limit,
 			Offset:        q.Offset,
+			OrderBy:       q.OrderBy,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar as funções.")

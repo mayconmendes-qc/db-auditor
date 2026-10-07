@@ -43,6 +43,9 @@ type RunnerOptions struct {
 	MaxDatabaseConnections   int
 	OptionalCollectorTimeout time.Duration
 	AnalysisProcessor        AnalysisProcessor
+	// EngineRegistries supplies bounded, read-only collectors for additional
+	// mechanisms. PostgreSQL and TimescaleDB use the default registry.
+	EngineRegistries map[string]*Registry
 }
 
 func (o RunnerOptions) withDefaults() RunnerOptions {
@@ -130,6 +133,7 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	if environmentID == "" {
 		return RunResult{}, fmt.Errorf("environment id is required")
 	}
+	registry := r.registry
 	if resolver, ok := r.store.(interface {
 		GetEnvironmentEngine(context.Context, string) (string, error)
 	}); ok {
@@ -138,15 +142,25 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			return RunResult{}, fmt.Errorf("resolve target engine: %w", err)
 		}
 		if engine != "postgresql" && engine != "timescaledb" {
-			return RunResult{}, fmt.Errorf("mecanismo %q sem adaptador de coleta; execução não aplicável", engine)
+			registry = r.opts.EngineRegistries[engine]
+			if registry == nil {
+				return RunResult{}, fmt.Errorf("mecanismo %q sem adaptador de coleta; execução não aplicável", engine)
+			}
 		}
 	}
 	if profile == "" {
 		profile = ProfileManual
 	}
-	collectors := r.registry.List(profile)
+	collectors := registry.List(profile)
 	if len(collectors) == 0 {
 		return RunResult{}, fmt.Errorf("no collectors registered for profile %q", profile)
+	}
+	if registry != r.registry {
+		for _, spec := range collectors {
+			if !spec.ReadOnly || spec.MaxRows <= 0 {
+				return RunResult{}, fmt.Errorf("adaptador %q sem contrato de somente leitura e limite de linhas", spec.Name)
+			}
+		}
 	}
 
 	auditRunID, err := r.store.StartAuditRun(ctx, environmentID, profile, r.opts.ServiceVersion, r.opts.CollectorVersion)
@@ -314,6 +328,9 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 			},
 		})
 		rows, runErr = spec.Run(cctx)
+		if runErr == nil && spec.MaxRows > 0 && rows > spec.MaxRows {
+			runErr = fmt.Errorf("coletor excedeu o limite declarado de %d linhas", spec.MaxRows)
+		}
 		cancel()
 		if runErr == nil {
 			break

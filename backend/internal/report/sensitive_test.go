@@ -22,8 +22,23 @@ func TestRedactionRemovesSensitiveValuesFromPDF(t *testing.T) {
 				t.Fatalf("sensitive value %q leaked", secret)
 			}
 		}
-		if !strings.Contains(content.String(), "Nível de redação: "+level) {
+		if !strings.Contains(content.String(), "Nível de redação: "+redactionLabel(level)) {
 			t.Fatal("redaction level missing")
 		}
+	}
+}
+
+func TestStrictRedactionRemovesTopologyAndHistory(t *testing.T) {
+	base := Document{Databases: []Database{{Name: "db"}}, Tables: []Table{{Name: "orders"}},
+		Growth: []GrowthPoint{{SizeBytes: 100}}, Baseline: &Baseline{RunID: "baseline"}}
+	identifiers := base
+	identifiers.RedactSensitive("identifiers")
+	if len(identifiers.Databases) != 1 || len(identifiers.Growth) != 1 || identifiers.Baseline == nil {
+		t.Fatal("identifier redaction removed aggregate context")
+	}
+	strict := base
+	strict.RedactSensitive("strict")
+	if len(strict.Databases) != 0 || len(strict.Tables) != 0 || len(strict.Growth) != 0 || strict.Baseline != nil {
+		t.Fatal("strict redaction retained topology or history")
 	}
 }

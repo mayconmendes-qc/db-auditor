@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -42,6 +43,34 @@ func TestSprint20LargeInventoryPagingIntegration(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("large page took %v", elapsed)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE table_snapshot SET total_size_bytes=substring(table_name from 6)::bigint WHERE audit_run_id=$1::uuid`, run); err != nil {
+		t.Fatal(err)
+	}
+	first, total, err := store.ListTableSnapshots(ctx, InventoryFilter{EnvironmentID: env, Limit: 50, OrderBy: "size:desc"})
+	if err != nil || total != 10000 || len(first) != 50 || first[0].TotalSizeBytes != 100 {
+		t.Fatalf("first sorted page: %d/%d %v", len(first), total, err)
+	}
+	second, _, err := store.ListTableSnapshots(ctx, InventoryFilter{EnvironmentID: env, Limit: 50, Offset: 50, OrderBy: "size:desc"})
+	if err != nil || len(second) != 50 || second[0].TotalSizeBytes > first[49].TotalSizeBytes {
+		t.Fatalf("second sorted page is out of order: %+v %v", second, err)
+	}
+	seen := map[string]bool{}
+	for _, item := range append(first, second...) {
+		if seen[item.ID] {
+			t.Fatalf("object repeated between pages: %s", item.ID)
+		}
+		seen[item.ID] = true
+	}
+	latencies := make([]time.Duration, 20)
+	for i := range latencies {
+		started := time.Now()
+		if _, _, err = store.ListTableSnapshots(ctx, InventoryFilter{EnvironmentID: env, Limit: 50, Offset: i * 50, OrderBy: "size:desc"}); err != nil {
+			t.Fatal(err)
+		}
+		latencies[i] = time.Since(started)
+	}
+	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+	t.Logf("10k synthetic inventory, sorted 50-row pages: p95=%s", latencies[18])
 	if _, err := pool.Exec(ctx, `ANALYZE table_snapshot`); err != nil {
 		t.Fatal(err)
 	}
