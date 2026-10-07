@@ -102,8 +102,10 @@ func (s *Store) EnsureIdentitySchema(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS auditor_login_attempt (
 		  key_hash bytea PRIMARY KEY,
 		  window_start timestamptz NOT NULL,
-		  attempts integer NOT NULL
+		  attempts integer NOT NULL,
+		  blocked_until timestamptz NOT NULL DEFAULT '-infinity'
 		)`,
+		`ALTER TABLE auditor_login_attempt ADD COLUMN IF NOT EXISTS blocked_until timestamptz NOT NULL DEFAULT '-infinity'`,
 		`CREATE INDEX IF NOT EXISTS auditor_login_attempt_window_idx ON auditor_login_attempt (window_start)`,
 		`CREATE TABLE IF NOT EXISTS auditor_operation_log (
 		  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -220,17 +222,30 @@ func (s *Store) DeleteExpiredAuditorSessions(ctx context.Context) error {
 	return err
 }
 
+// LoginAttempt is shared across replicas. RetryAfter is the account-specific
+// progressive delay; IP counters use the same store without a delay.
+type LoginAttempt struct {
+	Count      int
+	RetryAfter int
+}
+
 // RecordLoginAttempt is atomic across API replicas. Keys are digests of an IP
 // or account name; raw identifiers and passwords are never persisted here.
-func (s *Store) RecordLoginAttempt(ctx context.Context, keyHash []byte, window time.Duration) (int, error) {
-	var count int
-	err := s.pool.QueryRow(ctx, `INSERT INTO auditor_login_attempt(key_hash,window_start,attempts)
-VALUES($1,now(),1)
+func (s *Store) RecordLoginAttempt(ctx context.Context, keyHash []byte, window time.Duration, backoff bool) (LoginAttempt, error) {
+	var state LoginAttempt
+	err := s.pool.QueryRow(ctx, `INSERT INTO auditor_login_attempt(key_hash,window_start,attempts,blocked_until)
+VALUES($1,now(),1,'-infinity')
 ON CONFLICT(key_hash) DO UPDATE SET
-  attempts=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN 1 ELSE auditor_login_attempt.attempts+1 END,
-  window_start=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN now() ELSE auditor_login_attempt.window_start END
-RETURNING attempts`, keyHash, int(window.Seconds())).Scan(&count)
-	return count, err
+  attempts=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN 1
+    WHEN auditor_login_attempt.blocked_until>now() THEN auditor_login_attempt.attempts
+    ELSE auditor_login_attempt.attempts+1 END,
+  window_start=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN now() ELSE auditor_login_attempt.window_start END,
+  blocked_until=CASE WHEN auditor_login_attempt.window_start < now()-make_interval(secs => $2::int) THEN '-infinity'
+    WHEN auditor_login_attempt.blocked_until>now() THEN auditor_login_attempt.blocked_until
+    WHEN $3 AND auditor_login_attempt.attempts>=3 THEN now()+make_interval(secs => LEAST(60, 1 << LEAST(auditor_login_attempt.attempts-3,6)))
+    ELSE '-infinity' END
+RETURNING attempts,CASE WHEN blocked_until>now() THEN GREATEST(1,CEIL(EXTRACT(EPOCH FROM blocked_until-now()))::int) ELSE 0 END`, keyHash, int(window.Seconds()), backoff).Scan(&state.Count, &state.RetryAfter)
+	return state, err
 }
 
 func (s *Store) ClearLoginAttempt(ctx context.Context, keyHash []byte) error {

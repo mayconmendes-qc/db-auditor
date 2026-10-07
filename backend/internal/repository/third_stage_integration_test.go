@@ -80,7 +80,7 @@ func TestThirdStageHistoryAndMeasurementIntegration(t *testing.T) {
 	if _, err = store.UpdateFindingAction(ctx, finding, "tester", ActionProgress{Status: "validated", Owner: "dba", Justification: "conferido", Result: "feito externamente"}); err != nil {
 		t.Fatal(err)
 	}
-	measurement, err := store.RecordActionMeasurement(ctx, finding, runs[0], runs[1], "finding_observed", "achado deve desaparecer", "7 dias sem alteração de carga", "tester")
+	measurement, err := store.RecordActionMeasurement(ctx, finding, runs[0], runs[1], "finding_observed", "achado deve desaparecer", "7 dias sem alteração de carga", true, "tester")
 	if err != nil || measurement == nil || !measurement.Comparable {
 		t.Fatalf("measurement: %+v %v", measurement, err)
 	}

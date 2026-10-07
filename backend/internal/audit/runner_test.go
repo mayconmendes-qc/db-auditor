@@ -8,6 +8,31 @@ import (
 	"time"
 )
 
+type engineRunStore struct {
+	*MemoryRunStore
+	engine string
+}
+
+func (s *engineRunStore) GetEnvironmentEngine(context.Context, string) (string, error) {
+	return s.engine, nil
+}
+
+func TestAdditionalEngineRequiresBoundedReadOnlyAdapter(t *testing.T) {
+	defaultRegistry := NewRegistry()
+	adapterRegistry := NewRegistry()
+	store := &engineRunStore{MemoryRunStore: NewMemoryRunStore(), engine: "example_engine"}
+	_ = adapterRegistry.Register(CollectorSpec{Name: "example.catalog", Run: func(context.Context) (int64, error) { return 1, nil }})
+	runner := NewRunner(defaultRegistry, store, RunnerOptions{EngineRegistries: map[string]*Registry{"example_engine": adapterRegistry}})
+	if _, err := runner.Run(context.Background(), "env-1", ProfileManual); err == nil {
+		t.Fatal("unbounded or writable adapter was accepted")
+	}
+	_ = adapterRegistry.Register(CollectorSpec{Name: "example.catalog", ReadOnly: true, MaxRows: 2, Run: func(context.Context) (int64, error) { return 1, nil }})
+	result, err := runner.Run(context.Background(), "env-1", ProfileManual)
+	if err != nil || result.Status != RunStatusSuccess || len(result.Collectors) != 1 || result.Collectors[0].Name != "example.catalog" {
+		t.Fatalf("bounded adapter did not run: %+v %v", result, err)
+	}
+}
+
 func TestAggregateRunStatus(t *testing.T) {
 	t.Parallel()
 	if got := AggregateRunStatus(2, 0, 0, false); got != RunStatusSuccess {

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -26,7 +27,7 @@ type AuthStore interface {
 	CreateAuditorUser(context.Context, string, string, string, []string) (*repository.AuditorUser, error)
 	LogAuditorOperation(context.Context, *repository.AuditorUser, string, string, string, string) error
 	ResolveAuditorResourceEnvironment(context.Context, string, string) (string, error)
-	RecordLoginAttempt(context.Context, []byte, time.Duration) (int, error)
+	RecordLoginAttempt(context.Context, []byte, time.Duration, bool) (repository.LoginAttempt, error)
 	ClearLoginAttempt(context.Context, []byte) error
 }
 
@@ -99,20 +100,22 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 		}
 		ipKey := sha256.Sum256([]byte("login-ip:" + host))
 		accountKey := sha256.Sum256([]byte("login-user:" + strings.ToLower(username)))
-		ipAttempts, err := store.RecordLoginAttempt(r.Context(), ipKey[:], time.Minute)
+		ipAttempts, err := store.RecordLoginAttempt(r.Context(), ipKey[:], time.Minute, false)
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
 			return
 		}
-		accountAttempts, err := store.RecordLoginAttempt(r.Context(), accountKey[:], 5*time.Minute)
+		accountAttempts, err := store.RecordLoginAttempt(r.Context(), accountKey[:], 5*time.Minute, true)
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
 			return
 		}
-		if ipAttempts > 120 || accountAttempts > 10 {
+		if ipAttempts.Count > 120 || accountAttempts.Count > 10 || accountAttempts.RetryAfter > 0 {
 			retryAfter := "60"
-			if accountAttempts > 10 {
+			if accountAttempts.Count > 10 {
 				retryAfter = "300"
+			} else if accountAttempts.RetryAfter > 0 {
+				retryAfter = fmt.Sprint(accountAttempts.RetryAfter)
 			}
 			w.Header().Set("Retry-After", retryAfter)
 			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas tentativas. Aguarde e tente novamente.")

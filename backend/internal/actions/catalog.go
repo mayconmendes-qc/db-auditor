@@ -54,10 +54,16 @@ func For(rule string) Plan {
 		p.FalsePositive = "Permissão aparentemente ampla pode ser necessária a uma função operacional conhecida."
 	}
 	switch rule {
-	case "model.no_primary_key", "structure.no_primary_key":
+	case "integrity.missing_primary_key":
 		p.ReadOnlyQuery = "SELECT conname, contype, convalidated FROM pg_catalog.pg_constraint WHERE conrelid = $1::regclass AND contype = 'p';"
+	case "integrity.constraint_unvalidated":
+		p.ReadOnlyQuery = "SELECT conname, contype, convalidated FROM pg_catalog.pg_constraint WHERE conrelid = $1::regclass AND NOT convalidated;"
 	case "index.invalid":
 		p.ReadOnlyQuery = "SELECT indexrelid::regclass, indisvalid, indisready FROM pg_catalog.pg_index WHERE indexrelid = $1::regclass;"
+	case "integrity.orphan_sequence":
+		p.ReadOnlyQuery = "SELECT d.deptype, d.refobjid::regclass FROM pg_catalog.pg_depend d WHERE d.objid = $1::regclass;"
+	case "model.naming_inconsistent":
+		p.ReadOnlyQuery = "SELECT n.nspname, c.relname, c.relkind FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.oid=$1::regclass;"
 	}
 	return p
 }

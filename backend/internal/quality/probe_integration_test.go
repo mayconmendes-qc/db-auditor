@@ -2,7 +2,9 @@ package quality
 
 import (
 	"context"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +28,8 @@ func TestReadOnlyAggregateProbeIntegration(t *testing.T) {
 	}()
 	schema := "quality_test_" + time.Now().UTC().Format("150405000000")
 	role := "quality_reader_" + time.Now().UTC().Format("150405000000")
-	if _, err = admin.Exec(ctx, `CREATE ROLE `+pgx.Identifier{role}.Sanitize()+` LOGIN`); err != nil {
+	password := "integration-only-" + role
+	if _, err = admin.Exec(ctx, `CREATE ROLE `+pgx.Identifier{role}.Sanitize()+` LOGIN PASSWORD '`+password+`'`); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -55,8 +58,13 @@ func TestReadOnlyAggregateProbeIntegration(t *testing.T) {
 	if _, err = admin.Exec(ctx, `GRANT SELECT ON `+qualified+` TO `+pgx.Identifier{role}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
-	dsn := "postgres://" + role + "@localhost:5432/postgres?sslmode=disable"
-	request := Request{Database: "postgres", Schema: schema, Table: "orders", Limit: 3, ExpectedNonNull: []string{"key"}, CandidateKeys: []string{"key"}, DateRanges: []DateRange{{Column: "date_value", From: "2024-01-01T00:00:00Z", To: "2026-01-01T00:00:00Z"}}}
+	target, err := url.Parse(os.Getenv("AUDITOR_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target.User = url.UserPassword(role, password)
+	dsn := target.String()
+	request := Request{Database: strings.TrimPrefix(target.Path, "/"), Schema: schema, Table: "orders", Limit: 3, ExpectedNonNull: []string{"key"}, CandidateKeys: []string{"key"}, DateRanges: []DateRange{{Column: "date_value", From: "2024-01-01T00:00:00Z", To: "2026-01-01T00:00:00Z"}}}
 	result, err := Run(ctx, dsn, request)
 	if err != nil {
 		t.Fatal(err)
@@ -70,6 +78,17 @@ func TestReadOnlyAggregateProbeIntegration(t *testing.T) {
 	}
 	if counts["null"] != 1 || counts["duplicate"] != 1 || counts["date_range"] != 3 {
 		t.Fatalf("unexpected aggregate counts: %+v", counts)
+	}
+	if _, err = admin.Exec(ctx, `INSERT INTO `+qualified+` SELECT 'key-'||n,'2025-01-01'::timestamptz FROM generate_series(1,2000) n`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = admin.Exec(ctx, `ANALYZE `+qualified); err != nil {
+		t.Fatal(err)
+	}
+	request.Limit = 100
+	large, err := Run(ctx, dsn, request)
+	if err != nil || large.SampleMethod != "paginas_aleatorias_sistema" || large.SampledRows < 1 || large.SampledRows > 100 {
+		t.Fatalf("bounded page sample: %+v %v", large, err)
 	}
 	if _, err = admin.Exec(ctx, `GRANT INSERT ON `+qualified+` TO `+pgx.Identifier{role}.Sanitize()); err != nil {
 		t.Fatal(err)

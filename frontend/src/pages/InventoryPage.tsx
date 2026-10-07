@@ -22,7 +22,7 @@ import {
   relationClassBadgeClass,
   relationClassLabel,
 } from "../lib/relationClass";
-import { nextSort, type SortState, sortBy } from "../lib/sort";
+import { nextSort, type SortState } from "../lib/sort";
 import { api } from "../services/api";
 import type {
   ColumnStatSnapshot,
@@ -194,6 +194,7 @@ export function InventoryPage() {
       q: q || undefined,
       database: selectedDb || undefined,
       schema: selectedSchema || undefined,
+      order_by: sort ? `${sort.key}:${sort.dir}` : undefined,
     };
     const fail = (msg: string) => {
       if (!cancelled) {
@@ -214,7 +215,9 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) => fail(formatError(e, "Falha ao listar tables")))
+        .catch((e: unknown) =>
+          fail(formatError(e, "Não foi possível listar as tabelas")),
+        )
         .finally(ok);
     } else if (kind === "indexes") {
       api
@@ -225,7 +228,9 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) => fail(formatError(e, "Falha ao listar indexes")))
+        .catch((e: unknown) =>
+          fail(formatError(e, "Não foi possível listar os índices")),
+        )
         .finally(ok);
     } else if (kind === "views") {
       api
@@ -236,7 +241,9 @@ export function InventoryPage() {
             setPage(res.page);
           }
         })
-        .catch((e: unknown) => fail(formatError(e, "Falha ao listar views")))
+        .catch((e: unknown) =>
+          fail(formatError(e, "Não foi possível listar as visualizações")),
+        )
         .finally(ok);
     } else if (kind === "functions") {
       api
@@ -248,7 +255,7 @@ export function InventoryPage() {
           }
         })
         .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar functions")),
+          fail(formatError(e, "Não foi possível listar as funções")),
         )
         .finally(ok);
     } else if (kind === "hypertables") {
@@ -261,7 +268,7 @@ export function InventoryPage() {
           }
         })
         .catch((e: unknown) =>
-          fail(formatError(e, "Falha ao listar hypertables")),
+          fail(formatError(e, "Não foi possível listar as hypertables")),
         )
         .finally(ok);
     } else {
@@ -284,78 +291,27 @@ export function InventoryPage() {
             );
           }
         })
-        .catch((e: unknown) => fail(formatError(e, "Falha ao listar CAGGs")))
+        .catch((e: unknown) =>
+          fail(
+            formatError(e, "Não foi possível listar os agregados contínuos"),
+          ),
+        )
         .finally(ok);
     }
     return () => {
       cancelled = true;
     };
-  }, [envId, kind, offset, pageSize, q, selectedDb, selectedSchema]);
+  }, [envId, kind, offset, pageSize, q, selectedDb, selectedSchema, sort]);
 
   useEffect(() => loadObjects(), [loadObjects]);
   useEffect(() => setSort(null), [kind]);
 
-  const sortedTables = useMemo(
-    () =>
-      sortBy(tables, sort, {
-        database: (t) => t.database_name,
-        schema: (t) => t.schema_name,
-        name: (t) => t.table_name,
-        type: (t) => t.relation_class ?? t.relkind ?? "",
-        cols: (t) => t.column_count,
-        rows: (t) => t.row_estimate,
-        size: (t) => t.total_size_bytes,
-        owner: (t) => t.owner_name ?? "",
-        pk: (t) => t.has_primary_key,
-      }),
-    [tables, sort],
-  );
-  const sortedIndexes = useMemo(
-    () =>
-      sortBy(indexes, sort, {
-        schema: (i) => i.schema_name,
-        name: (i) => i.index_name,
-        table: (i) => i.table_name,
-        method: (i) => i.access_method ?? "",
-        size: (i) => i.size_bytes,
-        scans: (i) => i.idx_scan,
-        unique: (i) => i.is_unique,
-      }),
-    [indexes, sort],
-  );
-  const sortedViews = useMemo(
-    () =>
-      sortBy(views, sort, {
-        schema: (v) => v.schema_name,
-        name: (v) => v.view_name,
-        owner: (v) => v.owner_name ?? "",
-        size: (v) => v.size_bytes,
-        kind: (v) => v.relkind,
-      }),
-    [views, sort],
-  );
-  const sortedFunctions = useMemo(
-    () =>
-      sortBy(functions, sort, {
-        schema: (f) => f.schema_name,
-        name: (f) => f.function_name,
-        kind: (f) => f.kind,
-        lang: (f) => f.language_name ?? "",
-        secdef: (f) => f.is_security_definer,
-      }),
-    [functions, sort],
-  );
-  const sortedHypertables = useMemo(
-    () =>
-      sortBy(hypertables, sort, {
-        schema: (h) => h.schema_name,
-        name: (h) => h.hypertable_name,
-        size: (h) => h.total_size_bytes,
-        chunks: (h) => h.num_chunks,
-        compressed: (h) => h.compression_enabled,
-      }),
-    [hypertables, sort],
-  );
+  // The server sorts the filtered result before applying LIMIT/OFFSET.
+  const sortedTables = tables;
+  const sortedIndexes = indexes;
+  const sortedViews = views;
+  const sortedFunctions = functions;
+  const sortedHypertables = hypertables;
 
   const openRow = (key: string) => {
     closeInventory();
@@ -669,13 +625,16 @@ export function InventoryPage() {
                       virtualize
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
-                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      onSort={(id) => {
+                        setOffset(0);
+                        setSort((s) => nextSort(s, id));
+                      }}
                       headers={[
-                        { id: "database", label: "Database", sortable: true },
-                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "database", label: "Banco", sortable: true },
+                        { id: "schema", label: "Esquema", sortable: true },
                         { id: "name", label: "Tabela", sortable: true },
                         { id: "type", label: "Tipo", sortable: true },
-                        { id: "cols", label: "Cols", sortable: true },
+                        { id: "cols", label: "Colunas", sortable: true },
                         { id: "rows", label: "Linhas", sortable: true },
                         { id: "size", label: "Tamanho", sortable: true },
                         { id: "pk", label: "PK", sortable: true },
@@ -731,15 +690,18 @@ export function InventoryPage() {
                       dense
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
-                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      onSort={(id) => {
+                        setOffset(0);
+                        setSort((s) => nextSort(s, id));
+                      }}
                       headers={[
-                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "schema", label: "Esquema", sortable: true },
                         { id: "name", label: "Índice", sortable: true },
                         { id: "table", label: "Tabela", sortable: true },
                         { id: "method", label: "Método", sortable: true },
                         { id: "size", label: "Tamanho", sortable: true },
-                        { id: "scans", label: "Scans", sortable: true },
-                        { id: "unique", label: "Unique", sortable: true },
+                        { id: "scans", label: "Leituras", sortable: true },
+                        { id: "unique", label: "Único", sortable: true },
                       ]}
                     >
                       {sortedIndexes.map((i) => {
@@ -778,13 +740,24 @@ export function InventoryPage() {
                       dense
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
-                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      onSort={(id) => {
+                        setOffset(0);
+                        setSort((s) => nextSort(s, id));
+                      }}
                       headers={[
-                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "schema", label: "Esquema", sortable: true },
                         { id: "name", label: "Nome", sortable: true },
-                        { id: "owner", label: "Owner", sortable: true },
-                        { id: "size", label: "Tamanho", sortable: true },
-                        { id: "kind", label: "Kind", sortable: true },
+                        { id: "owner", label: "Responsável", sortable: true },
+                        {
+                          id: "size",
+                          label: "Tamanho",
+                          sortable: kind === "views",
+                        },
+                        {
+                          id: "kind",
+                          label: "Tipo",
+                          sortable: kind === "views",
+                        },
                       ]}
                     >
                       {sortedViews.map((v) => {
@@ -817,13 +790,20 @@ export function InventoryPage() {
                       dense
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
-                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      onSort={(id) => {
+                        setOffset(0);
+                        setSort((s) => nextSort(s, id));
+                      }}
                       headers={[
-                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "schema", label: "Esquema", sortable: true },
                         { id: "name", label: "Função", sortable: true },
-                        { id: "kind", label: "Kind", sortable: true },
-                        { id: "lang", label: "Lang", sortable: true },
-                        { id: "secdef", label: "SecDef", sortable: true },
+                        { id: "kind", label: "Tipo", sortable: true },
+                        { id: "lang", label: "Linguagem", sortable: true },
+                        {
+                          id: "secdef",
+                          label: "Segurança definida",
+                          sortable: true,
+                        },
                       ]}
                     >
                       {sortedFunctions.map((f) => {
@@ -859,9 +839,12 @@ export function InventoryPage() {
                       virtualize
                       sortKey={sort?.key}
                       sortDir={sort?.dir}
-                      onSort={(id) => setSort((s) => nextSort(s, id))}
+                      onSort={(id) => {
+                        setOffset(0);
+                        setSort((s) => nextSort(s, id));
+                      }}
                       headers={[
-                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "schema", label: "Esquema", sortable: true },
                         { id: "name", label: "Hypertable", sortable: true },
                         { id: "size", label: "Tamanho", sortable: true },
                         { id: "chunks", label: "Chunks", sortable: true },
