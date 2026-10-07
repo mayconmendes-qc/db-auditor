@@ -62,27 +62,27 @@ func Catalog() []RuleDefinition {
 	for _, id := range ruleIDs {
 		category := strings.SplitN(id, ".", 2)[0]
 		confidence := 0.90
-		risk := "low"
+		risk := "baixo"
 		if category == "model" || id == "index.prefix_overlap" || id == "index.investigate_missing" || id == "integrity.fk_type_mismatch" {
 			confidence = 0.45
-			risk = "hypothesis"
+			risk = "hipótese"
 		}
 		if category == "security" {
 			confidence = 0.80
-			risk = "security_review"
+			risk = "revisão de segurança"
 		}
-		impact := "Operational or structural quality"
+		impact := "Possível impacto operacional ou estrutural"
 		switch category {
 		case "integrity":
-			impact = "Potential referential-integrity or identity risk"
+			impact = "Possível risco para vínculos ou identificação de registros"
 		case "index", "performance":
-			impact = "Potential query latency or write overhead"
+			impact = "Possível lentidão de consultas ou custo adicional de escrita"
 		case "maintenance", "vacuum":
-			impact = "Potential storage or planner-statistics degradation"
+			impact = "Possível aumento de espaço ou perda de qualidade das estatísticas"
 		case "security":
-			impact = "Potential privilege or execution risk"
+			impact = "Possível exposição por permissões ou execução privilegiada"
 		case "model":
-			impact = "Possible maintainability concern (hypothesis)"
+			impact = "Hipótese de dificuldade de manutenção do modelo"
 		}
 		parameters := map[string]any{}
 		switch id {
@@ -127,7 +127,7 @@ func Catalog() []RuleDefinition {
 		}
 		if id == "policy.reorder_hypothesis" || id == "cagg.realtime_hypothesis" || id == "policy.compression_settings" || id == "index.candidate" || id == "security.rls_disabled_hypothesis" {
 			confidence = 0.4
-			risk = "hypothesis"
+			risk = "hipótese"
 		}
 		out = append(out, RuleDefinition{
 			ID: id, Version: version, Category: category, Confidence: confidence,
@@ -144,50 +144,50 @@ func Catalog() []RuleDefinition {
 func ruleRecommendation(id string) string {
 	switch id {
 	case "integrity.missing_primary_key":
-		return "Confirm entity identity and downstream dependencies; assess a primary key only after data validation."
+		return "Confirme como os registros são identificados e as dependências; avalie uma chave primária somente após validar os dados."
 	case "integrity.fk_without_index":
-		return "Review child-table query plans and write costs before considering an index whose leading keys match the FK."
+		return "Revise planos das consultas e custo de escrita da tabela filha antes de considerar um índice para a relação."
 	case "integrity.constraint_unvalidated":
-		return "Investigate violating rows and plan controlled VALIDATE CONSTRAINT after remediation."
+		return "Investigue registros incompatíveis e planeje a validação da restrição após uma correção controlada."
 	case "integrity.fk_type_mismatch":
-		return "Review casts and relationship semantics; do not infer the intended business type."
+		return "Revise conversões e o significado da relação com a equipe responsável; não presuma o tipo de negócio correto."
 	case "integrity.orphan_sequence", "integrity.sequence_default_mismatch":
-		return "Check application calls and defaults before assigning ownership or retiring the sequence."
+		return "Confira chamadas da aplicação e valores padrão antes de vincular ou aposentar a sequência."
 	case "index.overlap", "index.prefix_overlap":
-		return "Compare predicates, INCLUDE columns, uniqueness, usage and plans; never drop automatically."
+		return "Compare filtros, colunas incluídas, unicidade, uso e planos; não remova índices automaticamente."
 	case "index.invalid":
-		return "Investigate failed concurrent builds and plan a safe rebuild if needed."
+		return "Investigue a falha de criação do índice e planeje uma reconstrução segura se necessária."
 	case "index.write_burden":
-		return "Measure write latency and index usage before changing index inventory."
+		return "Meça latência de escrita e uso dos índices antes de alterar o conjunto."
 	case "index.investigate_missing":
-		return "Inspect representative EXPLAIN plans; this fingerprint does not identify index columns."
+		return "Examine planos de execução representativos; o fingerprint não identifica as colunas do índice."
 	case "maintenance.stale_analyze", "maintenance.dead_tuple_pressure":
-		return "Check autovacuum settings and table activity; confirm estimates with a controlled diagnostic."
+		return "Confira autovacuum e atividade da tabela; confirme as estimativas em diagnóstico controlado."
 	case "model.wide_table", "model.repeated_columns", "model.duplicate_entity", "model.implicit_relationship", "model.jsonb_critical":
-		return "Treat as a modelling hypothesis; validate access patterns and domain boundaries with owners."
+		return "Trate como hipótese de modelagem; valide acesso e limites do domínio com os responsáveis."
 	case "model.type_review":
-		return "Discuss type semantics with domain owners before proposing a migration."
+		return "Discuta o significado do tipo com a equipe de domínio antes de propor migração."
 	case "model.naming_inconsistent":
-		return "Review naming conventions; avoid renaming without compatibility planning."
+		return "Revise a convenção de nomes; planeje a compatibilidade antes de renomear."
 	case "model.undocumented_critical":
-		return "Add catalog documentation for ownership, purpose and retention after owner review."
+		return "Documente proprietário, finalidade e retenção no catálogo após revisão do responsável."
 	case "performance.workload_scan", "performance.workload_write", "performance.workload_cost":
-		return "Review the representative fingerprint and plan in an authorized environment; no raw SQL is stored."
+		return "Revise o fingerprint e o plano em ambiente autorizado; o SQL completo não é armazenado."
 	default:
-		return "Investigate the evidence and assess business intent before changing schema or configuration."
+		return "Investigue a evidência e confirme a necessidade de negócio antes de alterar estrutura ou configuração."
 	}
 }
 
 func ruleValidation(id string) string {
 	switch {
 	case strings.HasPrefix(id, "integrity."):
-		return "Confirm catalog metadata and sample affected relationships in a controlled environment."
+		return "Confirme o catálogo e verifique relações afetadas em ambiente controlado."
 	case strings.HasPrefix(id, "index."), strings.HasPrefix(id, "performance."):
-		return "Compare EXPLAIN plans and metrics over a sufficient observation window."
+		return "Compare planos de execução e métricas em uma janela de observação suficiente."
 	case strings.HasPrefix(id, "model."):
-		return "Review with domain owners; the heuristic alone is not proof of a design defect."
+		return "Revise com a equipe de domínio; a regra isolada não comprova um defeito de desenho."
 	default:
-		return "Confirm with catalog metadata, representative workload and a controlled non-production test."
+		return "Confirme com o catálogo, carga representativa e teste controlado fora da produção."
 	}
 }
 
@@ -276,8 +276,8 @@ func EnrichFindings(f SnapshotFacts, items []Finding) []Finding {
 		if !ok {
 			category := strings.SplitN(item.FindingType, ".", 2)[0]
 			def = RuleDefinition{ID: item.FindingType, Version: "1.0.0", Category: category, Confidence: 0.5,
-				Impact: "Requires human review", Risk: "uncatalogued", Recommendation: "Investigate evidence before making changes.",
-				Validation: "Confirm in a controlled environment.", References: ruleReferences(category), DefaultParameters: map[string]any{}}
+				Impact: "Requer análise de uma pessoa responsável", Risk: "não classificado", Recommendation: "Confira as evidências antes de fazer alterações.",
+				Validation: "Confirme em ambiente controlado.", References: ruleReferences(category), DefaultParameters: map[string]any{}}
 		}
 		enabled, params := effectivePolicy(f, item.SchemaName, def.ID)
 		if !enabled {

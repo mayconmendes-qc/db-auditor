@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/osmendes/db-auditor/internal/config"
@@ -20,7 +21,15 @@ func TestColumnStatsAndWorkloadAvailabilityIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	if _, err := conn.Exec(ctx, "ANALYZE audit_environment"); err != nil {
+	table := pgx.Identifier{"public", "stats_test_" + time.Now().UTC().Format("150405000000")}.Sanitize()
+	if _, err := conn.Exec(ctx, `CREATE TABLE `+table+` (id integer, value text)`); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = conn.Exec(context.Background(), `DROP TABLE `+table) }()
+	if _, err := conn.Exec(ctx, `INSERT INTO `+table+` VALUES (1,'a'),(2,'b')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `ANALYZE `+table); err != nil {
 		t.Fatal(err)
 	}
 	items, err := CollectColumnStats(ctx, conn, config.Scope{}, nil, 2)

@@ -98,6 +98,7 @@ export function AssistedActionsPage() {
     useState<ActionMeasurement["metric"]>("finding_observed");
   const [hypothesis, setHypothesis] = useState("");
   const [windowNote, setWindowNote] = useState("");
+  const [workloadComparable, setWorkloadComparable] = useState(false);
   const refresh = async (env: string) => {
     setLoading(true);
     setError("");
@@ -205,6 +206,7 @@ export function AssistedActionsPage() {
         metric,
         hypothesis: hypothesis.trim(),
         window_note: windowNote.trim(),
+        workload_comparable: workloadComparable,
       });
       setMeasurements(
         (await api.actionMeasurements(selectedAction.finding_id)).items,
@@ -235,18 +237,30 @@ export function AssistedActionsPage() {
         "before",
         "after",
         "comparable",
+        "comparison_note",
+        "hypothesis",
+        "window_note",
+        "recorded_at",
       ],
-      actions.map((item) => ({
-        finding_id: item.finding_id,
-        title: item.title,
-        status: item.status,
-        owner: item.owner,
-        recurrences: item.recurrences,
-        metric: item.latest_measurement?.metric ?? "",
-        before: item.latest_measurement?.before_value ?? "",
-        after: item.latest_measurement?.after_value ?? "",
-        comparable: item.latest_measurement?.comparable ?? "",
-      })),
+      actions.flatMap((item) =>
+        (item.measurements.length ? item.measurements : [null]).map(
+          (measurement) => ({
+            finding_id: item.finding_id,
+            title: item.title,
+            status: item.status,
+            owner: item.owner,
+            recurrences: item.recurrences,
+            metric: measurement?.metric ?? "",
+            before: measurement?.before_value ?? "",
+            after: measurement?.after_value ?? "",
+            comparable: measurement?.comparable ?? "",
+            comparison_note: measurement?.comparison_note ?? "",
+            hypothesis: measurement?.hypothesis ?? "",
+            window_note: measurement?.window_note ?? "",
+            recorded_at: measurement?.recorded_at ?? "",
+          }),
+        ),
+      ),
     );
   };
   return (
@@ -301,7 +315,7 @@ export function AssistedActionsPage() {
             </Card>
             <Card
               title="Diagnóstico opcional de dados"
-              subtitle="Até 1.000 linhas por tabela; primeira amostra limitada, sem margem estatística calculável. Nenhum valor de linha é armazenado."
+              subtitle="Até 1.000 linhas por tabela. Tabelas maiores usam páginas selecionadas pelo PostgreSQL; a margem estatística não é calculável. Nenhum valor de linha é armazenado."
             >
               {!enabled ? (
                 <p className="mt-3 text-sm text-amber-300">
@@ -432,8 +446,10 @@ export function AssistedActionsPage() {
                       </p>
                       <p className="text-slate-400">
                         {scan.sampled_rows}/{scan.sample_limit} linhas · amostra
-                        limitada por ordem física; mudanças na amostra podem
-                        afetar as contagens.
+                        {scan.sample_method === "paginas_aleatorias_sistema"
+                          ? "de páginas selecionadas pelo PostgreSQL"
+                          : "limitada por ordem física"}
+                        ; mudanças na amostra podem afetar as contagens.
                       </p>
                       <ul className="mt-2 space-y-2">
                         {scan.issues.map((issue) => (
@@ -650,6 +666,18 @@ export function AssistedActionsPage() {
                     onChange={(e) => setWindowNote(e.target.value)}
                     className="w-full rounded border border-slate-600 bg-slate-900 p-2"
                   />
+                  <label className="flex items-start gap-2 text-sm text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={workloadComparable}
+                      onChange={(event) =>
+                        setWorkloadComparable(event.target.checked)
+                      }
+                    />
+                    Confirmo que as cargas de trabalho nas duas janelas são
+                    suficientemente semelhantes, com base em evidência
+                    registrada na nota acima.
+                  </label>
                   {api.hasRole("auditor") ? (
                     <Button
                       disabled={
@@ -664,14 +692,26 @@ export function AssistedActionsPage() {
                       Registrar medição
                     </Button>
                   ) : null}
-                  <ul className="space-y-1 text-sm">
+                  <p className="text-xs text-slate-400">
+                    Histórico de medições. A carga informada pelo operador é uma
+                    ressalva, não uma confirmação automática de condições
+                    iguais.
+                  </p>
+                  <ul
+                    className="space-y-2 text-sm"
+                    aria-label="Série de medições da ação"
+                  >
                     {measurements.map((item) => (
-                      <li key={item.id}>
+                      <li
+                        key={item.id}
+                        className="rounded border border-slate-700 p-2"
+                      >
                         {new Date(item.recorded_at).toLocaleString("pt-BR")} ·{" "}
                         {metricLabel(item.metric)}:{" "}
                         {item.before_value ?? "sem dado"} →{" "}
                         {item.after_value ?? "sem dado"}. {item.comparison_note}{" "}
-                        Hipótese: {item.hypothesis}
+                        Hipótese: {item.hypothesis}. Janela e carga:{" "}
+                        {item.window_note}.
                       </li>
                     ))}
                   </ul>

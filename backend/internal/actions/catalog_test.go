@@ -4,7 +4,7 @@ import "testing"
 
 func TestActionCatalogCoversMajorDatabaseDecisions(t *testing.T) {
 	cases := []struct{ rule, category string }{
-		{"model.no_primary_key", "structure"},
+		{"integrity.missing_primary_key", "structure"},
 		{"index.invalid", "structure"},
 		{"performance.sequential_scan", "query_and_index"},
 		{"vacuum.dead_tuples", "maintenance"},
@@ -17,7 +17,12 @@ func TestActionCatalogCoversMajorDatabaseDecisions(t *testing.T) {
 			t.Fatalf("rule %s has incomplete plan: %+v", tc.rule, plan)
 		}
 	}
-	if For("model.no_primary_key").ReadOnlyQuery == "" {
+	if For("integrity.missing_primary_key").ReadOnlyQuery == "" {
 		t.Fatal("primary key plan needs a read-only verification query")
+	}
+	for _, rule := range []string{"integrity.constraint_unvalidated", "index.invalid", "integrity.orphan_sequence", "model.naming_inconsistent"} {
+		if For(rule).ReadOnlyQuery == "" {
+			t.Fatalf("structural rule %s needs a confirmation query", rule)
+		}
 	}
 }

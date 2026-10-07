@@ -188,7 +188,10 @@ func (s *Store) ListIndexSnapshots(ctx context.Context, f InventoryFilter) ([]In
 	if err := s.pool.QueryRow(ctx, countIndexesSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.pool.Query(ctx, listIndexesSQL, append(args, limit, offset)...)
+	rows, err := s.pool.Query(ctx, orderedInventorySQL(listIndexesSQL, f.OrderBy, map[string]string{
+		"schema": "schema_name", "name": "index_name", "table": "table_name", "method": "access_method",
+		"size": "size_bytes", "scans": "idx_scan", "unique": "is_unique",
+	}), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -216,7 +219,9 @@ func (s *Store) ListViewSnapshots(ctx context.Context, f InventoryFilter) ([]Vie
 	if err := s.pool.QueryRow(ctx, countViewsSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.pool.Query(ctx, listViewsSQL, append(args, limit, offset)...)
+	rows, err := s.pool.Query(ctx, orderedInventorySQL(listViewsSQL, f.OrderBy, map[string]string{
+		"schema": "schema_name", "name": "view_name", "owner": "owner_name", "size": "size_bytes", "kind": "relkind",
+	}), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -243,7 +248,9 @@ func (s *Store) ListFunctionSnapshots(ctx context.Context, f InventoryFilter) ([
 	if err := s.pool.QueryRow(ctx, countFunctionsSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.pool.Query(ctx, listFunctionsSQL, append(args, limit, offset)...)
+	rows, err := s.pool.Query(ctx, orderedInventorySQL(listFunctionsSQL, f.OrderBy, map[string]string{
+		"schema": "schema_name", "name": "function_name", "kind": "kind", "lang": "language_name", "secdef": "is_security_definer",
+	}), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -50,6 +50,9 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 		d.Databases = d.Databases[:500]
 		d.Truncated = true
 	}
+	if err = s.pool.QueryRow(ctx, `SELECT count(*) FROM database_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) AND NOT is_template`, job.AuditRunID, job.Filters.Database).Scan(&d.TotalDatabases); err != nil {
+		return d, err
+	}
 	limit := 5001
 	if job.Type == "executive" {
 		limit = 21
@@ -140,6 +143,28 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 	err = s.pool.QueryRow(ctx, `SELECT baseline_run_id::text,status,added_tables,removed_tables,changed_tables FROM baseline_comparison WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) ORDER BY database_name LIMIT 1`, job.AuditRunID, job.Filters.Database).Scan(&baseline.RunID, &baseline.Status, &baseline.AddedTables, &baseline.RemovedTables, &baseline.ChangedTables)
 	if err == nil {
 		d.Baseline = &baseline
+		rows, err = s.pool.Query(ctx, `SELECT e.finding_id::text,f.finding_type,e.severity,concat_ws('.',e.database_name,e.schema_name,e.object_name)
+FROM finding_event e JOIN finding f ON f.id=e.finding_id
+WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND e.severity IN ('critical','high')
+AND ($3='' OR e.database_name=$3) AND ($4='' OR e.schema_name=$4) AND ($5='' OR e.object_name=$5)
+AND NOT EXISTS (SELECT 1 FROM finding_event old WHERE old.audit_run_id=$2::uuid AND old.finding_id=e.finding_id AND old.event_type='observed')
+ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`, job.AuditRunID, baseline.RunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table)
+		if err != nil {
+			return d, err
+		}
+		for rows.Next() {
+			var regression report.Regression
+			if err = rows.Scan(&regression.FindingID, &regression.Type, &regression.Severity, &regression.Object); err != nil {
+				rows.Close()
+				return d, err
+			}
+			d.Regressions = append(d.Regressions, regression)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return d, err
+		}
 	} else if err != pgx.ErrNoRows {
 		return d, err
 	}
