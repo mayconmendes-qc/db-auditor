@@ -8,7 +8,7 @@ import (
 )
 
 // ScopeAggregate is one schema or database score derived from covered tables.
-// It uses the same category penalties as scope-v2. Missing collection or
+// It uses the same positive and negative factors as scope-v3. Missing collection or
 // analysis nulls the score instead of reporting 100.
 type ScopeAggregate struct {
 	DatabaseName      string   `json:"database_name"`
@@ -23,7 +23,7 @@ type ScopeAggregate struct {
 // AggregateScopeScores groups table observations. tables is the number of
 // covered tables in the scope. missingIndexes forces insufficient_coverage
 // and a null score. partial applies the 0.75 confidence factor.
-func AggregateScopeScores(database, schema string, observations [][2]string, tables int, missingIndexes bool, partial bool) ScopeAggregate {
+func AggregateScopeScores(database, schema string, observations [][2]string, tables, primaryKeys int, missingIndexes bool, partial bool) ScopeAggregate {
 	out := ScopeAggregate{
 		DatabaseName:      database,
 		SchemaName:        schema,
@@ -44,7 +44,7 @@ func AggregateScopeScores(database, schema string, observations [][2]string, tab
 		out.Confidence = 0
 		return out
 	}
-	_, score := calculateScopeCategories(observations)
+	_, score := calculateScopeCategories(observations, primaryKeys, tables)
 	if partial {
 		out.Confidence = 0.75
 	}
@@ -63,12 +63,32 @@ func (s *Store) ListScopeAggregates(ctx context.Context, environmentID, runID st
 	if err != nil {
 		return nil, err
 	}
+	engine, err := s.GetEnvironmentEngine(ctx, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	if engine != "postgresql" && engine != "timescaledb" {
+		rows, err := s.pool.Query(ctx, `SELECT database_name,schema_name,count(*)::int FROM table_snapshot WHERE audit_run_id=$1::uuid GROUP BY database_name,schema_name ORDER BY database_name,schema_name`, runID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		items := []ScopeAggregate{}
+		for rows.Next() {
+			item := ScopeAggregate{Status: "not_applicable", MissingCollectors: []string{}}
+			if err := rows.Scan(&item.DatabaseName, &item.SchemaName, &item.Tables); err != nil {
+				return nil, err
+			}
+			items = append(items, item)
+		}
+		return items, rows.Err()
+	}
 	var analyzed bool
 	if err = s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM analysis_run WHERE audit_run_id=$1::uuid AND status='success')`, runID).Scan(&analyzed); err != nil {
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
-SELECT database_name, schema_name, count(*)
+SELECT database_name, schema_name, count(*),count(*) FILTER (WHERE has_primary_key)
 FROM table_snapshot
 WHERE audit_run_id=$1::uuid
 GROUP BY database_name, schema_name
@@ -78,16 +98,18 @@ ORDER BY database_name, schema_name`, runID)
 	}
 	type key struct{ db, schema string }
 	tables := map[key]int{}
+	primaryKeys := map[key]int{}
 	order := []key{}
 	for rows.Next() {
 		var db, schema string
-		var n int
-		if err = rows.Scan(&db, &schema, &n); err != nil {
+		var n, pk int
+		if err = rows.Scan(&db, &schema, &n, &pk); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		k := key{db, schema}
 		tables[k] = n
+		primaryKeys[k] = pk
 		order = append(order, k)
 	}
 	if err = rows.Err(); err != nil {
@@ -135,7 +157,7 @@ ORDER BY database_name, schema_name`, runID)
 	partial := runStatus != "success"
 	out := make([]ScopeAggregate, 0, len(order))
 	for _, k := range order {
-		item := AggregateScopeScores(k.db, k.schema, obs[k], tables[k], !covered[k.db], partial)
+		item := AggregateScopeScores(k.db, k.schema, obs[k], tables[k], primaryKeys[k], !covered[k.db], partial)
 		if !analyzed {
 			item.Status = "insufficient_coverage"
 			item.MissingCollectors = append(item.MissingCollectors, "analysis")

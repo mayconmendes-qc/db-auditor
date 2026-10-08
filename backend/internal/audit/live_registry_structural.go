@@ -19,6 +19,10 @@ type assessmentMetadataPersister interface {
 	SaveAssessmentMetadata(ctx context.Context, environmentID, auditRunID pgtype.UUID, grants []postgres.GrantFacts, dependencies []postgres.DependencyFacts) error
 }
 
+type accountRolePersister interface {
+	SaveAccountRoles(ctx context.Context, environmentID, auditRunID pgtype.UUID, roles []postgres.AccountRoleFacts) error
+}
+
 // AttachStructuralCollectors registers sequences/triggers/RLS policy collectors (Sprint 14).
 func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 	if r == nil {
@@ -182,4 +186,36 @@ func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 	}
 	collectMetadata("postgres.effective_grants", true)
 	collectMetadata("postgres.object_dependencies", false)
+	_ = r.Register(CollectorSpec{
+		Name: "postgres.account_roles", Version: "1.0.0", MaxRows: postgres.MaxAccountRoles,
+		ReadOnly: true, Profiles: map[string]struct{}{ProfileManual: {}, ProfileMonthly: {}},
+		Run: func(ctx context.Context) (int64, error) {
+			dsn, err := dsnFromContext(ctx, targets)
+			if err != nil {
+				return 0, err
+			}
+			var all []postgres.AccountRoleFacts
+			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+				items, err := postgres.CollectAccountRoles(cctx, conn)
+				if err != nil {
+					return err
+				}
+				all = append(all, items...)
+				return nil
+			})
+			if hard != nil {
+				return 0, hard
+			}
+			if writer, ok := opts.Writer.(accountRolePersister); ok && len(all) > 0 {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return 0, err
+				}
+				if err := writer.SaveAccountRoles(ctx, envID, runID, all); err != nil {
+					return 0, fmt.Errorf("persistir contas do banco: %w", err)
+				}
+			}
+			return finishMulti(int64(len(all)), partial, nil)
+		},
+	})
 }

@@ -70,11 +70,11 @@ export function TableDetail({
       <DetailSection title="Identificação">
         <DetailGrid
           items={[
-            { label: "Database", value: t.database_name },
-            { label: "Schema", value: t.schema_name },
+            { label: "Banco", value: t.database_name },
+            { label: "Esquema", value: t.schema_name },
             { label: "Tabela", value: t.table_name },
-            { label: "Owner", value: t.owner_name ?? "—" },
-            { label: "Relkind", value: t.relkind },
+            { label: "Responsável", value: t.owner_name ?? "—" },
+            { label: "Tipo interno (relkind)", value: t.relkind },
             {
               label: "Classe de relação",
               value: (
@@ -240,7 +240,7 @@ export function TableDetail({
           </Table>
         )}
       </DetailSection>
-      <DetailSection title="Workload correlacionado">
+      <DetailSection title="Carga de consultas relacionada">
         {workload.length === 0 ? (
           <p className="text-sm text-slate-400">
             Sem evidência confiável de workload para esta tabela na janela
@@ -282,9 +282,9 @@ export function TableDetail({
       <DetailSection title="Referência">
         <DetailGrid
           items={[
-            { label: "ID snapshot", value: t.id },
-            { label: "Audit run", value: t.audit_run_id },
-            { label: "Environment", value: t.environment_id },
+            { label: "ID do inventário", value: t.id },
+            { label: "Execução", value: t.audit_run_id },
+            { label: "Ambiente", value: t.environment_id },
           ]}
         />
       </DetailSection>
@@ -298,13 +298,13 @@ export function IndexDetail({ i }: { i: IndexSnapshot }) {
       <DetailSection title="Identificação">
         <DetailGrid
           items={[
-            { label: "Database", value: i.database_name },
-            { label: "Schema", value: i.schema_name },
+            { label: "Banco", value: i.database_name },
+            { label: "Esquema", value: i.schema_name },
             { label: "Tabela", value: i.table_name },
             { label: "Índice", value: i.index_name },
             { label: "Método", value: i.access_method ?? "—" },
-            { label: "Unique", value: boolLabel(i.is_unique) },
-            { label: "Primary", value: boolLabel(i.is_primary) },
+            { label: "Único", value: boolLabel(i.is_unique) },
+            { label: "Primário", value: boolLabel(i.is_primary) },
             { label: "Coletado em", value: formatDate(i.collected_at) },
           ]}
         />
@@ -331,11 +331,11 @@ export function ViewDetail({ v }: { v: ViewSnapshot }) {
     <DetailSection title="Identificação">
       <DetailGrid
         items={[
-          { label: "Database", value: v.database_name },
-          { label: "Schema", value: v.schema_name },
-          { label: "View", value: v.view_name },
-          { label: "Owner", value: v.owner_name ?? "—" },
-          { label: "Relkind", value: v.relkind },
+          { label: "Banco", value: v.database_name },
+          { label: "Esquema", value: v.schema_name },
+          { label: "Visão", value: v.view_name },
+          { label: "Responsável", value: v.owner_name ?? "—" },
+          { label: "Tipo interno (relkind)", value: v.relkind },
           { label: "Tamanho", value: formatBytes(v.size_bytes) },
           { label: "Coletado em", value: formatDate(v.collected_at) },
         ]}
@@ -349,15 +349,15 @@ export function FunctionDetail({ f }: { f: FunctionSnapshot }) {
     <DetailSection title="Identificação">
       <DetailGrid
         items={[
-          { label: "Database", value: f.database_name },
-          { label: "Schema", value: f.schema_name },
+          { label: "Banco", value: f.database_name },
+          { label: "Esquema", value: f.schema_name },
           { label: "Função", value: f.function_name },
           { label: "Argumentos", value: f.identity_arguments || "—" },
-          { label: "Owner", value: f.owner_name ?? "—" },
+          { label: "Responsável", value: f.owner_name ?? "—" },
           { label: "Linguagem", value: f.language_name ?? "—" },
-          { label: "Kind", value: f.kind ?? "—" },
+          { label: "Tipo", value: f.kind ?? "—" },
           {
-            label: "Security definer",
+            label: "Executa com privilégios do proprietário",
             value: boolLabel(f.is_security_definer),
           },
           { label: "Coletado em", value: formatDate(f.collected_at) },
@@ -373,17 +373,17 @@ export function HypertableDetail({ h }: { h: HypertableSnapshot }) {
       <DetailSection title="Identificação">
         <DetailGrid
           items={[
-            { label: "Database", value: h.database_name },
-            { label: "Schema", value: h.schema_name },
-            { label: "Hypertable", value: h.hypertable_name },
-            { label: "Owner", value: h.owner_name ?? "—" },
+            { label: "Banco", value: h.database_name },
+            { label: "Esquema", value: h.schema_name },
+            { label: "Tabela temporal", value: h.hypertable_name },
+            { label: "Responsável", value: h.owner_name ?? "—" },
             { label: "Dimensões", value: formatNumber(h.num_dimensions) },
             { label: "Chunks", value: formatNumber(h.num_chunks) },
             {
               label: "Compressão",
               value: boolLabel(h.compression_enabled),
             },
-            { label: "Distributed", value: boolLabel(h.is_distributed) },
+            { label: "Distribuída", value: boolLabel(h.is_distributed) },
             { label: "Coletado em", value: formatDate(h.collected_at) },
           ]}
         />

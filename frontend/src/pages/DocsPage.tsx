@@ -77,19 +77,19 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           onNavigate={onNavigate}
           howTo={[
             "Use o seletor de Ambiente na barra lateral para filtrar KPIs e gráficos (ou deixe em Todos).",
-            "Total de Databases, Schemas e Tabelas vem da última execução coerente de cada ambiente. Todos soma os ambientes; aviso de cobertura parcial indica que algum inventário está ausente ou incompleto.",
+            "Total de bancos, esquemas e tabelas vem da última execução coerente de cada ambiente. Todos soma os ambientes; aviso de cobertura parcial indica que algum inventário está ausente ou incompleto.",
             "Confira o status de conexão de cada ambiente no topo (Conectado / Indisponível / DSN ausente).",
-            "Clique nos cards de KPI (Findings, Storage, Runs) para ir à tela correspondente.",
-            "O gráfico de pizza mostra a distribuição de storage: a legenda traz o armazenamento em bytes; o percentual aparece só nas fatias do gráfico.",
+            "Clique nos cartões de indicadores (achados, armazenamento e execuções) para ir à tela correspondente.",
+            "O gráfico de pizza mostra a distribuição de armazenamento. As barras dos maiores objetos são relativas ao maior da lista; leia o tamanho ao lado.",
           ]}
           terms={[
             {
               name: "KPI",
-              def: "Indicador resumido (ex.: findings abertos, hypertables, runs ok/falha).",
+              def: "Indicador resumido, como achados abertos, tabelas temporais e execuções concluídas ou com falha.",
             },
             {
               name: "DSN",
-              def: "Connection string do banco auditado, configurada via variáveis de ambiente no backend.",
+              def: "Endereço de conexão do banco auditado, configurado no servidor pelo administrador.",
             },
             {
               name: "Storage por ambiente",
@@ -107,19 +107,19 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Ambientes"
           onNavigate={onNavigate}
           howTo={[
-            "Liste os ambientes registrados no store interno (seed ou configuração do backend).",
-            "Cada ambiente representa um alvo Timescale (Tiger Cloud ou self-hosted).",
-            "As credenciais nunca são editadas na UI — apenas via .env / secrets.",
-            "Após alterar DSN no host, reinicie a API e valide em Status / Dashboard.",
+            "Consulte os ambientes registrados no banco interno do auditor.",
+            "Cada ambiente representa um alvo PostgreSQL, TimescaleDB ou MongoDB configurado pelo administrador.",
+            "As credenciais são configuradas no servidor, sem edição nesta tela.",
+            "Após alterar a conexão no servidor, reinicie a API e confira Status e Visão geral.",
           ]}
           terms={[
             {
               name: "Ambiente",
-              def: "Alvo lógico de auditoria com nome, tipo e modo de discovery.",
+              def: "Banco ou conjunto de bancos com nome, tipo e modo de descoberta.",
             },
             {
-              name: "Discovery",
-              def: "Modo de descoberta de databases (único ou múltiplos) no servidor Postgres/Timescale.",
+              name: "Descoberta",
+              def: "Modo de localizar um banco ou vários bancos no servidor configurado.",
             },
             {
               name: "Somente leitura",
@@ -139,19 +139,19 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           howTo={[
             "Em Disparo manual, escolha o ambiente e clique em Executar agora (confirmação via modal).",
             "Filtre a lista por Status e Perfil (largura total, lado a lado).",
-            "Selecione uma run na tabela para ver detalhe, erros e progresso por collector.",
+            "Selecione uma execução na tabela para ver detalhes, erros e progresso por coletor.",
             "A cobertura identifica databases coletados e falhas. Uma execução ativa pode ser cancelada por operador; o cancelamento é cooperativo e os dados já persistidos permanecem auditáveis.",
             "No detalhe, compare a execução com o baseline aprovado e acompanhe o score do escopo. Aprovar novo baseline exige confirmação e cobertura elegível.",
-            "Enquanto houver runs em execução, a lista atualiza automaticamente.",
+            "Enquanto houver auditorias em execução, a lista atualiza automaticamente.",
           ]}
           terms={[
             {
-              name: "Audit run",
-              def: "Uma execução de coleta que orquestra vários collectors e grava snapshots.",
+              name: "Execução",
+              def: "Coleta que reúne metadados de vários objetos e registra um inventário datado.",
             },
             {
-              name: "Collector",
-              def: "Unidade de coleta (ex.: tables, indexes, hypertables, policies) dentro de uma run.",
+              name: "Coletor",
+              def: "Parte da auditoria que consulta um tipo de metadado, como tabelas ou índices.",
             },
             {
               name: "Perfil",
@@ -173,25 +173,25 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Inventário"
           onNavigate={onNavigate}
           howTo={[
-            "Selecione um ambiente na sidebar (obrigatório para carregar snapshots).",
-            "Use o card Filtros: Database, Schema e busca por nome.",
-            "Alterne o tipo de objeto (Tabelas, Hypertables, Índices, Views, Funções, CAGGs).",
-            "Clique em uma linha para abrir detalhes, assessment, histórico e métricas do objeto. A avaliação não modifica o banco auditado.",
+            "Selecione um ambiente na barra lateral para carregar o inventário.",
+            "Use o card Filtros: Banco, Esquema e busca por nome.",
+            "Alterne o tipo de objeto. No MongoDB, consulte coleções e índices; verificações específicas de PostgreSQL aparecem como não aplicáveis.",
+            "Clique no nome do objeto ou use Tab e Enter para abrir detalhes, avaliação, histórico e métricas. A avaliação não modifica o banco auditado.",
             "Feche o painel de detalhes pelo botão, pelo fundo ou com Esc. O link volta para o inventário sem a tabela selecionada.",
             "Ajuste linhas por página entre 20, 50 e 100. O inventário carrega uma página por vez; refine os filtros em ambientes grandes.",
           ]}
           terms={[
             {
-              name: "Snapshot",
-              def: "Cópia pontual dos metadados coletados em uma audit run.",
+              name: "Inventário",
+              def: "Registro dos metadados observados em uma execução específica.",
             },
             {
-              name: "Hypertable",
+              name: "Tabela temporal",
               def: "Tabela Timescale particionada no tempo (ou outra dimensão).",
             },
             {
-              name: "CAGG",
-              def: "Continuous Aggregate — view materializada mantida pelo Timescale.",
+              name: "Agregado contínuo",
+              def: "Resumo materializado de dados que o Timescale mantém atualizado.",
             },
           ]}
         />
@@ -258,26 +258,26 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
     },
     {
       id: "findings",
-      title: "Findings",
+      title: "Achados",
       content: (
         <SectionBody
           goTo="Findings"
           onNavigate={onNavigate}
           howTo={[
             "Filtre por severidade e status usando os seletores em português.",
-            "Abra um finding para ler evidências e contexto do objeto.",
+            "Abra um achado para ler evidências e contexto do objeto.",
             "Triagem: reconheça, resolva ou suprima em lote quando fizer sentido.",
             "Consulte o histórico imutável antes de mudar o status. Supressões têm motivo e validade; uma reincidência após a validade volta a ser visível.",
             "Exporte CSV/JSON para auditoria externa, se necessário.",
           ]}
           terms={[
             {
-              name: "Finding",
-              def: "Achado gerado por um analyzer com severidade, evidências e status de triagem.",
+              name: "Achado",
+              def: "Sinal gerado por uma regra, com gravidade, evidências e estado de análise.",
             },
             {
-              name: "Analyzer",
-              def: "Regra automatizada (CAGG, policy, vacuum, segurança, etc.) que produz findings.",
+              name: "Regra",
+              def: "Verificação automática que produz um achado para análise humana.",
             },
             {
               name: "Severidade",
@@ -299,7 +299,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Performance"
           onNavigate={onNavigate}
           howTo={[
-            "Revise findings e métricas ligados a vacuum, bloat e consultas problemáticas.",
+            "Revise achados e métricas ligados a manutenção, espaço e consultas lentas.",
             "Correlacione com Inventário (tamanho de tabelas/índices) e Execuções recentes.",
             "Nada é executado no banco alvo — use as evidências para planejar manutenção.",
           ]}
@@ -324,9 +324,9 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           goTo="Segurança"
           onNavigate={onNavigate}
           howTo={[
-            "Consulte findings de segurança (funções com privilégios elevados, roles e permissões amplas).",
-            "Priorize critical/high e valide no ambiente de origem com a equipe de DBA.",
-            "A auditoria é passiva: não revoga grants nem altera roles automaticamente.",
+            "Consulte achados de segurança, permissões efetivas por tabela e contas possivelmente inativas.",
+            "Priorize gravidade crítica ou alta e confirme com a equipe responsável. Ausência de sessão na amostra não prova que uma conta não é usada.",
+            "A auditoria é passiva: não revoga permissões nem altera contas automaticamente.",
           ]}
           terms={[
             {
@@ -335,7 +335,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             },
             {
               name: "Evidência",
-              def: "Dados coletados que sustentam o finding (objeto, grant, configuração).",
+              def: "Dados coletados que sustentam o achado, como objeto, permissão ou configuração.",
             },
           ]}
         />
@@ -350,7 +350,7 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
           onNavigate={onNavigate}
           howTo={[
             "Escolha ambiente, execução concluída e tipo Executivo, Técnico ou Tabela.",
-            "Um relatório de tabela exige database, schema e tabela. A geração é assíncrona; acompanhe a fila, cancele ou tente novamente quando permitido.",
+            "Um relatório de tabela exige banco, esquema e tabela. A geração ocorre em segundo plano; acompanhe a fila, cancele ou tente novamente quando permitido.",
             "Baixe o PDF somente enquanto o artefato estiver válido. O histórico mantém o solicitante e a versão das regras; o PDF expira após 30 dias.",
             "O PDF mostra os achados por severidade e termina com próximos passos. Confira a cobertura e valide as recomendações com a equipe antes de alterar o banco.",
           ]}
@@ -362,6 +362,33 @@ export function DocsPage({ onNavigate }: DocsPageProps) {
             {
               name: "Redação de metadados",
               def: "A configuração do servidor pode ocultar ambiente, ID da execução, solicitante e versões do cabeçalho do PDF.",
+            },
+          ]}
+        />
+      ),
+    },
+    {
+      id: "acoes-assistidas",
+      title: "Ações assistidas e qualidade de dados",
+      content: (
+        <SectionBody
+          goTo="Ações assistidas"
+          onNavigate={onNavigate}
+          howTo={[
+            "Escolha um achado, registre responsável e planeje a mudança com o dono do banco. O auditor fornece passos de confirmação, riscos, validação e retorno, mas não executa alterações no alvo.",
+            "Depois de uma mudança externa, compare duas execuções completas com carga semelhante. Para consultas, escolha latência média ou leituras por mil chamadas quando o fingerprint estiver disponível. Uma diferença observada não prova causa.",
+            "Use as páginas para consultar ações e medições antigas. Baixe JSONL ou CSV para receber todo o histórico do ambiente; confirme o marcador final do arquivo antes de usá-lo.",
+            "O diagnóstico opcional de qualidade lê até mil linhas com conta de leitura e guarda apenas contagens. A margem de erro da amostra é desconhecida.",
+            "Uma ação de qualidade só pode ser validada depois de registrada como executada externamente e de repetida a mesma verificação em amostra comparável. O auditor vincula a nova coleta à decisão.",
+          ]}
+          terms={[
+            {
+              name: "Medição comparável",
+              def: "Valores de execuções com cobertura, perfil, versões e carga suficientemente semelhantes para uma comparação cautelosa.",
+            },
+            {
+              name: "Amostra",
+              def: "Conjunto limitado de linhas lidas; pode não representar todos os dados da tabela.",
             },
           ]}
         />

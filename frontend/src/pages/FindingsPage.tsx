@@ -520,9 +520,9 @@ export function FindingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Findings"
-        title="Findings"
-        description="Diagnósticos de storage, índices, chunks, CAGGs, policies/jobs e inatividade (POSSIBLY_INACTIVE — sem exclusão automática)."
+        eyebrow="ACHADOS"
+        title="Achados"
+        description="Sinais de risco em armazenamento, índices, manutenção e segurança. Confirme cada hipótese antes de mudar o banco; o auditor não exclui objetos automaticamente."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -926,7 +926,9 @@ export function FindingsPage() {
                 ) : null}
                 <p className="mt-3 text-xs text-slate-400">
                   O auditor não executa alterações no banco analisado. Registre
-                  o resultado após a ação externa.
+                  o resultado após a ação externa. Para marcar como validada,
+                  registre em Ações assistidas uma medição comparável de uma
+                  coleta completa posterior à mudança.
                 </p>
                 {api.hasRole("auditor") ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">

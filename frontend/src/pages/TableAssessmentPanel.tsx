@@ -673,14 +673,17 @@ export function TableAssessmentPanel({
         <p>
           Score de escopo:{" "}
           {scopeScore?.score == null
-            ? "indisponível por cobertura"
+            ? scopeScore?.status === "not_applicable"
+              ? "não aplicável a este mecanismo"
+              : "indisponível por cobertura"
             : `${scopeScore.score}/100`}{" "}
           · confiança {Math.round((scopeScore?.confidence ?? 0) * 100)}%
         </p>
         {scopeScore?.categories.map((category) => (
           <p key={category.category}>
             {category.category}: {category.score}/100 · {category.findings}{" "}
-            findings · penalidade {category.penalty}
+            achados · penalidade {category.penalty} · evidência positiva +
+            {category.positive}
           </p>
         ))}
         {assessment?.run.status === "success" ? (
@@ -738,7 +741,7 @@ export function TableAssessmentPanel({
               <DetailGrid
                 items={[
                   {
-                    label: "Database / schema",
+                    label: "Banco / esquema",
                     value: `${t.database_name} / ${t.schema_name}`,
                   },
                   { label: "Tabela", value: t.table_name },
@@ -747,7 +750,10 @@ export function TableAssessmentPanel({
                     label: "Linhas estimadas",
                     value: t.row_estimate.toLocaleString("pt-BR"),
                   },
-                  { label: "Storage", value: formatBytes(t.total_size_bytes) },
+                  {
+                    label: "Armazenamento",
+                    value: formatBytes(t.total_size_bytes),
+                  },
                   {
                     label: "Chave primária",
                     value: t.has_primary_key ? "Sim" : "Não",
@@ -757,7 +763,7 @@ export function TableAssessmentPanel({
                     value: assessment?.table.comment ?? "—",
                   },
                   {
-                    label: "Tablespace",
+                    label: "Área de armazenamento",
                     value: assessment?.table.tablespace_name ?? "—",
                   },
                   {
@@ -765,15 +771,15 @@ export function TableAssessmentPanel({
                     value: assessment?.table.persistence ?? "—",
                   },
                   {
-                    label: "Storage parameters",
+                    label: "Parâmetros de armazenamento",
                     value:
                       assessment?.table.storage_parameters.join(", ") || "—",
                   },
-                  { label: "Run", value: t.audit_run_id },
+                  { label: "Execução", value: t.audit_run_id },
                 ]}
               />
             </DetailSection>
-            <DetailSection title="Resumo do run">
+            <DetailSection title="Resumo da execução">
               <DetailGrid
                 items={[
                   {
@@ -781,7 +787,7 @@ export function TableAssessmentPanel({
                     value: assessment?.summary.columns ?? "—",
                   },
                   {
-                    label: "Constraints",
+                    label: "Restrições",
                     value: assessment?.summary.constraints ?? "—",
                   },
                   {
@@ -789,10 +795,13 @@ export function TableAssessmentPanel({
                     value: assessment?.summary.indexes ?? "—",
                   },
                   {
-                    label: "Findings",
+                    label: "Achados",
                     value: assessment?.summary.findings ?? "—",
                   },
-                  { label: "Grants", value: assessment?.summary.grants ?? "—" },
+                  {
+                    label: "Permissões",
+                    value: assessment?.summary.grants ?? "—",
+                  },
                   {
                     label: "Dependências",
                     value: assessment?.summary.dependencies ?? "—",
@@ -807,7 +816,7 @@ export function TableAssessmentPanel({
             ) : null}
             <p className="text-xs text-slate-400">
               Contrato v{assessment?.version ?? 1}; as coleções relacionadas são
-              paginadas e sempre usam este run.
+              paginadas e sempre usam esta execução.
             </p>
           </>
         ) : null}
@@ -918,7 +927,7 @@ export function TableAssessmentPanel({
                 {assessment?.table.rls_forced ? "habilitado" : "desabilitado"}.
               </p>
             </DetailSection>
-            <DetailSection title="Grants efetivos">
+            <DetailSection title="Permissões efetivas">
               <CollectionState data={grants}>
                 <ul className="space-y-1 text-sm">
                   {grants.items.map((g) => (
@@ -929,7 +938,7 @@ export function TableAssessmentPanel({
                 </ul>
               </CollectionState>
             </DetailSection>
-            <DetailSection title="Policies">
+            <DetailSection title="Políticas">
               <CollectionState data={policies}>
                 <ul className="space-y-1 text-sm">
                   {policies.items.map((p) => (

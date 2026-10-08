@@ -52,7 +52,7 @@ var ruleIDs = []string{
 	"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "security.auditor_not_readonly",
 	"security.auditor_privilege_unknown", "config.version_drift", "config.extension_drift", "config.guc_drift",
 	"index.candidate", "sequence.near_limit", "security.definer_search_path",
-	"security.rls_disabled_hypothesis", "security.public_schema_create",
+	"security.rls_disabled_hypothesis", "security.public_schema_create", "security.account_inactive_review",
 	"replication.lag_high", "replication.archive_stalled", "timescale.chunk_dead_tuples",
 }
 
@@ -115,7 +115,7 @@ func Catalog() []RuleDefinition {
 		}
 		version := "1.0.0"
 		switch id {
-		case "policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "policy.retention_chunk_mismatch",
+		case "storage.large_table", "policy.compression_not_applied", "policy.compression_ratio", "policy.compression_settings", "policy.retention_chunk_mismatch",
 			"policy.reorder_hypothesis", "job.slo_exceeded", "job.workers_saturated",
 			"cagg.materialization_lag", "cagg.realtime_hypothesis", "cagg.refresh_window_exceeded", "chunk.inventory_truncated",
 			"security.auditor_not_readonly", "security.auditor_privilege_unknown",
@@ -173,6 +173,10 @@ func ruleRecommendation(id string) string {
 		return "Documente proprietário, finalidade e retenção no catálogo após revisão do responsável."
 	case "performance.workload_scan", "performance.workload_write", "performance.workload_cost":
 		return "Revise o fingerprint e o plano em ambiente autorizado; o SQL completo não é armazenado."
+	case "security.account_inactive_review":
+		return "Confirme validade, uso entre coletas e responsável pela conta antes de planejar desativação externa."
+	case "storage.large_table":
+		return "Confirme crescimento e acesso por período; avalie particionamento, retenção ou compressão somente após medir custos e obter aprovação do negócio."
 	default:
 		return "Investigue a evidência e confirme a necessidade de negócio antes de alterar estrutura ou configuração."
 	}

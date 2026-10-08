@@ -31,7 +31,7 @@ func Matrix(engine string, timescaleObserved bool, qualityEnabled bool) []Capabi
 	out := make([]Capability, 0, len(known))
 	postgres := engine == "postgresql" || engine == "timescaledb"
 	for _, name := range known {
-		available := postgres
+		available := postgres || engine == "mongodb" && (name == "catalog" || name == "indexes")
 		switch name {
 		case "timescale":
 			available = postgres && timescaleObserved

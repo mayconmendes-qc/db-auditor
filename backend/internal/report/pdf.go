@@ -25,6 +25,13 @@ func RenderPDF(document Document) ([]byte, error) {
 	pages := [][]string{{}}
 	y := 790
 	for _, line := range lines {
+		if line.Style == "heading" && y < 110 {
+			if len(pages) >= maxPDFPages {
+				return nil, fmt.Errorf("relatório excede %d páginas; reduza o escopo ou use filtros", maxPDFPages)
+			}
+			pages = append(pages, []string{})
+			y = 790
+		}
 		if line.Style == "bar_bytes" {
 			if y < 75 {
 				if len(pages) >= maxPDFPages {
@@ -91,7 +98,7 @@ func RenderPDF(document Document) ([]byte, error) {
 				y -= 4
 			}
 		}
-		width := 96
+		width := 90
 		if fontSize == 18 {
 			width = 54
 		}
@@ -122,7 +129,15 @@ func RenderPDF(document Document) ([]byte, error) {
 		pageID := len(objects) + 1
 		contentID := pageID + 1
 		kids = append(kids, fmt.Sprintf("%d 0 R", pageID))
-		stream := "1 1 1 rg 0 0 595 842 re f\n" + strings.Join(commands, "") + fmt.Sprintf("0.45 0.50 0.55 rg BT /F1 9 Tf 42 30 Td (%s) Tj ET\n", escapePDFText(fmt.Sprintf("Página %d de %d", index+1, len(pages))))
+		stream := "1 1 1 rg 0 0 595 842 re f\n"
+		if index > 0 {
+			run := document.RunID
+			if len(run) > 8 {
+				run = run[:8]
+			}
+			stream += fmt.Sprintf("0.45 0.50 0.55 rg BT /F1 9 Tf 42 815 Td (%s) Tj ET\n", escapePDFText("DB Auditor · "+reportTypeLabel(document.Type)+" · execução "+run))
+		}
+		stream += strings.Join(commands, "") + fmt.Sprintf("0.45 0.50 0.55 rg BT /F1 9 Tf 42 30 Td (%s) Tj ET\n", escapePDFText(fmt.Sprintf("Página %d de %d", index+1, len(pages))))
 		objects = append(objects, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>", contentID), fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(stream), stream))
 	}
 	objects[0] = "<< /Type /Catalog /Pages 2 0 R >>"

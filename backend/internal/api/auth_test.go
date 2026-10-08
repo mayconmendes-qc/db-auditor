@@ -97,6 +97,7 @@ func TestAuthMiddlewareRejectsMissingSession(t *testing.T) {
 }
 
 func TestCookieSessionRequiresCSRFForMutations(t *testing.T) {
+	t.Setenv("AUDITOR_TRUSTED_PROXY_CIDRS", "192.0.2.1/32")
 	hash, err := repository.HashAuditorPassword("a-strong-test-password")
 	if err != nil {
 		t.Fatal(err)

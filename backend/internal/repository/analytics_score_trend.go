@@ -102,18 +102,39 @@ FROM database_snapshot d WHERE d.audit_run_id=ANY($1::uuid[]) AND NOT d.is_templ
 	if err != nil {
 		return err
 	}
+	tableRows, err := s.pool.Query(ctx, `SELECT audit_run_id::text,count(*) FILTER (WHERE has_primary_key)::int,count(*)::int FROM table_snapshot WHERE audit_run_id=ANY($1::uuid[]) GROUP BY audit_run_id`, ids)
+	if err != nil {
+		return err
+	}
+	type structuralEvidence struct{ primaryKeys, tables int }
+	evidence := map[string]structuralEvidence{}
+	for tableRows.Next() {
+		var id string
+		var item structuralEvidence
+		if err = tableRows.Scan(&id, &item.primaryKeys, &item.tables); err != nil {
+			tableRows.Close()
+			return err
+		}
+		evidence[id] = item
+	}
+	err = tableRows.Err()
+	tableRows.Close()
+	if err != nil {
+		return err
+	}
 	for i := range points {
 		point := &points[i]
-		point.ScoreVersion = scopeScoreVersion
+		point.ScoreVersion = ScopeScoreFormulaVersion
 		coverage := covered[point.AuditRunID]
 		if coverage.databases == 0 {
 			continue
 		}
 		point.ScoreConfidence = float64(coverage.collectors) / float64(coverage.databases*len(scoreCollectors))
-		if point.Coverage != "complete" || point.Status != "success" || coverage.collectors != coverage.databases*len(scoreCollectors) {
+		if point.Coverage != "complete" || point.Status != "success" || coverage.collectors != coverage.databases*len(scoreCollectors) || evidence[point.AuditRunID].tables == 0 {
 			continue
 		}
-		_, score := calculateScopeCategories(observations[point.AuditRunID])
+		facts := evidence[point.AuditRunID]
+		_, score := calculateScopeCategories(observations[point.AuditRunID], facts.primaryKeys, facts.tables)
 		point.Score = &score
 	}
 	return nil

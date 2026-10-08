@@ -22,6 +22,11 @@ func TestReportJobLifecycleIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
+	// Packages share the disposable integration database. A queued job from an
+	// earlier package must not be claimed before this test's own fixture.
+	if _, err = pool.Exec(ctx, `UPDATE report_job SET status='cancelled' WHERE status='queued'`); err != nil {
+		t.Fatal(err)
+	}
 	store := repository.NewStore(pool)
 	var env, run string
 	if err = pool.QueryRow(ctx, `INSERT INTO audit_environment(name,type,discovery_mode) VALUES(gen_random_uuid()::text,'self_hosted','single_database') RETURNING id::text`).Scan(&env); err != nil {

@@ -10,13 +10,13 @@ import {
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
-import { downloadCSV, downloadJSON } from "../lib/export";
 import { formatBytes } from "../lib/format";
 import { api } from "../services/api";
 import type {
   ActionMeasurement,
   AuditRun,
   EnvironmentCapabilities,
+  PageMeta,
   QualityIssue,
   QualityScan,
   TrackedAction,
@@ -50,9 +50,18 @@ function statusLabel(value: string): string {
   return statuses.find((item) => item.value === value)?.label ?? value;
 }
 function metricLabel(value: string): string {
-  return value === "finding_observed"
-    ? "Achado observado"
-    : "Tamanho da tabela";
+  switch (value) {
+    case "finding_observed":
+      return "Achado observado";
+    case "table_size_bytes":
+      return "Tamanho da tabela";
+    case "query_mean_latency_us":
+      return "Latência média da consulta (µs)";
+    case "query_reads_per_1000_calls":
+      return "Blocos lidos por 1.000 chamadas";
+    default:
+      return value;
+  }
 }
 
 function words(raw: string): string[] {
@@ -69,6 +78,8 @@ export function AssistedActionsPage() {
     useState<EnvironmentCapabilities | null>(null);
   const [scans, setScans] = useState<QualityScan[]>([]);
   const [actions, setActions] = useState<TrackedAction[]>([]);
+  const [actionOffset, setActionOffset] = useState(0);
+  const [actionPage, setActionPage] = useState<PageMeta | null>(null);
   const [runs, setRuns] = useState<AuditRun[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -92,6 +103,8 @@ export function AssistedActionsPage() {
     null,
   );
   const [measurements, setMeasurements] = useState<ActionMeasurement[]>([]);
+  const [measurementOffset, setMeasurementOffset] = useState(0);
+  const [measurementPage, setMeasurementPage] = useState<PageMeta | null>(null);
   const [before, setBefore] = useState("");
   const [after, setAfter] = useState("");
   const [metric, setMetric] =
@@ -106,12 +119,13 @@ export function AssistedActionsPage() {
       const [c, q, a, r] = await Promise.all([
         api.environmentCapabilities(env),
         api.qualityScans(env),
-        api.trackedActions(env),
+        api.trackedActions(env, actionOffset),
         api.auditRuns({ environment_id: env }),
       ]);
       setCapabilities(c);
       setScans(q.items);
       setActions(a.items);
+      setActionPage(a.page);
       setRuns(
         r.items.filter(
           (run) => run.status === "success" || run.status === "partial_success",
@@ -134,7 +148,7 @@ export function AssistedActionsPage() {
       setActions([]);
       setRuns([]);
     }
-  }, [environmentId]);
+  }, [environmentId, actionOffset]);
   const startScan = async () => {
     if (!environmentId) return;
     setBusy(true);
@@ -192,7 +206,10 @@ export function AssistedActionsPage() {
   };
   const chooseAction = async (item: TrackedAction) => {
     setSelectedAction(item);
-    setMeasurements((await api.actionMeasurements(item.finding_id)).items);
+    setMeasurementOffset(0);
+    const page = await api.actionMeasurements(item.finding_id);
+    setMeasurements(page.items);
+    setMeasurementPage(page.page);
     setBefore("");
     setAfter("");
   };
@@ -208,9 +225,10 @@ export function AssistedActionsPage() {
         window_note: windowNote.trim(),
         workload_comparable: workloadComparable,
       });
-      setMeasurements(
-        (await api.actionMeasurements(selectedAction.finding_id)).items,
-      );
+      const page = await api.actionMeasurements(selectedAction.finding_id);
+      setMeasurements(page.items);
+      setMeasurementOffset(0);
+      setMeasurementPage(page.page);
       await refresh(environmentId || "");
     } catch (cause) {
       setError(formatError(cause, "Medição não registrada"));
@@ -218,50 +236,14 @@ export function AssistedActionsPage() {
       setBusy(false);
     }
   };
-  const exportActions = () => {
-    const now = new Date().toISOString().slice(0, 10);
-    downloadJSON(`acoes-${now}.json`, {
-      environment_id: environmentId,
-      exported_at: new Date().toISOString(),
-      items: actions,
-    });
-    downloadCSV(
-      `acoes-${now}.csv`,
-      [
-        "finding_id",
-        "title",
-        "status",
-        "owner",
-        "recurrences",
-        "metric",
-        "before",
-        "after",
-        "comparable",
-        "comparison_note",
-        "hypothesis",
-        "window_note",
-        "recorded_at",
-      ],
-      actions.flatMap((item) =>
-        (item.measurements.length ? item.measurements : [null]).map(
-          (measurement) => ({
-            finding_id: item.finding_id,
-            title: item.title,
-            status: item.status,
-            owner: item.owner,
-            recurrences: item.recurrences,
-            metric: measurement?.metric ?? "",
-            before: measurement?.before_value ?? "",
-            after: measurement?.after_value ?? "",
-            comparable: measurement?.comparable ?? "",
-            comparison_note: measurement?.comparison_note ?? "",
-            hypothesis: measurement?.hypothesis ?? "",
-            window_note: measurement?.window_note ?? "",
-            recorded_at: measurement?.recorded_at ?? "",
-          }),
-        ),
-      ),
-    );
+  const exportActions = (format: "csv" | "jsonl") => {
+    if (!environmentId) return;
+    const link = document.createElement("a");
+    link.href = api.actionExportURL(environmentId, format);
+    link.download = `acoes-${new Date().toISOString().slice(0, 10)}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
   return (
     <>
@@ -274,7 +256,10 @@ export function AssistedActionsPage() {
         <Select
           label="Ambiente"
           value={environmentId ?? ""}
-          onChange={(event) => setEnvironmentId(event.target.value || null)}
+          onChange={(event) => {
+            setActionOffset(0);
+            setEnvironmentId(event.target.value || null);
+          }}
           options={[
             { value: "", label: "Selecione um ambiente" },
             ...environments.map((env) => ({ value: env.id, label: env.name })),
@@ -451,6 +436,7 @@ export function AssistedActionsPage() {
                           : "limitada por ordem física"}
                         ; mudanças na amostra podem afetar as contagens.
                       </p>
+                      <p className="text-slate-400">{scan.sampling_note}</p>
                       <ul className="mt-2 space-y-2">
                         {scan.issues.map((issue) => (
                           <li
@@ -473,6 +459,12 @@ export function AssistedActionsPage() {
                                 ? ` Antes: ${issue.previous_affected_rows}; agora: ${issue.affected_rows}.`
                                 : ""}
                             </p>
+                            {issue.validation_scan_id ? (
+                              <p className="text-slate-400">
+                                Validação vinculada ao diagnóstico{" "}
+                                {issue.validation_scan_id}.
+                              </p>
+                            ) : null}
                             <details className="mt-1">
                               <summary className="cursor-pointer">
                                 Roteiro de confirmação e sanitização
@@ -512,6 +504,13 @@ export function AssistedActionsPage() {
                     onChange={(e) => setIssueStatus(e.target.value)}
                     options={statuses}
                   />
+                  {issueStatus === "validated" ? (
+                    <p className="text-xs text-amber-200">
+                      Para validar, repita o diagnóstico após a ação com método,
+                      limite e quantidade de linhas comparáveis. A nova coleta
+                      ficará vinculada à decisão.
+                    </p>
+                  ) : null}
                   <input
                     aria-label="Responsável"
                     value={owner}
@@ -546,9 +545,20 @@ export function AssistedActionsPage() {
               {actions.length ? (
                 <>
                   <div className="mt-3">
-                    <Button variant="secondary" onClick={exportActions}>
-                      Exportar JSON e CSV
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => exportActions("jsonl")}
+                      >
+                        Baixar histórico JSONL
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => exportActions("csv")}
+                      >
+                        Baixar histórico CSV
+                      </Button>
+                    </div>
                   </div>
                   <ul className="mt-3 space-y-2">
                     {actions.map((item) => (
@@ -577,7 +587,7 @@ export function AssistedActionsPage() {
                         ) : null}
                         <p className="text-slate-400">
                           {item.potential_reclaim_bytes != null
-                            ? `Espaço candidato até ${formatBytes(item.potential_reclaim_bytes)}. `
+                            ? `Indicador de espaço: ${formatBytes(item.potential_reclaim_bytes)}. `
                             : ""}
                           {item.estimate_note}
                         </p>
@@ -598,6 +608,31 @@ export function AssistedActionsPage() {
                       </li>
                     ))}
                   </ul>
+                  {actionPage ? (
+                    <div className="mt-3 flex items-center gap-3 text-xs text-slate-300">
+                      <Button
+                        variant="secondary"
+                        disabled={actionOffset === 0}
+                        onClick={() =>
+                          setActionOffset(Math.max(0, actionOffset - 50))
+                        }
+                      >
+                        Anterior
+                      </Button>
+                      <span>
+                        {actionOffset + 1}–
+                        {Math.min(actionOffset + 50, actionPage.total)} de{" "}
+                        {actionPage.total} ações
+                      </span>
+                      <Button
+                        variant="secondary"
+                        disabled={!actionPage.has_more}
+                        onClick={() => setActionOffset(actionOffset + 50)}
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="mt-3 text-sm text-slate-400">
@@ -649,6 +684,14 @@ export function AssistedActionsPage() {
                       {
                         value: "table_size_bytes",
                         label: "Tamanho da tabela (bytes)",
+                      },
+                      {
+                        value: "query_mean_latency_us",
+                        label: "Latência média da consulta (µs)",
+                      },
+                      {
+                        value: "query_reads_per_1000_calls",
+                        label: "Blocos lidos por 1.000 chamadas",
                       },
                     ]}
                   />
@@ -715,6 +758,66 @@ export function AssistedActionsPage() {
                       </li>
                     ))}
                   </ul>
+                  {measurementPage && measurementPage.total > 50 ? (
+                    <div className="mt-3 flex items-center gap-3 text-xs text-slate-300">
+                      <Button
+                        variant="secondary"
+                        disabled={measurementOffset === 0}
+                        onClick={() => {
+                          const next = Math.max(0, measurementOffset - 50);
+                          void api
+                            .actionMeasurements(selectedAction.finding_id, next)
+                            .then((page) => {
+                              setMeasurements(page.items);
+                              setMeasurementPage(page.page);
+                              setMeasurementOffset(next);
+                            })
+                            .catch((cause) =>
+                              setError(
+                                formatError(
+                                  cause,
+                                  "Falha ao carregar medições",
+                                ),
+                              ),
+                            );
+                        }}
+                      >
+                        Anterior
+                      </Button>
+                      <span>
+                        {measurementOffset + 1}–
+                        {Math.min(
+                          measurementOffset + 50,
+                          measurementPage.total,
+                        )}{" "}
+                        de {measurementPage.total} medições
+                      </span>
+                      <Button
+                        variant="secondary"
+                        disabled={!measurementPage.has_more}
+                        onClick={() => {
+                          const next = measurementOffset + 50;
+                          void api
+                            .actionMeasurements(selectedAction.finding_id, next)
+                            .then((page) => {
+                              setMeasurements(page.items);
+                              setMeasurementPage(page.page);
+                              setMeasurementOffset(next);
+                            })
+                            .catch((cause) =>
+                              setError(
+                                formatError(
+                                  cause,
+                                  "Falha ao carregar medições",
+                                ),
+                              ),
+                            );
+                        }}
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </Card>
             ) : null}
