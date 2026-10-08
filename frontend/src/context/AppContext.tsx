@@ -8,6 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  type InventoryTarget,
+  inventoryTargetFromParams,
+  inventoryTargetParams,
+  type LegacyTableTarget,
+  normalizeInventoryTarget,
+} from "../lib/inventoryTarget";
 import { api } from "../services/api";
 import type { Environment, NavigationSection } from "../types";
 
@@ -35,13 +42,7 @@ const SLUG_TO_SECTION = Object.fromEntries(
   Object.entries(SECTION_SLUGS).map(([k, v]) => [v, k]),
 ) as Record<string, NavigationSection>;
 
-export interface InventoryTarget {
-  database: string;
-  schema: string;
-  table: string;
-}
-
-interface LocationState {
+export interface LocationState {
   section: NavigationSection;
   env: string | null;
   runId: string | null;
@@ -50,14 +51,26 @@ interface LocationState {
   search: Record<string, string>;
 }
 
-function parseLocation(): LocationState {
-  const raw = window.location.hash.replace(/^#\/?/, "");
+export function parseLocationHash(hash: string): LocationState {
+  const raw = hash.replace(/^#\/?/, "");
   const [pathPart, queryPart] = raw.split("?");
   const parts = pathPart.split("/").filter(Boolean);
   const params = new URLSearchParams(queryPart || "");
   const search: Record<string, string> = {};
   params.forEach((value, key) => {
-    if (key !== "env" && value) search[key] = value;
+    if (
+      ![
+        "env",
+        "kind",
+        "database",
+        "schema",
+        "name",
+        "table",
+        "signature",
+      ].includes(key) &&
+      value
+    )
+      search[key] = value;
   });
   const head = parts[0] || "dashboard";
   let section: NavigationSection = "Dashboard";
@@ -73,18 +86,14 @@ function parseLocation(): LocationState {
   } else if (head === "inventory" && parts.length >= 4) {
     section = "Inventário";
     inventory = {
+      kind: "tables",
       database: decodeURIComponent(parts[1]),
       schema: decodeURIComponent(parts[2]),
-      table: decodeURIComponent(parts[3]),
+      name: decodeURIComponent(parts[3]),
     };
   } else if (head === "inventory") {
     section = "Inventário";
-    const database = params.get("database");
-    const schema = params.get("schema");
-    const table = params.get("table");
-    if (database && schema && table) {
-      inventory = { database, schema, table };
-    }
+    inventory = inventoryTargetFromParams(params);
   } else if (head === "compare") {
     section = "Comparar";
   } else if (head === "overview") {
@@ -102,18 +111,24 @@ function parseLocation(): LocationState {
   };
 }
 
-function formatLocation(state: LocationState): string {
+function parseLocation(): LocationState {
+  return parseLocationHash(window.location.hash);
+}
+
+export function formatLocation(state: LocationState): string {
   let path = SECTION_SLUGS[state.section];
   if (state.section === "Execuções" && state.runId) {
     path = `runs/${encodeURIComponent(state.runId)}`;
   } else if (state.section === "Findings" && state.findingId) {
     path = `findings/${encodeURIComponent(state.findingId)}`;
-  } else if (state.section === "Inventário" && state.inventory) {
-    const item = state.inventory;
-    path = `inventory/${encodeURIComponent(item.database)}/${encodeURIComponent(item.schema)}/${encodeURIComponent(item.table)}`;
   }
   const query = new URLSearchParams();
   if (state.env) query.set("env", state.env);
+  if (state.section === "Inventário" && state.inventory) {
+    inventoryTargetParams(state.inventory).forEach((value, key) => {
+      query.set(key, value);
+    });
+  }
   for (const [key, value] of Object.entries(state.search)) {
     if (value) query.set(key, value);
   }
@@ -145,7 +160,10 @@ export interface AppContextValue {
   setSearch: (patch: Record<string, string | null>) => void;
   openRun: (id: string) => void;
   openFinding: (id: string | null) => void;
-  openInventory: (target: InventoryTarget, run?: string) => void;
+  openInventory: (
+    target: InventoryTarget | LegacyTableTarget,
+    run?: string,
+  ) => void;
   closeInventory: () => void;
 }
 
@@ -242,6 +260,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setEnvironmentId = useCallback((id: string | null) => {
     setEnvironmentIdState(id);
+    setInventory(null);
+    setSearchState((prev) => {
+      if (!prev.run) return prev;
+      const { run: _run, ...next } = prev;
+      return next;
+    });
   }, []);
 
   const setSearch = useCallback((patch: Record<string, string | null>) => {
@@ -269,18 +293,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setInventory(null);
   }, []);
 
-  const openInventory = useCallback((target: InventoryTarget, run?: string) => {
-    setSectionState("Inventário");
-    setInventory(target);
-    setRunId(null);
-    setFindingId(null);
-    if (run) {
-      setSearchState((prev) => (prev.run === run ? prev : { ...prev, run }));
-    }
-  }, []);
+  const openInventory = useCallback(
+    (target: InventoryTarget | LegacyTableTarget, run?: string) => {
+      setSectionState("Inventário");
+      setInventory(normalizeInventoryTarget(target));
+      setRunId(null);
+      setFindingId(null);
+      setSearchState((prev) => {
+        if (run) return prev.run === run ? prev : { ...prev, run };
+        if (!prev.run) return prev;
+        const { run: _run, ...next } = prev;
+        return next;
+      });
+    },
+    [],
+  );
 
   const closeInventory = useCallback(() => {
     setInventory(null);
+    setSearchState((prev) => {
+      if (!prev.run) return prev;
+      const { run: _run, ...next } = prev;
+      return next;
+    });
   }, []);
 
   const refreshEnvironments = useCallback(async () => {

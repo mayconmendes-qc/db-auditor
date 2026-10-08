@@ -19,6 +19,11 @@ import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
 import {
+  type InventoryTarget,
+  inventoryRunForSelection,
+  inventoryTargetKey,
+} from "../lib/inventoryTarget";
+import {
   relationClassBadgeClass,
   relationClassLabel,
 } from "../lib/relationClass";
@@ -45,7 +50,41 @@ import {
   IndexDetail,
   ViewDetail,
 } from "./InventoryDetails";
+import { InventoryObjectPanel } from "./InventoryObjectPanel";
 import { TableAssessmentPanel } from "./TableAssessmentPanel";
+
+type SelectedInventoryItem =
+  | { kind: "tables"; item: TableSnapshot }
+  | { kind: "indexes"; item: IndexSnapshot }
+  | { kind: "views" | "caggs"; item: ViewSnapshot }
+  | { kind: "functions"; item: FunctionSnapshot }
+  | { kind: "hypertables"; item: HypertableSnapshot };
+
+function targetFor(item: SelectedInventoryItem): InventoryTarget {
+  const value = item.item;
+  const shared = {
+    database: value.database_name,
+    schema: value.schema_name,
+  };
+  switch (item.kind) {
+    case "tables":
+      return { ...shared, kind: item.kind, name: item.item.table_name };
+    case "indexes":
+      return { ...shared, kind: item.kind, name: item.item.index_name };
+    case "views":
+    case "caggs":
+      return { ...shared, kind: item.kind, name: item.item.view_name };
+    case "functions":
+      return {
+        ...shared,
+        kind: item.kind,
+        name: item.item.function_name,
+        signature: item.item.identity_arguments,
+      };
+    case "hypertables":
+      return { ...shared, kind: item.kind, name: item.item.hypertable_name };
+  }
+}
 
 const KINDS: InventoryObjectKind[] = [
   "tables",
@@ -120,6 +159,14 @@ export function InventoryPage() {
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [kind, setKind] = useState<InventoryObjectKind>("tables");
   useEffect(() => {
+    if (
+      inventory &&
+      (!isMongo || inventory.kind === "tables" || inventory.kind === "indexes")
+    ) {
+      setKind(inventory.kind);
+    }
+  }, [inventory?.kind, isMongo]);
+  useEffect(() => {
     if (isMongo && kind !== "tables" && kind !== "indexes") setKind("tables");
   }, [isMongo, kind]);
   const [q, setQ] = useState("");
@@ -133,19 +180,20 @@ export function InventoryPage() {
   const [views, setViews] = useState<ViewSnapshot[]>([]);
   const [functions, setFunctions] = useState<FunctionSnapshot[]>([]);
   const [hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [deepLinkedTable, setDeepLinkedTable] = useState<TableSnapshot | null>(
-    null,
-  );
+  const [selectedItem, setSelectedItem] =
+    useState<SelectedInventoryItem | null>(null);
+  const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sort, setSort] = useState<SortState | null>(null);
   const [snapshotStatus, setSnapshotStatus] =
+    useState<SnapshotCompleteness | null>(null);
+  const [detailSnapshot, setDetailSnapshot] =
     useState<SnapshotCompleteness | null>(null);
   const [detailHistory, setDetailHistory] = useState<TableHistoryPoint[]>([]);
   const [detailStats, setDetailStats] = useState<ColumnStatSnapshot[]>([]);
   const [detailWorkload, setDetailWorkload] = useState<WorkloadSnapshot[]>([]);
   const selectedKeyRef = useRef<string | null>(null);
-  const openedDeepLinkRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!envId) {
@@ -165,6 +213,7 @@ export function InventoryPage() {
     setSelectedSchema(null);
     setOffset(0);
     setError(null);
+    setSnapshotStatus(null);
     Promise.all([
       api.databases(envId),
       api.schemas(envId),
@@ -209,9 +258,8 @@ export function InventoryPage() {
     let cancelled = false;
     setLoading(true);
     setListError(null);
-    setSelectedKey(null);
-    setSheetOpen(false);
     const params = {
+      audit_run_id: search.run || undefined,
       limit: pageSize === "all" ? 100 : pageSize,
       offset,
       q: q || undefined,
@@ -324,7 +372,17 @@ export function InventoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [envId, kind, offset, pageSize, q, selectedDb, selectedSchema, sort]);
+  }, [
+    envId,
+    kind,
+    offset,
+    pageSize,
+    q,
+    search.run,
+    selectedDb,
+    selectedSchema,
+    sort,
+  ]);
 
   useEffect(() => loadObjects(), [loadObjects]);
   useEffect(() => setSort(null), [kind]);
@@ -335,41 +393,42 @@ export function InventoryPage() {
   const sortedViews = views;
   const sortedFunctions = functions;
   const sortedHypertables = hypertables;
+  const currentRun = inventoryRunForSelection(
+    search.run,
+    snapshotStatus?.audit_run_id,
+  );
 
-  const openRow = (key: string) => {
-    closeInventory();
+  const openRow = (
+    selection: SelectedInventoryItem,
+    run: string | null,
+    updateLocation = true,
+  ) => {
+    const target = targetFor(selection);
+    const key = inventoryTargetKey(envId ?? "", run ?? "", target);
     selectedKeyRef.current = key;
-    setSelectedKey(key);
+    setSelectedItem(selection);
+    setSelectedRun(run);
+    setDetailError(null);
     setSheetOpen(true);
     setDetailHistory([]);
     setDetailStats([]);
     setDetailWorkload([]);
+    if (updateLocation) openInventory(target, run ?? undefined);
   };
 
   const closeSheet = () => {
     selectedKeyRef.current = null;
-    openedDeepLinkRef.current = null;
     setSheetOpen(false);
-    setSelectedKey(null);
-    setDeepLinkedTable(null);
+    setSelectedItem(null);
+    setSelectedRun(null);
+    setDetailError(null);
     closeInventory();
   };
 
-  const openTable = (t: TableSnapshot) => {
-    const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
-    if (envId) {
-      openedDeepLinkRef.current = `${envId}/${t.audit_run_id}/${t.database_name}/${t.schema_name}/${t.table_name}`;
-    }
-    openRow(key);
-    setDeepLinkedTable(t);
-    openInventory(
-      {
-        database: t.database_name,
-        schema: t.schema_name,
-        table: t.table_name,
-      },
-      t.audit_run_id,
-    );
+  const openTable = (t: TableSnapshot, updateLocation = true) => {
+    const target = targetFor({ kind: "tables", item: t });
+    const key = inventoryTargetKey(envId ?? "", t.audit_run_id, target);
+    openRow({ kind: "tables", item: t }, t.audit_run_id, updateLocation);
     if (!envId || isMongo) return;
     const scope = {
       database: t.database_name,
@@ -393,38 +452,159 @@ export function InventoryPage() {
   };
 
   useEffect(() => {
-    if (!envId || !page || loading) return;
-    const database = inventory?.database;
-    const schema = inventory?.schema;
-    const table = inventory?.table;
-    const run = search.run;
-    if (!run || !database || !schema || !table) return;
-    const key = `${envId}/${run}/${database}/${schema}/${table}`;
-    if (openedDeepLinkRef.current === key) return;
-    openedDeepLinkRef.current = key;
-    api
-      .tableAssessment(envId, run, database, schema, table)
-      .then((result) => openTable(result.table))
-      .catch((cause: unknown) =>
-        setListError(
-          formatError(cause, "Não foi possível abrir o link da tabela"),
-        ),
-      );
-    // The link is opened after the inventory page is ready.
+    selectedKeyRef.current = null;
+    setSelectedItem(null);
+    setSelectedRun(null);
+    setSheetOpen(false);
+  }, [envId]);
+
+  useEffect(() => {
+    if (inventory) return;
+    selectedKeyRef.current = null;
+    setSelectedItem(null);
+    setSelectedRun(null);
+    setSheetOpen(false);
+  }, [inventory]);
+
+  useEffect(() => {
+    if (!envId || !inventory) return;
+    const run = search.run ?? snapshotStatus?.audit_run_id;
+    if (!run) return;
+    const key = inventoryTargetKey(envId, run, inventory);
+    if (selectedKeyRef.current === key) return;
+    let cancelled = false;
+    selectedKeyRef.current = key;
+    setSelectedItem(null);
+    setSelectedRun(run);
+    setDetailError(null);
+    setSheetOpen(true);
+    const params = {
+      audit_run_id: run,
+      database: inventory.database,
+      schema: inventory.schema,
+      q: inventory.name,
+    };
+    const findPage = async <T,>(
+      load: (offset: number) => Promise<{ items: T[]; page: PageMeta }>,
+      matches: (item: T) => boolean,
+    ): Promise<T | null> => {
+      let offset = 0;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const result = await load(offset);
+        const found = result.items.find(matches);
+        if (found) return found;
+        if (!result.page.has_more) return null;
+        offset += result.items.length;
+      }
+      throw new Error("Busca limitada a 2.000 objetos. Refine o link.");
+    };
+    const resolve = async (): Promise<SelectedInventoryItem | null> => {
+      switch (inventory.kind) {
+        case "tables": {
+          const result = await api.tableAssessment(
+            envId,
+            run,
+            inventory.database,
+            inventory.schema,
+            inventory.name,
+          );
+          return { kind: "tables", item: result.table };
+        }
+        case "indexes": {
+          const item = await findPage(
+            (offset) => api.indexes(envId, { ...params, limit: 100, offset }),
+            (value) =>
+              value.database_name === inventory.database &&
+              value.schema_name === inventory.schema &&
+              value.index_name === inventory.name,
+          );
+          return item ? { kind: "indexes", item } : null;
+        }
+        case "views": {
+          const item = await findPage(
+            (offset) => api.views(envId, { ...params, limit: 100, offset }),
+            (value) =>
+              value.database_name === inventory.database &&
+              value.schema_name === inventory.schema &&
+              value.view_name === inventory.name,
+          );
+          return item ? { kind: "views", item } : null;
+        }
+        case "caggs": {
+          const item = await findPage(
+            (offset) =>
+              api.continuousAggregatesPage(envId, {
+                ...params,
+                limit: 100,
+                offset,
+              }),
+            (value) =>
+              value.database_name === inventory.database &&
+              value.schema_name === inventory.schema &&
+              value.view_name === inventory.name,
+          );
+          if (!item) return null;
+          return {
+            kind: "caggs",
+            item: { ...item, relkind: "cagg", size_bytes: 0 },
+          };
+        }
+        case "functions": {
+          const item = await findPage(
+            (offset) => api.functions(envId, { ...params, limit: 100, offset }),
+            (value) =>
+              value.database_name === inventory.database &&
+              value.schema_name === inventory.schema &&
+              value.function_name === inventory.name &&
+              value.identity_arguments === (inventory.signature ?? ""),
+          );
+          return item ? { kind: "functions", item } : null;
+        }
+        case "hypertables": {
+          const item = await findPage(
+            (offset) =>
+              api.hypertablesPage(envId, { ...params, limit: 100, offset }),
+            (value) =>
+              value.database_name === inventory.database &&
+              value.schema_name === inventory.schema &&
+              value.hypertable_name === inventory.name,
+          );
+          return item ? { kind: "hypertables", item } : null;
+        }
+      }
+    };
+    void resolve()
+      .then((selection) => {
+        if (cancelled || selectedKeyRef.current !== key) return;
+        if (!selection) {
+          setDetailError(
+            "Objeto não encontrado nesta execução ou fora da cobertura da coleta.",
+          );
+          return;
+        }
+        if (!search.run) openInventory(inventory, run);
+        if (selection.kind === "tables") openTable(selection.item, false);
+        else {
+          setSelectedItem(selection);
+          setSheetOpen(true);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled && selectedKeyRef.current === key) {
+          setDetailError(
+            formatError(cause, "Não foi possível abrir este objeto"),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // The canonical key captures every part of the selected object and run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [envId, page, loading, inventory, search.run]);
+  }, [envId, inventory, search.run, snapshotStatus?.audit_run_id]);
 
   const selectedTable =
-    (deepLinkedTable &&
-    `table:${deepLinkedTable.database_name}.${deepLinkedTable.schema_name}.${deepLinkedTable.table_name}` ===
-      selectedKey
-      ? deepLinkedTable
-      : undefined) ??
-    sortedTables.find(
-      (t) =>
-        `table:${t.database_name}.${t.schema_name}.${t.table_name}` ===
-        selectedKey,
-    );
+    selectedItem?.kind === "tables" ? selectedItem.item : undefined;
 
   const navigateToRelatedTable = (schema: string, table: string) => {
     if (!envId || !selectedTable) return;
@@ -443,25 +623,40 @@ export function InventoryPage() {
         ),
       );
   };
-  const selectedIndex = sortedIndexes.find(
-    (i) =>
-      `index:${i.database_name}.${i.schema_name}.${i.index_name}` ===
-      selectedKey,
-  );
-  const selectedView = sortedViews.find(
-    (v) =>
-      `view:${v.database_name}.${v.schema_name}.${v.view_name}` === selectedKey,
-  );
-  const selectedFn = sortedFunctions.find(
-    (f) =>
-      `fn:${f.database_name}.${f.schema_name}.${f.function_name}` ===
-      selectedKey,
-  );
-  const selectedHt = sortedHypertables.find(
-    (h) =>
-      `ht:${h.database_name}.${h.schema_name}.${h.hypertable_name}` ===
-      selectedKey,
-  );
+  const selectedIndex =
+    selectedItem?.kind === "indexes" ? selectedItem.item : undefined;
+  const selectedView =
+    selectedItem?.kind === "views" || selectedItem?.kind === "caggs"
+      ? selectedItem.item
+      : undefined;
+  const selectedFn =
+    selectedItem?.kind === "functions" ? selectedItem.item : undefined;
+  const selectedHt =
+    selectedItem?.kind === "hypertables" ? selectedItem.item : undefined;
+
+  useEffect(() => {
+    if (!envId || !selectedRun) {
+      setDetailSnapshot(null);
+      return;
+    }
+    if (snapshotStatus?.audit_run_id === selectedRun) {
+      setDetailSnapshot(snapshotStatus);
+      return;
+    }
+    let cancelled = false;
+    setDetailSnapshot(null);
+    void api
+      .snapshotStatus(envId, selectedRun)
+      .then((status) => {
+        if (!cancelled) setDetailSnapshot(status);
+      })
+      .catch(() => {
+        if (!cancelled) setDetailSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [envId, selectedRun, snapshotStatus]);
 
   const envName =
     environments.find((e) => e.id === envId)?.name ??
@@ -689,11 +884,13 @@ export function InventoryPage() {
                       ]}
                     >
                       {sortedTables.map((t) => {
-                        const key = `table:${t.database_name}.${t.schema_name}.${t.table_name}`;
                         return (
                           <tr
                             key={t.id}
-                            className={rowClass(selectedKey === key)}
+                            className={rowClass(
+                              selectedItem?.kind === "tables" &&
+                                selectedItem.item.id === t.id,
+                            )}
                             onClick={() => openTable(t)}
                           >
                             <td className="px-3 py-2">{t.database_name}</td>
@@ -765,12 +962,16 @@ export function InventoryPage() {
                       ]}
                     >
                       {sortedIndexes.map((i) => {
-                        const key = `index:${i.database_name}.${i.schema_name}.${i.index_name}`;
                         return (
                           <tr
                             key={i.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => openRow(key)}
+                            className={rowClass(
+                              selectedItem?.kind === "indexes" &&
+                                selectedItem.item.id === i.id,
+                            )}
+                            onClick={() =>
+                              openRow({ kind: "indexes", item: i }, currentRun)
+                            }
                           >
                             <td className="px-3 py-2">{i.schema_name}</td>
                             <td className="px-3 py-2">
@@ -780,7 +981,10 @@ export function InventoryPage() {
                                 aria-label={`Abrir detalhes do índice ${i.index_name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openRow(key);
+                                  openRow(
+                                    { kind: "indexes", item: i },
+                                    currentRun,
+                                  );
                                 }}
                               >
                                 {i.index_name}
@@ -831,12 +1035,17 @@ export function InventoryPage() {
                       ]}
                     >
                       {sortedViews.map((v) => {
-                        const key = `view:${v.database_name}.${v.schema_name}.${v.view_name}`;
+                        const viewKind = kind === "caggs" ? "caggs" : "views";
                         return (
                           <tr
                             key={v.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => openRow(key)}
+                            className={rowClass(
+                              selectedItem?.kind === viewKind &&
+                                selectedItem.item.id === v.id,
+                            )}
+                            onClick={() =>
+                              openRow({ kind: viewKind, item: v }, currentRun)
+                            }
                           >
                             <td className="px-3 py-2">{v.schema_name}</td>
                             <td className="px-3 py-2">
@@ -846,7 +1055,10 @@ export function InventoryPage() {
                                 aria-label={`Abrir detalhes da visão ${v.view_name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openRow(key);
+                                  openRow(
+                                    { kind: viewKind, item: v },
+                                    currentRun,
+                                  );
                                 }}
                               >
                                 {v.view_name}
@@ -887,12 +1099,19 @@ export function InventoryPage() {
                       ]}
                     >
                       {sortedFunctions.map((f) => {
-                        const key = `fn:${f.database_name}.${f.schema_name}.${f.function_name}`;
                         return (
                           <tr
                             key={f.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => openRow(key)}
+                            className={rowClass(
+                              selectedItem?.kind === "functions" &&
+                                selectedItem.item.id === f.id,
+                            )}
+                            onClick={() =>
+                              openRow(
+                                { kind: "functions", item: f },
+                                currentRun,
+                              )
+                            }
                           >
                             <td className="px-3 py-2">{f.schema_name}</td>
                             <td className="px-3 py-2">
@@ -902,7 +1121,10 @@ export function InventoryPage() {
                                 aria-label={`Abrir detalhes da função ${f.function_name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openRow(key);
+                                  openRow(
+                                    { kind: "functions", item: f },
+                                    currentRun,
+                                  );
                                 }}
                               >
                                 {f.function_name}
@@ -950,12 +1172,19 @@ export function InventoryPage() {
                       ]}
                     >
                       {sortedHypertables.map((h) => {
-                        const key = `ht:${h.database_name}.${h.schema_name}.${h.hypertable_name}`;
                         return (
                           <tr
                             key={h.id}
-                            className={rowClass(selectedKey === key)}
-                            onClick={() => openRow(key)}
+                            className={rowClass(
+                              selectedItem?.kind === "hypertables" &&
+                                selectedItem.item.id === h.id,
+                            )}
+                            onClick={() =>
+                              openRow(
+                                { kind: "hypertables", item: h },
+                                h.audit_run_id,
+                              )
+                            }
                           >
                             <td className="px-3 py-2">{h.schema_name}</td>
                             <td className="px-3 py-2">
@@ -965,7 +1194,10 @@ export function InventoryPage() {
                                 aria-label={`Abrir detalhes da tabela temporal ${h.hypertable_name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openRow(key);
+                                  openRow(
+                                    { kind: "hypertables", item: h },
+                                    h.audit_run_id,
+                                  );
                                 }}
                               >
                                 {h.hypertable_name}
@@ -996,9 +1228,23 @@ export function InventoryPage() {
             onOpenChange={(open) => {
               if (!open) closeSheet();
             }}
-            title={selectedKey ?? "Detalhe"}
+            title={
+              selectedItem
+                ? targetFor(selectedItem).name
+                : (inventory?.name ?? "Detalhe")
+            }
             wide
           >
+            {detailError ? (
+              <p role="alert" className="mb-4 text-sm text-red-300">
+                {detailError}
+              </p>
+            ) : null}
+            {!selectedItem && !detailError && inventory ? (
+              <p role="status" className="text-sm text-slate-400">
+                Carregando detalhes…
+              </p>
+            ) : null}
             {selectedTable && isMongo ? (
               <div className="space-y-2 text-sm text-slate-200">
                 <p>
@@ -1027,15 +1273,34 @@ export function InventoryPage() {
                 onNavigate={navigateToRelatedTable}
               />
             ) : null}
-            {selectedIndex ? <IndexDetail i={selectedIndex} /> : null}
-            {selectedView ? <ViewDetail v={selectedView} /> : null}
-            {selectedFn ? <FunctionDetail f={selectedFn} /> : null}
-            {selectedHt ? <HypertableDetail h={selectedHt} /> : null}
+            {selectedItem && selectedItem.kind !== "tables" && envId ? (
+              <InventoryObjectPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun ?? "",
+                  targetFor(selectedItem),
+                )}
+                target={targetFor(selectedItem)}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+                overview={
+                  <>
+                    {selectedIndex ? <IndexDetail i={selectedIndex} /> : null}
+                    {selectedView ? <ViewDetail v={selectedView} /> : null}
+                    {selectedFn ? <FunctionDetail f={selectedFn} /> : null}
+                    {selectedHt ? <HypertableDetail h={selectedHt} /> : null}
+                  </>
+                }
+              />
+            ) : null}
             {!selectedTable &&
             !selectedIndex &&
             !selectedView &&
             !selectedFn &&
-            !selectedHt ? (
+            !selectedHt &&
+            !inventory &&
+            !detailError ? (
               <p className="text-sm text-slate-400">Nenhum detalhe.</p>
             ) : null}
           </Sheet>

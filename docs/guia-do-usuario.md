@@ -27,6 +27,8 @@ O identificador da execução permite relacionar inventário, achados, gráficos
 
 Em **Inventário**, escolha banco, esquema e tipo de objeto. Para MongoDB, abra o banco e veja as coleções e índices; a tela mostra contagem estimada de documentos, armazenamento e índices. A busca e os filtros reduzem a lista. Use os controles de página para percorrer objetos; o total indica quantos atendem ao filtro. Clique no cabeçalho de uma coluna para ordenar **todo o resultado filtrado**, inclusive as outras páginas. Abrir uma linha mostra detalhes e histórico do objeto; fechar o painel devolve a URL à lista.
 
+O painel de cada tipo de objeto oferece as mesmas seções: visão geral, estrutura, relacionamentos, performance, segurança e recomendações. As tabelas já possuem avaliações detalhadas; nas demais categorias, uma seção ainda sem dados aparece como **não coletada**, sem sugerir que o objeto esteja seguro ou livre de problemas. O painel avisa quando a coleta foi parcial ou vazia. Use **Link direto para este objeto e execução** para compartilhar a observação exata com outra pessoa que tenha acesso ao ambiente. Ao fechar o painel, o endereço volta à lista; links antigos de tabelas continuam abrindo.
+
 Tabelas, índices, visualizações, funções, hypertables e agregados contínuos dependem das capacidades da coleta. Se um tipo não se aplica ao mecanismo ou não foi coletado, a aplicação indica a limitação. Um número de linhas é estimado pelo PostgreSQL e pode diferir da contagem real.
 
 ## 4. Investigar achados
