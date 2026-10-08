@@ -15,7 +15,7 @@ import { api } from "../services/api";
 import type { EffectiveRule } from "../types";
 
 export function RulesPage() {
-  const { environmentId } = useApp();
+  const { environmentId, selectedEnvironment } = useApp();
   const [schema, setSchema] = useState("public");
   const [items, setItems] = useState<EffectiveRule[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +93,16 @@ export function RulesPage() {
           {loading ? <Skeleton className="h-40 w-full" /> : null}
           {!loading && items.length === 0 ? (
             <EmptyState
-              title="Nenhuma regra"
-              description="O catálogo ainda não respondeu."
+              title={
+                selectedEnvironment?.engine === "mongodb"
+                  ? "Regras não aplicáveis"
+                  : "Nenhuma regra"
+              }
+              description={
+                selectedEnvironment?.engine === "mongodb"
+                  ? "As regras atuais analisam PostgreSQL e TimescaleDB. O inventário MongoDB não recebe diagnósticos desses mecanismos."
+                  : "O catálogo ainda não respondeu."
+              }
             />
           ) : null}
           <div className="grid gap-2">

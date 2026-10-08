@@ -44,21 +44,40 @@ type TrackedAction struct {
 }
 
 func (s *Store) ListTrackedActions(ctx context.Context, env string) ([]TrackedAction, error) {
-	rows, err := s.pool.Query(ctx, `SELECT f.id::text,f.environment_id::text,f.title,f.severity,a.status,a.owner_name,a.result_note,f.recurrence_count,f.due_at,
-CASE WHEN f.finding_type='index.unused' THEN (SELECT i.size_bytes FROM index_snapshot i WHERE i.audit_run_id=f.audit_run_id AND i.database_name=f.database_name AND i.schema_name=f.schema_name AND i.index_name=f.object_name LIMIT 1) END
-FROM finding_action a JOIN finding f ON f.id=a.finding_id WHERE f.environment_id=$1::uuid ORDER BY a.updated_at DESC,f.id DESC LIMIT 100`, env)
+	return s.listTrackedActions(ctx, env, 100, 0)
+}
+
+func (s *Store) ListTrackedActionsPage(ctx context.Context, env string, limit, offset int) ([]TrackedAction, int, error) {
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM finding_action a JOIN finding f ON f.id=a.finding_id WHERE f.environment_id=$1::uuid`, env).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	items, err := s.listTrackedActions(ctx, env, limit, offset)
+	return items, total, err
+}
+
+func (s *Store) listTrackedActions(ctx context.Context, env string, limit, offset int) ([]TrackedAction, error) {
+	rows, err := s.pool.Query(ctx, `SELECT f.id::text,f.environment_id::text,f.title,f.severity,a.status,a.owner_name,a.result_note,f.recurrence_count,f.due_at,f.finding_type,
+CASE WHEN f.finding_type='index.unused' THEN (SELECT i.size_bytes FROM index_snapshot i WHERE i.audit_run_id=f.audit_run_id AND i.database_name=f.database_name AND i.schema_name=f.schema_name AND i.index_name=f.object_name LIMIT 1)
+WHEN f.finding_type='vacuum.high_dead_tuples' THEN (SELECT LEAST(t.data_size_bytes::numeric,TRUNC(t.data_size_bytes::numeric*t.n_dead_tup::numeric/GREATEST(t.n_live_tup::numeric+t.n_dead_tup::numeric,1)))::bigint FROM table_snapshot t WHERE t.audit_run_id=f.audit_run_id AND t.database_name=f.database_name AND t.schema_name=f.schema_name AND t.table_name=f.object_name LIMIT 1) END
+FROM finding_action a JOIN finding f ON f.id=a.finding_id WHERE f.environment_id=$1::uuid ORDER BY a.updated_at DESC,f.id DESC LIMIT $2 OFFSET $3`, env, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	out := []TrackedAction{}
 	for rows.Next() {
 		var item TrackedAction
-		if err = rows.Scan(&item.FindingID, &item.EnvironmentID, &item.Title, &item.Severity, &item.Status, &item.Owner, &item.Result, &item.Recurrences, &item.DueAt, &item.PotentialReclaimBytes); err != nil {
+		var findingType string
+		if err = rows.Scan(&item.FindingID, &item.EnvironmentID, &item.Title, &item.Severity, &item.Status, &item.Owner, &item.Result, &item.Recurrences, &item.DueAt, &findingType, &item.PotentialReclaimBytes); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		if item.PotentialReclaimBytes != nil && *item.PotentialReclaimBytes > 0 {
-			item.EstimateNote = "Limite superior de espaço candidato: tamanho observado do índice. Só seria recuperável após revisão e remoção externa; uso futuro e dependências podem impedir a ação."
+			if findingType == "vacuum.high_dead_tuples" {
+				item.EstimateNote = "Proxy de bytes associados a tuplas mortas, calculado com proporção estimada e tamanho da tabela. Não representa espaço recuperável no sistema de arquivos; confirme com medições e manutenção controlada."
+			} else {
+				item.EstimateNote = "Limite superior de espaço candidato: tamanho observado do índice. Só seria recuperável após revisão e remoção externa; uso futuro e dependências podem impedir a ação."
+			}
 		} else {
 			item.PotentialReclaimBytes = nil
 			item.EstimateNote = "Sem base suficiente para estimar impacto numérico."
@@ -109,7 +128,20 @@ WHERE position<=100 ORDER BY finding_id,recorded_at DESC,id DESC`, ids)
 }
 
 func (s *Store) ListActionMeasurements(ctx context.Context, findingID string) ([]ActionMeasurement, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,workload_comparable,recorded_by,recorded_at FROM finding_action_measurement WHERE finding_id=$1::uuid ORDER BY recorded_at DESC,id DESC LIMIT 100`, findingID)
+	return s.listActionMeasurements(ctx, findingID, 100, 0)
+}
+
+func (s *Store) ListActionMeasurementsPage(ctx context.Context, findingID string, limit, offset int) ([]ActionMeasurement, int, error) {
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM finding_action_measurement WHERE finding_id=$1::uuid`, findingID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	items, err := s.listActionMeasurements(ctx, findingID, limit, offset)
+	return items, total, err
+}
+
+func (s *Store) listActionMeasurements(ctx context.Context, findingID string, limit, offset int) ([]ActionMeasurement, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id::text,finding_id::text,before_run_id::text,after_run_id::text,metric,before_value,after_value,comparable,comparison_note,hypothesis,window_note,workload_comparable,recorded_by,recorded_at FROM finding_action_measurement WHERE finding_id=$1::uuid ORDER BY recorded_at DESC,id DESC LIMIT $2 OFFSET $3`, findingID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -126,13 +158,17 @@ func (s *Store) ListActionMeasurements(ctx context.Context, findingID string) ([
 }
 
 func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, after, metric, hypothesis, window string, workloadComparable bool, actor string) (*ActionMeasurement, error) {
-	var env, db, schema, table string
-	err := s.pool.QueryRow(ctx, `SELECT environment_id::text,database_name,schema_name,object_name FROM finding WHERE id=$1::uuid`, findingID).Scan(&env, &db, &schema, &table)
+	var env, db, schema, table, fingerprint string
+	err := s.pool.QueryRow(ctx, `SELECT environment_id::text,database_name,schema_name,object_name,COALESCE(evidence->>'query_fingerprint','') FROM finding WHERE id=$1::uuid`, findingID).Scan(&env, &db, &schema, &table, &fingerprint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	queryMetric := metric == "query_mean_latency_us" || metric == "query_reads_per_1000_calls"
+	if queryMetric && fingerprint == "" {
+		return nil, ErrMeasurementRun
 	}
 	type runMeta struct {
 		started                           time.Time
@@ -160,27 +196,34 @@ func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, 
 	if !b.started.Before(a.started) {
 		return nil, ErrMeasurementRun
 	}
-	value := func(run string) (*int64, error) {
+	value := func(run string) (*int64, *time.Time, error) {
 		var n int64
 		var e error
+		var reset *time.Time
 		if metric == "finding_observed" {
 			e = s.pool.QueryRow(ctx, `SELECT count(*) FROM finding_event WHERE finding_id=$1::uuid AND audit_run_id=$2::uuid AND event_type='observed'`, findingID, run).Scan(&n)
-		} else {
+		} else if metric == "table_size_bytes" {
 			e = s.pool.QueryRow(ctx, `SELECT total_size_bytes FROM table_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND schema_name=$3 AND table_name=$4`, run, db, schema, table).Scan(&n)
+		} else if metric == "query_mean_latency_us" {
+			e = s.pool.QueryRow(ctx, `SELECT ROUND(mean_exec_time_ms*1000)::bigint,stats_reset FROM workload_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND query_fingerprint=$3`, run, db, fingerprint).Scan(&n, &reset)
+		} else if metric == "query_reads_per_1000_calls" {
+			e = s.pool.QueryRow(ctx, `SELECT ROUND(shared_blocks_read::numeric*1000/GREATEST(calls,1))::bigint,stats_reset FROM workload_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND query_fingerprint=$3`, run, db, fingerprint).Scan(&n, &reset)
+		} else {
+			return nil, nil, ErrMeasurementRun
 		}
 		if errors.Is(e, pgx.ErrNoRows) {
-			return nil, nil
+			return nil, nil, nil
 		}
 		if e != nil {
-			return nil, e
+			return nil, nil, e
 		}
-		return &n, nil
+		return &n, reset, nil
 	}
-	beforeValue, err := value(before)
+	beforeValue, beforeReset, err := value(before)
 	if err != nil {
 		return nil, err
 	}
-	afterValue, err := value(after)
+	afterValue, afterReset, err := value(after)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +235,9 @@ func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, 
 	if err != nil {
 		return nil, err
 	}
-	comparable := workloadComparable && beforeValue != nil && afterValue != nil && b.status == "success" && a.status == "success" && b.profile == a.profile && b.collector == a.collector && b.rules == a.rules && b.rules != "" && beforeCoverage != nil && afterCoverage != nil && beforeCoverage.Completeness == "complete" && afterCoverage.Completeness == "complete" && beforeCoverage.AnalysisStatus != nil && afterCoverage.AnalysisStatus != nil && *beforeCoverage.AnalysisStatus == "success" && *afterCoverage.AnalysisStatus == "success"
-	note := "Comparação indisponível: cobertura, análise, objeto, perfil, versão ou carga não confirmada como semelhante."
+	workloadResetComparable := !queryMetric || beforeReset != nil && afterReset != nil && beforeReset.Equal(*afterReset)
+	comparable := workloadComparable && workloadResetComparable && beforeValue != nil && afterValue != nil && b.status == "success" && a.status == "success" && b.profile == a.profile && b.collector == a.collector && b.rules == a.rules && b.rules != "" && beforeCoverage != nil && afterCoverage != nil && beforeCoverage.Completeness == "complete" && afterCoverage.Completeness == "complete" && beforeCoverage.AnalysisStatus != nil && afterCoverage.AnalysisStatus != nil && *beforeCoverage.AnalysisStatus == "success" && *afterCoverage.AnalysisStatus == "success"
+	note := "Comparação indisponível: cobertura, análise, objeto, perfil, versão, reset de estatísticas ou carga não confirmada como semelhante."
 	if comparable {
 		note = "Métrica observada em runs tecnicamente comparáveis, com carga declarada semelhante pelo operador; a diferença não comprova causalidade da ação."
 	}

@@ -1,6 +1,9 @@
 package actions
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestActionCatalogCoversMajorDatabaseDecisions(t *testing.T) {
 	cases := []struct{ rule, category string }{
@@ -20,8 +23,9 @@ func TestActionCatalogCoversMajorDatabaseDecisions(t *testing.T) {
 	if For("integrity.missing_primary_key").ReadOnlyQuery == "" {
 		t.Fatal("primary key plan needs a read-only verification query")
 	}
-	for _, rule := range []string{"integrity.constraint_unvalidated", "index.invalid", "integrity.orphan_sequence", "model.naming_inconsistent"} {
-		if For(rule).ReadOnlyQuery == "" {
+	for _, rule := range []string{"integrity.constraint_unvalidated", "integrity.fk_without_index", "integrity.fk_type_mismatch", "integrity.orphan_sequence", "integrity.sequence_default_mismatch", "index.invalid", "index.unused", "index.overlap", "index.prefix_overlap", "model.naming_inconsistent", "model.wide_table", "model.type_review", "sequence.near_limit"} {
+		query := For(rule).ReadOnlyQuery
+		if !strings.HasPrefix(query, "SELECT ") || !strings.Contains(query, "$1::regclass") || strings.Contains(strings.ToUpper(query), " DROP ") {
 			t.Fatalf("structural rule %s needs a confirmation query", rule)
 		}
 	}

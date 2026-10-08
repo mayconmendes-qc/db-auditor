@@ -71,6 +71,19 @@ func TestAssessmentMetadataCollectorsIntegration(t *testing.T) {
 	if !grantFound {
 		t.Fatal("effective grant missing")
 	}
+	roles, err := CollectAccountRoles(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundAccount := false
+	for _, role := range roles {
+		if role.RoleName == "postgres" && role.CanLogin && role.SampledActive {
+			foundAccount = true
+		}
+	}
+	if !foundAccount {
+		t.Fatal("current login role should appear active in account sample")
+	}
 	deps, err := CollectObjectDependencies(ctx, conn, config.Scope{})
 	if err != nil {
 		t.Fatal(err)

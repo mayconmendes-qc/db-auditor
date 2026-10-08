@@ -2,7 +2,7 @@
 
 O DB Auditor ajuda a conhecer um banco, encontrar sinais de risco e acompanhar melhorias. Ele **não corrige, remove ou altera dados no banco analisado**. As recomendações são hipóteses para a equipe responsável confirmar antes de executar qualquer mudança fora da aplicação.
 
-Hoje os coletores prontos atendem PostgreSQL e TimescaleDB. A tela de capacidades informa o que foi ou não foi coletado. A ausência de um alerta só é tranquilizadora quando a coleta e a análise terminaram com cobertura suficiente.
+Os coletores atendem PostgreSQL, TimescaleDB e o catálogo de coleções e índices do MongoDB. No MongoDB, o auditor não lê documentos nem aplica regras específicas de PostgreSQL; as demais capacidades aparecem como não aplicáveis. A ausência de um alerta só é tranquilizadora quando a coleta e a análise terminaram com cobertura suficiente para aquela verificação.
 
 ## 1. Entrar e escolher um ambiente
 
@@ -25,13 +25,13 @@ O identificador da execução permite relacionar inventário, achados, gráficos
 
 ## 3. Navegar pelo inventário
 
-Em **Inventário**, escolha banco, esquema e tipo de objeto. A busca e os filtros reduzem a lista. Use os controles de página para percorrer objetos; o total indica quantos atendem ao filtro. Clique no cabeçalho de uma coluna para ordenar **todo o resultado filtrado**, inclusive as outras páginas. Abrir uma linha mostra detalhes e histórico do objeto; fechar o painel devolve a URL à lista.
+Em **Inventário**, escolha banco, esquema e tipo de objeto. Para MongoDB, abra o banco e veja as coleções e índices; a tela mostra contagem estimada de documentos, armazenamento e índices. A busca e os filtros reduzem a lista. Use os controles de página para percorrer objetos; o total indica quantos atendem ao filtro. Clique no cabeçalho de uma coluna para ordenar **todo o resultado filtrado**, inclusive as outras páginas. Abrir uma linha mostra detalhes e histórico do objeto; fechar o painel devolve a URL à lista.
 
 Tabelas, índices, visualizações, funções, hypertables e agregados contínuos dependem das capacidades da coleta. Se um tipo não se aplica ao mecanismo ou não foi coletado, a aplicação indica a limitação. Um número de linhas é estimado pelo PostgreSQL e pode diferir da contagem real.
 
 ## 4. Investigar achados
 
-Em **Findings**, filtre por severidade, estado e tipo. A **constatação** resume o que foi observado em português. Abra o achado para ver evidência, confiança, cobertura, objeto, orientação e histórico. Os termos e textos originais da regra ficam na seção técnica.
+Em **Achados**, filtre por severidade, estado e tipo. A **constatação** resume o que foi observado em português. Abra o achado para ver evidência, confiança, cobertura, objeto, orientação e histórico. Os termos e textos originais da regra ficam na seção técnica.
 
 Um achado é um sinal para investigar. Severidade indica prioridade inicial, não ganho garantido. Confiança baixa ou coleta parcial pede confirmação adicional. O auditor pode reconhecer um achado, planejar uma ação, justificar uma supressão e registrar o resultado. Se o sinal reaparecer, o histórico anterior permanece visível.
 
@@ -41,7 +41,7 @@ Antes de usar uma consulta de confirmação, substitua os parâmetros pelo objet
 
 O **Dashboard** mostra indicadores atuais e a evolução por execução: armazenamento, achados, score e cobertura. Escolha período, granularidade e ambiente. Cada barra representa uma execução identificável; intervalos sem coleta não são tratados como zero. Avisos indicam coletas parciais, versões ou perfis incompatíveis e reinício observado de contadores.
 
-O **score** é uma nota ponderada, com versão e pesos mostrados no produto. Ele fica indisponível quando faltam coletores necessários ou a análise não foi concluída. Compare notas somente entre execuções compatíveis. Uma mudança de score é uma pista para investigar, não prova de causa.
+O **score** é uma nota ponderada, com versão e pesos mostrados no produto. Achados reduzem a nota e chaves primárias verificadas acrescentam pontos à categoria de estrutura. Ele fica indisponível quando faltam coletores necessários ou a análise não foi concluída. Compare notas somente entre execuções compatíveis. A comparação mostra quais categorias mudaram; isso é uma pista para investigar, não prova de causa.
 
 Em **Acompanhamento**, um auditor pode aprovar um baseline, registrar manutenção ou implantação e reconhecer alertas de regressão. Um alerta persistente mostra sua referência e a evidência. Não interprete um intervalo sem coleta como melhora.
 
@@ -49,15 +49,15 @@ Em **Acompanhamento**, um auditor pode aprovar um baseline, registrar manutenç�
 
 Em **Ações assistidas**, escolha uma ação e duas execuções: a primeira antes da alteração externa e a segunda depois. Informe a hipótese, a janela observada e o que sabe sobre a carga. Marque a confirmação de carga semelhante somente se tiver evidência para isso. A aplicação verifica ainda perfil, versões, análise, objeto e cobertura.
 
-O resultado mostra valores anteriores e posteriores, comparabilidade e ressalvas. Uma diferença observada **não comprova que a ação a causou**. Se um achado persistir após uma medição comparável, a ação volta para análise. O JSON e o CSV de ações incluem o histórico de medições disponível na lista, limitado a 100 medições por achado.
+Algumas ações mostram um indicador numérico preliminar: tamanho de um índice sem uso observado ou proporção estimada de espaço associado a tuplas mortas. Esse número não é uma promessa de espaço recuperável; a própria ação explica as limitações. O resultado mostra valores anteriores e posteriores, comparabilidade e ressalvas. Uma diferença observada **não comprova que a ação a causou**. Para marcar uma ação como validada, registre uma medição comparável em uma coleta completa posterior à mudança. Se um achado persistir após uma medição comparável, a ação volta para análise. A lista e as medições têm páginas. Use **Baixar histórico JSONL** ou **Baixar histórico CSV** para receber todas as ações e medições do ambiente: o servidor envia o arquivo em partes, sem carregar o histórico inteiro na página. JSONL contém uma linha JSON por ação ou medição; o campo `record_type` indica o tipo. O arquivo termina com um registro `complete` (JSONL) ou `# export_complete` (CSV), com as contagens exportadas. Se esse registro faltar, a transferência foi interrompida e deve ser repetida. O arquivo pode conter nomes de objetos e notas, então guarde-o em local autorizado.
 
 ## 7. Diagnóstico opcional de qualidade de dados
 
 Um operador precisa habilitar o recurso e configurar uma conta de leitura sem privilégios de escrita. Em **Ações assistidas**, informe banco, esquema, tabela, limite de até 1.000 linhas e as colunas que deseja examinar. Você pode verificar nulos inesperados, chaves candidatas repetidas, datas fora de um intervalo, distribuição concentrada e referências órfãs em relações simples.
 
-O resultado guarda **contagens**, não valores de linhas. Em tabelas grandes, o PostgreSQL seleciona páginas para a amostra; em tabelas menores, a leitura limitada pode seguir a ordem física. Nenhum dos dois métodos fornece uma margem de erro estatística calculável neste produto. Confirme qualquer hipótese na população de dados antes de uma mudança.
+O resultado guarda **contagens**, não valores de linhas. Em tabelas grandes, o PostgreSQL seleciona páginas para a amostra; em tabelas menores, a leitura limitada pode seguir a ordem física. A margem de erro amostral é **desconhecida** e aparece no diagnóstico; as contagens descrevem somente as linhas lidas. Confirme qualquer hipótese na população de dados antes de uma mudança.
 
-O plano sugerido descreve confirmação, dependências, backup, janela, validação e recuperação. Para dados fora de uma política de retenção, obtenha aprovação da área de negócio, teste a cópia para arquivo e a restauração antes de considerar exclusão externa. Registre a evidência da nova coleta ou da validação humana ao concluir uma ação.
+O plano sugerido descreve confirmação, dependências, backup, janela, validação e recuperação. Para dados fora de uma política de retenção, obtenha aprovação da área de negócio, teste a cópia para arquivo e a restauração antes de considerar exclusão externa. Para marcar a ação de qualidade como **validada**, repita a mesma verificação após a mudança, com método, limite e número de linhas comparáveis. O auditor vincula o ID do novo diagnóstico à decisão. Um texto livre sozinho não valida a ação; compare as contagens e explique o resultado. Mesmo duas amostras comparáveis podem ter lido páginas diferentes.
 
 ## 8. Gerar e compartilhar um PDF
 
@@ -76,7 +76,7 @@ O artefato expira após 30 dias. A expiração remove o PDF, mas preserva o regi
 ## 9. Outras áreas
 
 - **Performance:** consulte sinais de consultas, índices, manutenção, espaço e carga. Confirme planos e estatísticas em uma janela representativa antes de agir.
-- **Segurança:** revise papéis, permissões, funções privilegiadas e exposição observável. Uma revogação depende da equipe da aplicação e de um plano de retorno.
+- **Segurança:** revise papéis, permissões efetivas por tabela, funções privilegiadas e exposição observável. O auditor sinaliza contas com validade expirada ou sem sessão ativa vista em coletas espaçadas por pelo menos 30 dias. A ausência de sessão na amostra não comprova que a conta não foi usada entre coletas. Confirme com a equipe responsável antes de desativar ou revogar acesso, com plano de retorno.
 - **Mapeamentos, Desvio de schema e Comparar:** relacione objetos entre ambientes e examine diferenças. Versão, perfil e cobertura podem limitar a comparação.
 - **Regras:** veja o catálogo, sua versão e a explicação das verificações. Uma regra não aplicável ao mecanismo não deve ser interpretada como resultado saudável.
 - **Status:** veja se API, armazenamento interno, conexões e tarefas estão funcionando.

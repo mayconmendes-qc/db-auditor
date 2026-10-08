@@ -96,6 +96,24 @@ func (SecurityAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Findi
 
 	// Superuser / powerful roles
 	for _, role := range facts.Roles {
+		if !role.Current && role.Login {
+			expired := role.ValidUntil != nil && !role.CollectedAt.IsZero() && role.ValidUntil.Before(role.CollectedAt)
+			if expired || role.PossiblyInactive {
+				reason := "Nenhuma sessão ativa foi vista nas coletas disponíveis por pelo menos 30 dias; a amostragem não comprova ausência de uso entre coletas."
+				if expired {
+					reason = "A validade da conta terminou; confirme se ela deve permanecer cadastrada."
+				}
+				key := fmt.Sprintf("%s.role:%s", role.Database, role.RoleName)
+				out = append(out, Finding{EnvironmentID: facts.EnvironmentID, AuditRunID: facts.AuditRunID,
+					FindingType: "security.account_inactive_review", Severity: SeverityLow, Status: StatusOpen,
+					Title:      "Revisar conta possivelmente inativa: " + role.RoleName,
+					Summary:    reason + " Consulte a equipe responsável antes de desativar qualquer acesso.",
+					ObjectType: "role", ObjectKey: key, DatabaseName: role.Database, ObjectName: role.RoleName,
+					Evidence: map[string]any{"valid_until": role.ValidUntil, "sampled_active": role.SampledActive, "sampled_inactive_window": role.PossiblyInactive, "expired": expired},
+					DedupKey: DedupKey("security.account_inactive_review", key, "review"),
+				})
+			}
+		}
 		if !role.Superuser && !role.BypassRLS && !role.Replication {
 			continue
 		}

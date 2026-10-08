@@ -8,13 +8,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const scopeScoreVersion = "scope-v2"
+const ScopeScoreFormulaVersion = "scope-v3"
 
 type ScoreCategory struct {
 	Category string `json:"category"`
 	Weight   int    `json:"weight"`
 	Score    int    `json:"score"`
 	Penalty  int    `json:"penalty"`
+	Positive int    `json:"positive"`
 	Findings int    `json:"findings"`
 }
 
@@ -68,10 +69,19 @@ func severityPenalty(severity string) int {
 	}
 }
 
-func calculateScopeCategories(observations [][2]string) ([]ScoreCategory, int) {
+func calculateScopeCategories(observations [][2]string, primaryKeys, tables int) ([]ScoreCategory, int) {
 	byCategory := map[string]*ScoreCategory{}
 	for name, weight := range scoreWeights {
 		byCategory[name] = &ScoreCategory{Category: name, Weight: weight, Score: 100}
+	}
+	// A valid identifier on observed tables is affirmative structural evidence.
+	// Missing identifiers cannot receive the same structural score as verified
+	// identifiers, even if no analyzer finding was emitted.
+	structure := byCategory["structure"]
+	structure.Score = 80
+	if tables > 0 {
+		structure.Positive = 20 * primaryKeys / tables
+		structure.Score += structure.Positive
 	}
 	for _, o := range observations {
 		category := scoreGroup(o[0])
@@ -81,7 +91,14 @@ func calculateScopeCategories(observations [][2]string) ([]ScoreCategory, int) {
 		if item.Penalty > 100 {
 			item.Penalty = 100
 		}
-		item.Score = 100 - item.Penalty
+		if category == "structure" {
+			item.Score = 80 + item.Positive - item.Penalty
+		} else {
+			item.Score = 100 - item.Penalty
+		}
+		if item.Score < 0 {
+			item.Score = 0
+		}
 	}
 	out := make([]ScoreCategory, 0, len(byCategory))
 	weighted := 0
@@ -105,8 +122,17 @@ WHERE r.id=$1::uuid AND r.environment_id=$2::uuid AND r.status IN ('success','pa
 	if err != nil {
 		return nil, err
 	}
-	out := &ScopeScore{Version: scopeScoreVersion, EnvironmentID: environmentID, AuditRunID: runID, DatabaseName: database, SchemaName: schema, TableName: table, Status: "available", Categories: []ScoreCategory{}, MissingCollectors: []string{}, Explanation: "Nota ponderada por segurança (35%), performance (30%), estrutura (20%) e manutenção (15%). Cada achado desconta pontos conforme a severidade; ausência de achados só conta quando a análise e a cobertura estão completas."}
+	out := &ScopeScore{Version: ScopeScoreFormulaVersion, EnvironmentID: environmentID, AuditRunID: runID, DatabaseName: database, SchemaName: schema, TableName: table, Status: "available", Categories: []ScoreCategory{}, MissingCollectors: []string{}, Explanation: "Nota ponderada por segurança (35%), performance (30%), estrutura (20%) e manutenção (15%). Cada achado desconta pontos; chaves primárias verificadas acrescentam até 20 pontos à estrutura. Ausência de achados só conta com análise e cobertura completas."}
 	out.Profile, out.CollectorVersion, out.RuleVersion = profile, collectorVersion, ruleVersion
+	engine, err := s.GetEnvironmentEngine(ctx, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	if engine != "postgresql" && engine != "timescaledb" {
+		out.Status = "not_applicable"
+		out.Explanation = "Nota não aplicável ao mecanismo " + engine + "; as regras e a fórmula atuais foram validadas para PostgreSQL e TimescaleDB. Consulte o inventário e as capacidades disponíveis."
+		return out, nil
+	}
 	rows, err := s.pool.Query(ctx, `SELECT database_name FROM database_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) ORDER BY database_name`, runID, database)
 	if err != nil {
 		return nil, err
@@ -177,8 +203,17 @@ WHERE r.id=$1::uuid AND r.environment_id=$2::uuid AND r.status IN ('success','pa
 	if err != nil {
 		return nil, err
 	}
+	var primaryKeys, tableCount int
+	if err = s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE has_primary_key)::int,count(*)::int FROM table_snapshot WHERE audit_run_id=$1::uuid AND ($2='' OR database_name=$2) AND ($3='' OR schema_name=$3) AND ($4='' OR table_name=$4)`, runID, database, schema, table).Scan(&primaryKeys, &tableCount); err != nil {
+		return nil, err
+	}
+	if tableCount == 0 {
+		out.Status = "insufficient_coverage"
+		out.MissingCollectors = append(out.MissingCollectors, "postgres.tables")
+		return out, nil
+	}
 	var score int
-	out.Categories, score = calculateScopeCategories(observations)
+	out.Categories, score = calculateScopeCategories(observations, primaryKeys, tableCount)
 	var analysisStatus string
 	if err = s.pool.QueryRow(ctx, `SELECT COALESCE((SELECT status FROM analysis_run WHERE audit_run_id=$1::uuid),'')`, runID).Scan(&analysisStatus); err != nil {
 		return nil, err

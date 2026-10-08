@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -38,11 +39,58 @@ func TestRenderPDFDeterministicAndPaginated(t *testing.T) {
 	}
 }
 
+func TestPDFVariantsAndBoundaryContent(t *testing.T) {
+	base := Document{Environment: "Ambiente de teste", RunID: "00000000-0000-0000-0000-000000000001", RunStarted: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), ServiceVersion: "teste", RuleVersion: "regra-teste", RequestedBy: "operador", Coverage: "complete", RunStatus: "success"}
+	variants := []struct {
+		name string
+		doc  Document
+	}{
+		{"executivo-vazio", base},
+		{"tecnico-longo", base},
+		{"tabela-parcial", base},
+	}
+	variants[0].doc.Type = "executive"
+	variants[1].doc.Type = "technical"
+	for i := 0; i < 180; i++ {
+		variants[1].doc.Tables = append(variants[1].doc.Tables, Table{Database: "db", Schema: "public", Name: fmt.Sprintf("tabela_de_vendas_%03d", i), SizeBytes: int64(i + 100)})
+	}
+	variants[1].doc.Findings = append(variants[1].doc.Findings, Finding{ID: "id-1", Type: "index.unused", Severity: "medium", Database: "db", Schema: "public", Object: "indice_vendas", Evidence: strings.Repeat("evidência revisável ", 45)})
+	variants[2].doc.Type = "table"
+	variants[2].doc.Coverage = "partial"
+	variants[2].doc.RunStatus = "partial_success"
+	variants[2].doc.CoverageNotes = []string{"A coleta não pôde ler índices nesta execução."}
+	variants[2].doc.Findings = []Finding{{ID: "id-2", Type: "integrity.missing_primary_key", Severity: "high", Database: "db", Schema: "public", Object: strings.Repeat("objeto_longo_", 15), Summary: strings.Repeat("Explicação técnica extensa. ", 35)}}
+	for _, variant := range variants {
+		t.Run(variant.name, func(t *testing.T) {
+			pdf, err := RenderPDF(variant.doc)
+			if err != nil || ValidatePDF(pdf) != nil || PageCount(pdf) == 0 {
+				t.Fatalf("PDF inválido: %v", err)
+			}
+			if dir := os.Getenv("AUDITOR_REPORT_VARIANTS_DIR"); dir != "" {
+				if err := os.WriteFile(dir+"/"+variant.name+".pdf", pdf, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
 func TestWrapTextBounded(t *testing.T) {
 	for _, part := range wrapText(strings.Repeat("x", 220), 90) {
 		if len(part) > 90 {
 			t.Fatalf("unbounded part: %d", len(part))
 		}
+	}
+}
+
+func TestPDFEscapesUntrustedMetadata(t *testing.T) {
+	name := `) Tj 0 0 m (inject`
+	pdf, err := RenderPDF(Document{Type: "executive", Environment: name, RunID: "safe", RunStarted: time.Unix(0, 0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(pdf, []byte(name)) || !bytes.Contains(pdf, []byte(`\) Tj 0 0 m \(inject`)) {
+		t.Fatal("untrusted metadata was not escaped as PDF text")
 	}
 }
 

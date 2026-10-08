@@ -19,7 +19,7 @@ func protectPublic(next http.Handler) http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, maxAPIBody)
-		if r.Method == http.MethodPost && mutationPath(r.URL.Path) && !mutations.allow(r.RemoteAddr) {
+		if r.Method == http.MethodPost && mutationPath(r.URL.Path) && !mutations.allow(clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas requisições. Aguarde um minuto.")
 			return
 		}

@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `08_action_workload.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. A migração da segunda etapa e seu procedimento operacional estão em [second-stage-operations.md](second-stage-operations.md).
+O schema canônico está em `backend/migrations/01_baseline.sql`. O seed local é `02_seed_demo.sql`. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `11_quality_validation.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. A migração da segunda etapa e seu procedimento operacional estão em [second-stage-operations.md](second-stage-operations.md).
 
 `04_p1.sql` adiciona workflow de finding (responsável e prazo), dedupe de alerta, privilégio do papel auditor, GUCs fechados e colunas de job, lag de CAGG e tamanho antes/depois da compressão. Alertas são opcionais: `AUDITOR_ALERT_WEBHOOK_URL` e/ou `AUDITOR_ALERT_EMAIL_TO` com `AUDITOR_ALERT_SMTP_HOST`. Sem URL e sem SMTP, nada é enviado. Falha de envio não falha o run. O payload não leva DSN, senha nem SQL cru. Coletores de catálogo ficam no `statement_timeout` curto do alvo; estatística, chunks, jobs e workload usam 120s locais para não estourar falso timeout em banco grande.
 
@@ -15,7 +15,7 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod up -d
 ```
 
 O compose falha se faltarem `POSTGRES_PASSWORD`, `AUDITOR_BOOTSTRAP_USER`, `AUDITOR_BOOTSTRAP_PASSWORD`, `AUDITOR_CORS_ORIGINS` ou `AUDITOR_TARGET_ALLOWED_HOSTS`. Os DSNs não entram no YAML. O Postgres interno não publica porta. `GET /metrics` não passa pelo Caddy; o scrape fica em `api:9090`, dentro da rede do compose.
-Mantenha `VITE_API_BASE_URL=/` e encaminhe `/api/*` pelo proxy HTTPS da mesma origem da interface. Os arquivos Caddy do projeto definem CSP, bloqueio de MIME sniffing e política de referência; ao usar outro proxy, configure cabeçalhos equivalentes. Preserve o esquema HTTPS original para que a API marque o cookie como `Secure`. A sessão da UI usa cookie HttpOnly e cabeçalho CSRF para alterações; o proxy deve preservar `Set-Cookie`, `Cookie` e `X-CSRF-Token`. A API cria e atualiza a tabela compartilhada de contagem de login em volumes existentes no boot, sem reaplicar o baseline. Depois de quatro tentativas de uma conta em cinco minutos, aplica espera progressiva de 1 a 60 segundos; também limita por conta e IP. As respostas 429 incluem `Retry-After`, usam texto genérico e aparecem em `auditor_http_requests_total`. Os contadores guardam hashes, não nomes nem senhas. Confira o impacto em usuários atrás de NAT antes de ajustar limites.
+Mantenha `VITE_API_BASE_URL=/` e encaminhe `/api/*` pelo proxy HTTPS da mesma origem da interface. Os arquivos Caddy do projeto definem CSP, bloqueio de MIME sniffing e política de referência; ao usar outro proxy, configure cabeçalhos equivalentes. O Compose fixa o Caddy em `172.30.72.10/32` e somente esse endereço pode informar `X-Forwarded-For` e `X-Forwarded-Proto` à API. Se usar outro proxy, ajuste `AUDITOR_TRUSTED_PROXY_CIDRS` para os endereços exatos dele e faça o proxy substituir cabeçalhos de origem enviados pelo cliente. Sem proxy confiável, a API usa o IP da conexão e marca o cookie como `Secure` apenas com TLS direto. Escolha outra sub-rede no Compose se `172.30.72.0/24` já estiver em uso na VPS. A sessão da UI usa cookie HttpOnly e cabeçalho CSRF para alterações; o proxy deve preservar `Set-Cookie`, `Cookie` e `X-CSRF-Token`. A API cria e atualiza a tabela compartilhada de contagem de login em volumes existentes no boot, sem reaplicar o baseline. Depois de quatro tentativas de uma conta em cinco minutos, aplica espera progressiva de 1 a 60 segundos; também limita por conta e IP. As respostas 429 incluem `Retry-After`, usam texto genérico e aparecem em `auditor_http_requests_total`. Os contadores guardam hashes, não nomes nem senhas. Confira o impacto em usuários atrás de NAT antes de ajustar limites.
 O Postgres do Compose aplica scripts deste diretório **somente na primeira inicialização** do volume.
 
 Após alterar o baseline em desenvolvimento:
@@ -28,6 +28,20 @@ make up
 **Nome do banco interno:** default `db_auditor` (`.env` / `POSTGRES_DB`). Se o volume foi criado com o nome legado `timescale_auditor`, alinhe o `.env` ou recrie o volume.
 
 Detalhes: `backend/migrations/README.md`.
+
+## Adicionar um ambiente MongoDB
+
+Crie um ambiente no snapshot store após aplicar as migrações e guarde o ID retornado:
+
+```sql
+INSERT INTO audit_environment (name, type, discovery_mode, engine)
+VALUES ('MongoDB de produção', 'self_hosted', 'single_database', 'mongodb')
+RETURNING id;
+```
+
+Configure o slot `AUDITOR_TARGET_3_*` do [exemplo de produção](../deploy/env.prod.example) com esse ID, banco, host, porta e usuário. Acrescente o host exato a `AUDITOR_TARGET_ALLOWED_HOSTS` e reinicie a API. O conector aceita um host direto (`mongodb://`), TLS verificado e um banco explícito; ele não segue descoberta de réplica ou URI `mongodb+srv`. Crie uma conta com apenas as permissões necessárias para `listCollections`, `listIndexes` e `collStats`. A coleta lê somente metadados, limita a 1.000 coleções e 20.000 índices por execução e não lê documentos. Se o banco ultrapassar esses limites, a execução falha com motivo e exige um escopo menor. As regras PostgreSQL, a nota de saúde e o diagnóstico de qualidade de dados aparecem como não aplicáveis ao MongoDB.
+
+Não cole a URI com senha em logs ou tickets. Faça backup do snapshot store antes de mudar a configuração ou migrar ambientes existentes. Desativar o ambiente ou remover o slot interrompe novas coletas; os snapshots anteriores permanecem no store.
 
 ## Observabilidade (Sprint 10)
 

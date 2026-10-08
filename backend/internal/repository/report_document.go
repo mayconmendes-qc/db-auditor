@@ -113,7 +113,7 @@ FROM database_snapshot d WHERE d.audit_run_id=$1::uuid AND ($2='' OR d.database_
 		d.Score = score.Score
 		d.ScoreConfidence = score.Confidence
 		for _, category := range score.Categories {
-			d.ScoreCategories = append(d.ScoreCategories, report.ScoreCategory{Category: category.Category, Score: category.Score, Penalty: category.Penalty, Findings: category.Findings})
+			d.ScoreCategories = append(d.ScoreCategories, report.ScoreCategory{Category: category.Category, Score: category.Score, Penalty: category.Penalty, Positive: category.Positive, Findings: category.Findings})
 		}
 		if len(score.MissingCollectors) > 0 {
 			d.CoverageNotes = append(d.CoverageNotes, "Score sem cobertura suficiente: "+strings.Join(score.MissingCollectors, ", "))

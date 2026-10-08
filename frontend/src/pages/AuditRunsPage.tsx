@@ -817,10 +817,7 @@ export function AuditRunsPage() {
 
             {coverage?.some((item) => item.database_name) ? (
               <Card title="Progresso por database">
-                <Table
-                  dense
-                  headers={["Database", "Collector", "Estado", "Ação"]}
-                >
+                <Table dense headers={["Banco", "Coletor", "Estado", "Ação"]}>
                   {coverage
                     .filter((item) => item.database_name)
                     .map((item) => (
@@ -885,7 +882,7 @@ export function AuditRunsPage() {
             ) : null}
 
             <Card
-              title="Findings desta execução"
+              title="Achados desta execução"
               subtitle="O conjunto observado neste run, não a fila de hoje"
             >
               {runFindings === null ? (

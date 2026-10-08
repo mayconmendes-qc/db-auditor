@@ -519,7 +519,7 @@
       }
     },
     "/api/v1/environments/{id}/runs/{run}/score/compare": {
-      "get":{"description":"Compara o score scope-v2 com baseline aprovado quando cobertura, análise e versão são compatíveis.","responses":{"200":{"description":"Comparação ou motivo de indisponibilidade"}}}
+      "get":{"description":"Compara o score scope-v3 com baseline aprovado quando cobertura, análise e versão são compatíveis.","responses":{"200":{"description":"Comparação ou motivo de indisponibilidade"}}}
     },
     "/api/v1/environments/{id}/runs/{run}/scores": {
       "get": {
@@ -797,7 +797,7 @@
     },
     "/api/v1/environments/{id}/quality-issues/{issue}": {
       "patch": {
-        "description": "Registra decisão e evidência de uma ação de saneamento externa; exige auditor.",
+        "description": "Registra decisão de saneamento externo; o estado validado exige diagnóstico comparável posterior ao registro da execução externa e devolve validation_scan_id. Exige auditor.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -807,6 +807,9 @@
           },
           "403": {
             "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Diagnóstico posterior comparável obrigatório para validar"
           },
           "422": {
             "description": "Escopo ou comparação indisponível"
@@ -816,7 +819,7 @@
     },
     "/api/v1/environments/{id}/actions": {
       "get": {
-        "description": "Lista até 100 ações de achados com até 100 medições por ação, incluindo confirmação explícita de carga comparável.",
+        "description": "Lista ações paginadas com total, confirmação de carga comparável e resumo das medições recentes.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -833,9 +836,16 @@
         }
       }
     },
+    "/api/v1/environments/{id}/actions/export": {
+      "get": {
+        "description": "Exporta todo o histórico de ações e medições em CSV ou JSONL por streaming, sem limite de 100 registros. Exige acesso ao ambiente.",
+        "parameters": [{"name":"format","in":"query","required":true,"schema":{"type":"string","enum":["csv","jsonl"]}}],
+        "responses": {"200":{"description":"Arquivo para download"},"400":{"description":"Formato ou ambiente inválido"},"403":{"description":"Sem permissão"}}
+      }
+    },
     "/api/v1/findings/{id}/action/measurements": {
       "get": {
-        "description": "Lista até 100 medições antes e depois com hipótese, janela, confirmação de carga e ressalvas de comparabilidade.",
+        "description": "Lista medições paginadas antes e depois com hipótese, janela, confirmação de carga e ressalvas de comparabilidade.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -852,7 +862,7 @@
         }
       },
       "post": {
-        "description": "Registra hipótese, janela, workload_comparable e observação entre duas execuções; exige auditor.",
+        "description": "Registra hipótese, janela, workload_comparable e métrica antes/depois. Inclui presença do achado, tamanho, latência média e leituras por mil chamadas quando há fingerprint; exige auditor.",
         "responses": {
           "200": {
             "description": "Resultado"
@@ -874,12 +884,13 @@
     "schemas": {
       "ScopeScoreCategory": {
         "type": "object",
-        "required": ["category", "weight", "score", "penalty", "findings"],
+        "required": ["category", "weight", "score", "penalty", "positive", "findings"],
         "properties": {
           "category": { "type": "string" },
           "weight": { "type": "integer" },
           "score": { "type": "integer" },
           "penalty": { "type": "integer" },
+          "positive": { "type": "integer", "description": "Pontos por evidência positiva verificada no escopo." },
           "findings": { "type": "integer" }
         }
       },
