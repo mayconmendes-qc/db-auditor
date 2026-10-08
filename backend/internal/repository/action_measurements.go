@@ -200,15 +200,16 @@ func (s *Store) RecordActionMeasurement(ctx context.Context, findingID, before, 
 		var n int64
 		var e error
 		var reset *time.Time
-		if metric == "finding_observed" {
+		switch metric {
+		case "finding_observed":
 			e = s.pool.QueryRow(ctx, `SELECT count(*) FROM finding_event WHERE finding_id=$1::uuid AND audit_run_id=$2::uuid AND event_type='observed'`, findingID, run).Scan(&n)
-		} else if metric == "table_size_bytes" {
+		case "table_size_bytes":
 			e = s.pool.QueryRow(ctx, `SELECT total_size_bytes FROM table_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND schema_name=$3 AND table_name=$4`, run, db, schema, table).Scan(&n)
-		} else if metric == "query_mean_latency_us" {
+		case "query_mean_latency_us":
 			e = s.pool.QueryRow(ctx, `SELECT ROUND(mean_exec_time_ms*1000)::bigint,stats_reset FROM workload_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND query_fingerprint=$3`, run, db, fingerprint).Scan(&n, &reset)
-		} else if metric == "query_reads_per_1000_calls" {
+		case "query_reads_per_1000_calls":
 			e = s.pool.QueryRow(ctx, `SELECT ROUND(shared_blocks_read::numeric*1000/GREATEST(calls,1))::bigint,stats_reset FROM workload_snapshot WHERE audit_run_id=$1::uuid AND database_name=$2 AND query_fingerprint=$3`, run, db, fingerprint).Scan(&n, &reset)
-		} else {
+		default:
 			return nil, nil, ErrMeasurementRun
 		}
 		if errors.Is(e, pgx.ErrNoRows) {

@@ -27,7 +27,7 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "recover-operator" {
 		if err := recoverOperator(os.Args[2:]); err != nil {
 			// Connection errors may contain the snapshot-store DSN.
-			os.Stderr.WriteString("Recuperação não concluída. Verifique a conta, a conexão e o backup; consulte os logs do banco.\n")
+			_, _ = os.Stderr.WriteString("Recuperação não concluída. Verifique a conta, a conexão e o backup; consulte os logs do banco.\n")
 			os.Exit(1)
 		}
 		return
