@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  type InventoryDetailTab,
+  InventoryDetailTabs,
+} from "../components/InventoryDetailTabs";
+import {
   type PageSize,
   PaginationControls,
 } from "../components/ui/PaginationControls";
 import { DetailGrid, DetailSection } from "../components/ui/Sheet";
 import { formatError } from "../lib/errors";
 import { formatBytes } from "../lib/format";
+import { inventoryPermalink } from "../lib/inventoryTarget";
 import { fetchAllPages } from "../lib/pagination";
 import { api } from "../services/api";
 import type {
@@ -31,35 +36,13 @@ import type {
 } from "../types";
 import { TableDetail } from "./InventoryDetails";
 
-type Tab =
-  | "overview"
-  | "structure"
-  | "relationships"
-  | "performance"
-  | "security"
-  | "recommendations";
-const tabs: Array<{ id: Tab; label: string }> = [
-  { id: "overview", label: "Visão geral" },
-  { id: "structure", label: "Estrutura" },
-  { id: "relationships", label: "Relacionamentos" },
-  { id: "performance", label: "Performance" },
-  { id: "security", label: "Segurança" },
-  { id: "recommendations", label: "Recomendações" },
-];
-
 function permalink(env: string, t: TableSnapshot): string {
-  const q = new URLSearchParams({
-    env,
-    run: t.audit_run_id,
+  return inventoryPermalink(env, t.audit_run_id, {
+    kind: "tables",
     database: t.database_name,
     schema: t.schema_name,
-    table: t.table_name,
+    name: t.table_name,
   });
-  const base =
-    typeof window === "undefined"
-      ? "http://localhost/"
-      : `${window.location.origin}${window.location.pathname}`;
-  return `${base}#/inventory?${q}`;
 }
 
 function useCollection<T>(
@@ -465,7 +448,7 @@ export function TableAssessmentPanel({
   workload: WorkloadSnapshot[];
   onNavigate: (schema: string, table: string) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<InventoryDetailTab>("overview");
   const [assessment, setAssessment] = useState<TableAssessment | null>(null);
   const [graph, setGraph] = useState<RelationshipGraph | null>(null);
   const [baseline, setBaseline] = useState<AuditBaseline | null>(null);
@@ -710,31 +693,7 @@ export function TableAssessmentPanel({
           </div>
         ) : null}
       </div>
-      <div
-        role="tablist"
-        aria-label="Seções do assessment"
-        className="flex flex-wrap gap-1 border-b border-slate-700 pb-2"
-      >
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            id={`assessment-tab-${item.id}`}
-            aria-controls={`assessment-panel-${item.id}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.id}
-            onClick={() => setTab(item.id)}
-            className={`rounded px-2 py-1 text-xs ${tab === item.id ? "bg-cyan-800 text-white" : "text-slate-300 hover:bg-slate-800"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div
-        role="tabpanel"
-        id={`assessment-panel-${tab}`}
-        aria-labelledby={`assessment-tab-${tab}`}
-      >
+      <InventoryDetailTabs tab={tab} onTabChange={setTab}>
         {tab === "overview" ? (
           <>
             <DetailSection title="Tabela">
@@ -998,7 +957,7 @@ export function TableAssessmentPanel({
             </CollectionState>
           </DetailSection>
         ) : null}
-      </div>
+      </InventoryDetailTabs>
     </div>
   );
 }
