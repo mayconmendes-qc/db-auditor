@@ -13,7 +13,8 @@ var (
 	passwordKV = regexp.MustCompile(`(?i)(password|passwd|pwd)\s*[=:]\s*\S+`)
 )
 
-// SanitizeDSN redacts credentials from a PostgreSQL connection URI or any string that may embed one.
+// SanitizeDSN redacts credentials from SQL or MongoDB connection URIs and
+// errors that may embed one.
 // Safe for logs, PartialError messages, and API error envelopes.
 func SanitizeDSN(s string) string {
 	s = strings.TrimSpace(s)

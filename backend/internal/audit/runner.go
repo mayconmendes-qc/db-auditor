@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/osmendes/db-auditor/internal/collectors/postgres"
+	"github.com/osmendes/db-auditor/internal/config"
 	"github.com/osmendes/db-auditor/internal/notify"
 )
 
@@ -250,7 +251,7 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	}
 	status := AggregateRunStatus(success, failed, skipped, cancelled)
 	var analysis *AnalysisOutcome
-	if !cancelled && success > 0 && r.opts.AnalysisProcessor != nil {
+	if !cancelled && success > 0 && registry == r.registry && r.opts.AnalysisProcessor != nil {
 		produced, saved, analysisErr := r.opts.AnalysisProcessor.AnalyzeRun(ctx, environmentID, auditRunID)
 		analysis = &AnalysisOutcome{Status: "success", Produced: produced, Saved: saved}
 		if analysisErr != nil {
@@ -347,7 +348,7 @@ func (r *Runner) runOne(ctx context.Context, auditRunID string, spec CollectorSp
 		if !isRetryable(runErr) || attempt == attempts-1 {
 			break
 		}
-		warning = fmt.Sprintf("retry %d after: %v", attempt+1, runErr)
+		warning = fmt.Sprintf("retry %d after: %s", attempt+1, config.SanitizeError(runErr))
 		timer := time.NewTimer(r.opts.RetryBackoff)
 		select {
 		case <-ctx.Done():
@@ -502,7 +503,7 @@ func classifyCollectorFailure(name string, err error) string {
 		kind = "cancelled"
 	default:
 		msg := strings.ToLower(err.Error())
-		if strings.Contains(msg, "permission denied") || strings.Contains(msg, "42501") {
+		if strings.Contains(msg, "permission denied") || strings.Contains(msg, "not authorized") || strings.Contains(msg, "42501") {
 			kind = "permission"
 		} else if strings.Contains(msg, "statement timeout") || strings.Contains(msg, "57014") || strings.Contains(msg, "canceling statement") {
 			kind = "timeout"
@@ -510,5 +511,5 @@ func classifyCollectorFailure(name string, err error) string {
 			kind = "cancelled"
 		}
 	}
-	return fmt.Sprintf("%s: %s: %s", name, kind, err.Error())
+	return fmt.Sprintf("%s: %s: %s", name, kind, config.SanitizeError(err))
 }

@@ -12,6 +12,7 @@ import (
 )
 
 var ErrActionNotFound = errors.New("finding action source not found")
+var ErrActionEvidenceRequired = errors.New("a comparable post-change measurement is required")
 
 type FindingAction struct {
 	FindingID     string          `json:"finding_id"`
@@ -113,6 +114,20 @@ func (s *Store) UpdateFindingAction(ctx context.Context, id, actor string, progr
 	}
 	if !exists {
 		return nil, ErrActionNotFound
+	}
+	if progress.Status == "validated" {
+		var verified bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM finding_action_measurement m
+JOIN finding f ON f.id=m.finding_id JOIN audit_run after_run ON after_run.id=m.after_run_id
+WHERE m.finding_id=$1::uuid AND m.comparable AND m.workload_comparable
+AND m.before_value IS NOT NULL AND m.after_value IS NOT NULL
+AND after_run.status='success' AND after_run.environment_id=f.environment_id
+AND (f.audit_run_id IS NULL OR after_run.started_at > (SELECT started_at FROM audit_run WHERE id=f.audit_run_id)))`, id).Scan(&verified); err != nil {
+			return nil, err
+		}
+		if !verified {
+			return nil, ErrActionEvidenceRequired
+		}
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO finding_action(finding_id,status,owner_name,justification,result_note,updated_by)
 VALUES($1::uuid,$2,$3,$4,$5,$6)

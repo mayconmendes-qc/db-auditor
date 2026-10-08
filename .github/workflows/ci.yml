@@ -18,6 +18,24 @@ jobs:
   backend:
     name: Backend (Go)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: db_auditor_test
+        ports:
+          - 55437:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d db_auditor_test"
+          --health-interval 10s --health-timeout 5s --health-retries 12
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s --health-timeout 5s --health-retries 12
     defaults:
       run:
         working-directory: backend
@@ -59,8 +77,18 @@ jobs:
           version: latest
           working-directory: backend
 
+      - name: Prepare disposable snapshot store
+        run: |
+          for migration in migrations/01_baseline.sql migrations/03_audit_schedule.sql migrations/04_p1.sql migrations/05_p2.sql migrations/06_second_stage.sql migrations/07_third_stage.sql migrations/08_action_workload.sql migrations/09_query_action_metrics.sql migrations/10_account_activity.sql migrations/11_quality_validation.sql; do
+            docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -d db_auditor_test < "$migration" >/dev/null
+          done
+
       - name: Test with coverage
-        run: go test ./... -coverprofile=coverage.out
+        env:
+          AUDITOR_MONGO_TEST_URI: mongodb://127.0.0.1:27017/db_auditor_ci?tls=false&directConnection=true
+          AUDITOR_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:55437/db_auditor_test?sslmode=disable
+          AUDITOR_TEST_DISPOSABLE: "1"
+        run: go test -p 1 ./... -coverprofile=coverage.out
 
       - name: Trivy filesystem (backend)
         uses: aquasecurity/trivy-action@v0.36.0

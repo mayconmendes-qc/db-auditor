@@ -353,17 +353,21 @@ type QueryStatFact struct {
 
 // RoleFact describes a database role for privilege review.
 type RoleFact struct {
-	Database             string `json:"database"`
-	RoleName             string `json:"role_name"`
-	Superuser            bool   `json:"superuser"`
-	CreateDB             bool   `json:"createrole,omitempty"`
-	CreateRole           bool   `json:"create_role,omitempty"`
-	Login                bool   `json:"login"`
-	Replication          bool   `json:"replication"`
-	BypassRLS            bool   `json:"bypass_rls"`
-	Current              bool   `json:"current,omitempty"`
-	CanWrite             bool   `json:"can_write,omitempty"`
-	PrivilegeCheckFailed bool   `json:"privilege_check_failed,omitempty"`
+	Database             string     `json:"database"`
+	RoleName             string     `json:"role_name"`
+	Superuser            bool       `json:"superuser"`
+	CreateDB             bool       `json:"createrole,omitempty"`
+	CreateRole           bool       `json:"create_role,omitempty"`
+	Login                bool       `json:"login"`
+	Replication          bool       `json:"replication"`
+	BypassRLS            bool       `json:"bypass_rls"`
+	Current              bool       `json:"current,omitempty"`
+	CanWrite             bool       `json:"can_write,omitempty"`
+	PrivilegeCheckFailed bool       `json:"privilege_check_failed,omitempty"`
+	ValidUntil           *time.Time `json:"valid_until,omitempty"`
+	SampledActive        bool       `json:"sampled_active,omitempty"`
+	PossiblyInactive     bool       `json:"possibly_inactive,omitempty"`
+	CollectedAt          time.Time  `json:"collected_at,omitempty"`
 }
 
 // GrantFact is an ACL entry for review (no automatic REVOKE).

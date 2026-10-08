@@ -94,10 +94,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			return
 		}
 		username := strings.TrimSpace(body.Username)
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			host = r.RemoteAddr
-		}
+		host := clientIP(r)
 		ipKey := sha256.Sum256([]byte("login-ip:" + host))
 		accountKey := sha256.Sum256([]byte("login-user:" + strings.ToLower(username)))
 		ipAttempts, err := store.RecordLoginAttempt(r.Context(), ipKey[:], time.Minute, false)
@@ -110,7 +107,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
 			return
 		}
-		if ipAttempts.Count > 120 || accountAttempts.Count > 10 || accountAttempts.RetryAfter > 0 {
+		if ipAttempts.Count > 600 || accountAttempts.Count > 10 || accountAttempts.RetryAfter > 0 {
 			retryAfter := "60"
 			if accountAttempts.Count > 10 {
 				retryAfter = "300"
@@ -146,7 +143,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 		}
 		if r.URL.Query().Get("mode") == "cookie" {
 			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800,
-				HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+				HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 			writeJSON(w, http.StatusOK, map[string]any{"user": user, "csrf_token": csrfToken(encoded), "expires_in": 28800})
 			return
 		}
@@ -168,7 +165,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			return
 		}
 		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
-			HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+			HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 	})
 	mux.HandleFunc("POST /api/v1/auth/users", func(w http.ResponseWriter, r *http.Request) {
@@ -311,7 +308,7 @@ func registerAccountRoutes(mux *http.ServeMux, store AuthStore) {
 
 func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
-		HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteLaxMode})
+		HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 }
 
 func authMiddleware(next http.Handler, store AuthStore) http.Handler {

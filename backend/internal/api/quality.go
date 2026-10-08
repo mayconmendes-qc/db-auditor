@@ -105,6 +105,10 @@ func registerQualityRoutes(mux *http.ServeMux, store InventoryStore, targets map
 			writeError(w, 404, CodeNotFound, "Ação não encontrada.")
 			return
 		}
+		if errors.Is(err, repository.ErrQualityEvidenceRequired) {
+			writeError(w, 409, CodeConflict, "Para validar, repita o mesmo diagnóstico em uma nova coleta com limite e amostra comparáveis.")
+			return
+		}
 		if err != nil {
 			writeError(w, 500, CodeInternal, "Falha ao salvar ação.")
 			return

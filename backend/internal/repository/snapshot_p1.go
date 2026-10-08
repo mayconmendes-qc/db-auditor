@@ -15,6 +15,9 @@ func (s *Store) enrichP1Facts(ctx context.Context, environmentID, auditRunID str
 	if err := s.loadAuditorRoles(ctx, environmentID, auditRunID, f); err != nil {
 		return err
 	}
+	if err := s.loadAccountRoles(ctx, environmentID, auditRunID, f); err != nil {
+		return err
+	}
 	if err := s.loadCompressionRatios(ctx, environmentID, auditRunID, f); err != nil {
 		return err
 	}

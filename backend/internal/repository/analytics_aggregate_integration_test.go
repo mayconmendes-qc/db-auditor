@@ -71,6 +71,9 @@ SELECT id,$1::uuid,'observed','high' FROM finding WHERE environment_id=$2::uuid 
 			t.Fatal(err)
 		}
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO table_snapshot(audit_run_id,environment_id,database_name,schema_name,table_name,has_primary_key) VALUES($1::uuid,$2::uuid,'db','public','orders',true)`, newer, env); err != nil {
+		t.Fatal(err)
+	}
 	aggregate, err := store.CountFindings(ctx, env)
 	if err != nil || aggregate.Total != 5100 || aggregate.Open != 5100 || aggregate.High != 5100 {
 		t.Fatalf("finding aggregate %+v: %v", aggregate, err)
@@ -109,8 +112,12 @@ SELECT id,$1::uuid,'observed','high' FROM finding WHERE environment_id=$2::uuid 
 		t.Fatalf("storage trend %+v: %v", storage, err)
 	}
 	findings, err := store.ListFindingTrend(ctx, env, from, to, "day")
-	if err != nil || len(findings) != 1 || findings[0].Findings == nil || *findings[0].Findings != 2 || findings[0].Score == nil || *findings[0].Score != 94 || findings[0].ScoreConfidence != 1 {
-		t.Fatalf("finding trend %+v: %v", findings, err)
+	if err != nil || len(findings) != 2 || findings[0].Findings != nil || findings[0].Coverage != "partial" || findings[1].Findings == nil || *findings[1].Findings != 2 || findings[1].Score == nil || *findings[1].Score != 94 || findings[1].ScoreConfidence != 1 {
+		var score any
+		if len(findings) > 0 && findings[len(findings)-1].Score != nil {
+			score = *findings[len(findings)-1].Score
+		}
+		t.Fatalf("finding trend %+v: score=%v err=%v", findings, score, err)
 	}
 	for _, table := range []string{"hypertable_snapshot", "continuous_aggregate_snapshot"} {
 		name := "hypertable_name"

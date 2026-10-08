@@ -83,4 +83,38 @@ describe("cookie session", () => {
     await expect(api.restoreSession()).resolves.toBeNull();
     expect(api.hasSession()).toBe(false);
   });
+
+  it("revokes the local session in another tab after logout", async () => {
+    class FakeChannel {
+      static channels: FakeChannel[] = [];
+      onmessage: ((event: { data: string }) => void) | null = null;
+      constructor(_name: string) {
+        FakeChannel.channels.push(this);
+      }
+      postMessage(data: string) {
+        for (const peer of FakeChannel.channels) {
+          if (peer !== this) peer.onmessage?.({ data });
+        }
+      }
+    }
+    vi.stubGlobal("document", {});
+    vi.stubGlobal("BroadcastChannel", FakeChannel);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () =>
+        Response.json({
+          user: { username: "admin", role: "operator" },
+          csrf_token: "csrf-value",
+        }),
+      ),
+    );
+    const { api: first } = await import("./api");
+    await first.login("admin", "password");
+    vi.resetModules();
+    const { api: second } = await import("./api");
+    await second.login("admin", "password");
+    expect(second.hasSession()).toBe(true);
+    await first.logout();
+    expect(second.hasSession()).toBe(false);
+  });
 });

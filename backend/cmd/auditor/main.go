@@ -24,6 +24,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "recover-operator" {
+		if err := recoverOperator(os.Args[2:]); err != nil {
+			// Connection errors may contain the snapshot-store DSN.
+			_, _ = os.Stderr.WriteString("Recuperação não concluída. Verifique a conta, a conexão e o backup; consulte os logs do banco.\n")
+			os.Exit(1)
+		}
+		return
+	}
 	observability.SetupLogging()
 
 	cfg, err := config.Load()
@@ -33,12 +41,17 @@ func main() {
 	}
 
 	targets := config.LoadTargetDSNs()
+	mongoTargets := config.LoadMongoTargetURIs()
 	if err := config.ApplyTargetStatementTimeout(targets, cfg.TargetStatementTimeout); err != nil {
 		slog.Error("invalid target query budget", "error", err)
 		os.Exit(1)
 	}
 	if err := config.ValidateTargetDSNs(targets); err != nil {
 		slog.Error("unsafe target configuration", "error", err)
+		os.Exit(1)
+	}
+	if err := config.ValidateMongoTargetURIs(mongoTargets); err != nil {
+		slog.Error("unsafe MongoDB target configuration", "error", err)
 		os.Exit(1)
 	}
 	if len(targets) == 0 {
@@ -118,6 +131,9 @@ func main() {
 		MaxDatabaseConnections:   cfg.MaxDatabaseConnections,
 		OptionalCollectorTimeout: cfg.OptionalCollectorTimeout,
 		AnalysisProcessor:        analysisService,
+		EngineRegistries: map[string]*audit.Registry{
+			"mongodb": audit.NewMongoRegistry(mongoTargets, store),
+		},
 	})
 	sch := scheduler.NewWithLimits(runner, cfg.MaxConcurrentRuns)
 	sch.UseStore(store)

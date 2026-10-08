@@ -44,6 +44,9 @@ func TestSecondStageWorkflowsIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err = s.UpdateAuditorAccount(ctx, one.ID, AccountChange{Role: "operator", Active: true}); err != nil {
+		t.Fatal(err)
+	}
 	two, err := s.CreateAuditorUser(ctx, "stage2b"+env[:8], hash, "operator", []string{env})
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +65,25 @@ func TestSecondStageWorkflowsIntegration(t *testing.T) {
 	if err = s.ChangeAuditorPassword(ctx, one.ID, hash); err != nil {
 		t.Fatal(err)
 	}
+	if err = s.CreateAuditorSession(ctx, one.ID, sessionHash, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	newHash, err := HashAuditorPassword("new-recovery-password-stage-two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.RecoverOperatorPassword(ctx, two.Username, newHash); !errors.Is(err, ErrRecoveryTarget) {
+		t.Fatalf("non-operator recovery must fail: %v", err)
+	}
+	if err = s.RecoverOperatorPassword(ctx, one.Username, newHash); err != nil {
+		t.Fatal(err)
+	}
+	if user, err := s.GetAuditorSession(ctx, sessionHash); err != nil || user != nil {
+		t.Fatalf("recovered operator session survived: %+v %v", user, err)
+	}
+	if user, err := s.FindAuditorUser(ctx, one.Username); err != nil || user == nil || !CheckAuditorPassword("new-recovery-password-stage-two", user.PasswordHash) {
+		t.Fatalf("recovered password unavailable: %+v %v", user, err)
+	}
 
 	runs := make([]string, 3)
 	for i := range runs {
@@ -71,6 +93,9 @@ VALUES($1::uuid,'manual','success','test','test',$2) RETURNING id::text`, env, a
 			t.Fatal(err)
 		}
 		if _, err = pool.Exec(ctx, `INSERT INTO database_snapshot(audit_run_id,environment_id,database_name) VALUES($1::uuid,$2::uuid,'db')`, runs[i], env); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, `INSERT INTO table_snapshot(audit_run_id,environment_id,database_name,schema_name,table_name,has_primary_key) VALUES($1::uuid,$2::uuid,'db','public','orders',true)`, runs[i], env); err != nil {
 			t.Fatal(err)
 		}
 		for _, collector := range scoreCollectors {
@@ -135,7 +160,7 @@ VALUES($1::uuid,$2::uuid,'model.no_primary_key','high','test',gen_random_uuid():
 		t.Fatal(err)
 	}
 	score, err := s.GetScopeScore(ctx, env, runs[2], "", "", "")
-	if err != nil || score.Score == nil || score.Version != "scope-v2" {
+	if err != nil || score.Score == nil || score.Version != ScopeScoreFormulaVersion {
 		t.Fatalf("score: %+v %v", score, err)
 	}
 }

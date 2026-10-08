@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/osmendes/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/capabilities"
 	"github.com/osmendes/db-auditor/internal/collectors/postgres"
 )
 
@@ -28,19 +29,25 @@ func TestSprint16RepositoryIntegration(t *testing.T) {
 	if err := s.EnsureRuleCatalog(ctx); err != nil {
 		t.Fatal(err)
 	}
-	rules, err := s.EffectiveRules(ctx, "00000000-0000-0000-0000-000000000001", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rules) != len(analyzer.Catalog()) {
-		t.Fatalf("catalog size: %d", len(rules))
-	}
-
 	var envID, run1, run2, run3, run4 string
 	err = pool.QueryRow(ctx, `INSERT INTO audit_environment(name,type,discovery_mode) VALUES (gen_random_uuid()::text,'self_hosted','single_database') RETURNING id::text`).Scan(&envID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	rules, err := s.EffectiveRules(ctx, envID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := 0
+	for _, rule := range analyzer.Catalog() {
+		if capabilities.RuleApplicable("postgresql", rule.ID, false) {
+			expected++
+		}
+	}
+	if len(rules) != expected {
+		t.Fatalf("applicable catalog size: %d want %d", len(rules), expected)
+	}
+
 	if err := s.SetRulePolicy(ctx, analyzer.RulePolicy{EnvironmentID: envID, SchemaName: "public", RuleID: "model.wide_table", Enabled: false, Parameters: map[string]any{"min_columns": float64(70)}}); err != nil {
 		t.Fatal(err)
 	}

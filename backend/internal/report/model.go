@@ -98,6 +98,7 @@ type ScoreCategory struct {
 	Category string
 	Score    int
 	Penalty  int
+	Positive int
 	Findings int
 }
 
@@ -153,7 +154,7 @@ func BuildLines(d Document) []Line {
 		lines = append(lines, Line{fmt.Sprintf("Índice indisponível | confiança %.0f%%", d.ScoreConfidence*100), "body"})
 	}
 	for _, c := range d.ScoreCategories {
-		lines = append(lines, Line{fmt.Sprintf("%s: %d/100 (%d achados, penalidade %d)", c.Category, c.Score, c.Findings, c.Penalty), "body"})
+		lines = append(lines, Line{fmt.Sprintf("%s: %d/100 (%d achados, penalidade %d, evidência positiva +%d)", c.Category, c.Score, c.Findings, c.Penalty, c.Positive), "body"})
 	}
 	for _, note := range d.CoverageNotes {
 		lines = append(lines, Line{"Limite: " + note, "body"})
@@ -201,7 +202,7 @@ func BuildLines(d Document) []Line {
 		}
 	}
 	lines = append(lines, Line{"Riscos e prioridades", "heading"})
-	lines = append(lines, Line{"Matriz de decisão: impacto corresponde à severidade observada. Esforço depende das dependências e da janela de mudança; confirme estes fatores antes de priorizar.", "body"})
+	lines = append(lines, Line{"Matriz de decisão: impacto é a severidade observada; esforço é uma faixa preliminar para planejar a investigação. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"})
 	if len(d.Findings) == 0 {
 		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
 	}
@@ -209,14 +210,22 @@ func BuildLines(d Document) []Line {
 		friendly := guidance.For(f.Type)
 		plan := actions.For(f.Type)
 		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(severityLabel(f.Severity)), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
-		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço: avaliar pré-requisitos e janela", f.ID, severityLabel(f.Severity)), "body"})
+		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço preliminar: %s", f.ID, severityLabel(f.Severity), effortLabel(plan.Category)), "body"})
 		lines = append(lines, Line{"Risco da mudança: " + plan.Risk, "body"}, Line{"Benefício esperado: " + plan.Benefit, "body"})
-		lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"}, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
+		if strings.TrimSpace(f.Evidence) != "" {
+			lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"})
+		}
+		lines = append(lines, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
 		if d.Type == "technical" || d.Type == "table" {
-			lines = append(lines, Line{"Resumo original da regra: " + f.Summary, "body"}, Line{"Recomendação técnica original: " + f.Recommendation, "body"})
+			if strings.TrimSpace(f.Summary) != "" {
+				lines = append(lines, Line{"Resumo original da regra: " + f.Summary, "body"})
+			}
+			if strings.TrimSpace(f.Recommendation) != "" {
+				lines = append(lines, Line{"Recomendação técnica original: " + f.Recommendation, "body"})
+			}
 		}
 	}
-	if d.Type == "technical" || d.Type == "table" {
+	if (d.Type == "technical" || d.Type == "table") && (len(d.Databases) > 0 || len(d.Tables) > 0) {
 		lines = append(lines, Line{"Inventário técnico (apêndice)", "heading"})
 		for _, db := range d.Databases {
 			lines = append(lines, Line{fmt.Sprintf("Banco %s: %d esquemas, %d tabelas, %d bytes", db.Name, db.Schemas, db.Tables, db.SizeBytes), "body"})
@@ -252,6 +261,17 @@ func BuildLines(d Document) []Line {
 	lines = append(lines, Line{Text: "Valide cada recomendação com métricas, plano de execução e teste em ambiente controlado. O auditor não aplica mudanças no banco auditado.", Style: "body"})
 	lines = append(lines, Line{"Metodologia e glossário", "heading"}, Line{"Somente dados e observações da execução informada foram usados.", "body"}, Line{"Achado: sinal de diagnóstico que exige validação humana.", "body"}, Line{"Baseline: execução aprovada para comparação temporal.", "body"}, Line{"Cobertura parcial impede conclusões sobre ausência de objetos e achados.", "body"})
 	return lines
+}
+
+func effortLabel(category string) string {
+	switch category {
+	case "structure", "maintenance":
+		return "alto (dependências e janela)"
+	case "query_and_index", "security":
+		return "médio (teste e retorno)"
+	default:
+		return "baixo para investigar; execução não estimada"
+	}
 }
 
 func reportTypeLabel(kind string) string {

@@ -8,6 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccountRoleSnapshot struct {
+	AuditRunID    pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	RoleName      string
+	CanLogin      bool
+	ValidUntil    pgtype.Timestamptz
+	SampledActive bool
+	CollectedAt   pgtype.Timestamptz
+}
+
 type AlertDelivery struct {
 	EnvironmentID pgtype.UUID
 	DedupKey      string
@@ -611,30 +622,32 @@ type PolicySnapshot struct {
 }
 
 type QualityIssue struct {
-	ID            pgtype.UUID
-	ScanID        pgtype.UUID
-	CheckKind     string
-	ColumnName    string
-	AffectedRows  int32
-	SampledRows   int32
-	Status        string
-	OwnerName     string
-	Justification string
-	ResultNote    string
-	UpdatedBy     string
-	UpdatedAt     pgtype.Timestamptz
+	ID               pgtype.UUID
+	ScanID           pgtype.UUID
+	CheckKind        string
+	ColumnName       string
+	AffectedRows     int32
+	SampledRows      int32
+	Status           string
+	OwnerName        string
+	Justification    string
+	ResultNote       string
+	UpdatedBy        string
+	UpdatedAt        pgtype.Timestamptz
+	ValidationScanID pgtype.UUID
 }
 
 type QualityIssueEvent struct {
-	ID             pgtype.UUID
-	IssueID        pgtype.UUID
-	PreviousStatus string
-	NewStatus      string
-	Actor          string
-	OwnerName      string
-	Justification  string
-	ResultNote     string
-	RecordedAt     pgtype.Timestamptz
+	ID               pgtype.UUID
+	IssueID          pgtype.UUID
+	PreviousStatus   string
+	NewStatus        string
+	Actor            string
+	OwnerName        string
+	Justification    string
+	ResultNote       string
+	RecordedAt       pgtype.Timestamptz
+	ValidationScanID pgtype.UUID
 }
 
 type QualityScan struct {
