@@ -209,6 +209,7 @@ export interface QualityIssue {
   justification: string;
   result: string;
   updated_by: string;
+  validation_scan_id?: string;
   plan: QualityPlan;
   previous_affected_rows?: number;
   comparable: boolean;
@@ -224,6 +225,7 @@ export interface QualityScan {
   sample_limit: number;
   sampled_rows: number;
   sample_method: string;
+  sampling_note: string;
   actor: string;
   created_at: string;
   issues: QualityIssue[];
@@ -244,7 +246,11 @@ export interface ActionMeasurement {
   finding_id: string;
   before_run_id: string;
   after_run_id: string;
-  metric: "table_size_bytes" | "finding_observed";
+  metric:
+    | "table_size_bytes"
+    | "finding_observed"
+    | "query_mean_latency_us"
+    | "query_reads_per_1000_calls";
   before_value: number | null;
   after_value: number | null;
   comparable: boolean;
@@ -767,6 +773,7 @@ export interface ScopeScore {
     category: string;
     score: number;
     penalty: number;
+    positive: number;
     findings: number;
   }>;
   missing_collectors: string[];

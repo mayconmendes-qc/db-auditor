@@ -54,7 +54,7 @@ func TestRulesEndpointReturnsVersionedCatalog(t *testing.T) {
 			storage = item.Version
 		}
 	}
-	if storage != "1.0.0" {
+	if storage != "1.1.0" {
 		t.Fatalf("storage rule version %s", storage)
 	}
 }

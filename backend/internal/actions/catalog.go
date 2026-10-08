@@ -64,6 +64,22 @@ func For(rule string) Plan {
 		p.ReadOnlyQuery = "SELECT d.deptype, d.refobjid::regclass FROM pg_catalog.pg_depend d WHERE d.objid = $1::regclass;"
 	case "model.naming_inconsistent":
 		p.ReadOnlyQuery = "SELECT n.nspname, c.relname, c.relkind FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE c.oid=$1::regclass;"
+	case "integrity.fk_without_index", "integrity.fk_type_mismatch", "model.implicit_relationship":
+		p.ReadOnlyQuery = "SELECT conname, conkey, confrelid::regclass, confkey, convalidated FROM pg_catalog.pg_constraint WHERE conrelid=$1::regclass AND contype='f';"
+	case "integrity.sequence_default_mismatch", "sequence.near_limit":
+		p.ReadOnlyQuery = "SELECT s.seqrelid::regclass, s.seqtypid::regtype, s.seqstart, s.seqmin, s.seqmax, s.seqincrement FROM pg_catalog.pg_sequence s WHERE s.seqrelid=$1::regclass;"
+	case "index.unused", "index.overlap", "index.prefix_overlap", "index.write_burden":
+		p.ReadOnlyQuery = "SELECT i.indexrelid::regclass, i.indrelid::regclass, i.indisunique, i.indisvalid, pg_catalog.pg_get_indexdef(i.indexrelid) FROM pg_catalog.pg_index i WHERE i.indexrelid=$1::regclass OR i.indrelid=$1::regclass;"
+	case "model.wide_table", "model.repeated_columns", "model.duplicate_entity", "model.type_review", "model.jsonb_critical", "model.undocumented_critical":
+		p.ReadOnlyQuery = "SELECT a.attname, a.atttypid::regtype, a.attnotnull FROM pg_catalog.pg_attribute a WHERE a.attrelid=$1::regclass AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum;"
+	case "storage.large_table":
+		p.Confirmation = "Compare crescimento em coletas completas, verifique filtros de data e planos de consulta; avalie particionamento apenas se a carga e a chave natural justificarem. Confirme retenção com a área de negócio."
+		p.Prerequisites = "Estime custo de migração, índices, chaves, manutenção e espaço temporário; obtenha backup restaurável, janela e plano de retorno."
+		p.Validation = "Após mudança externa, compare volume, latência de consulta e escrita, manutenção e cobertura em novas coletas."
+		p.ReadOnlyQuery = "SELECT c.oid::regclass,c.relkind,c.reltuples::bigint,pg_catalog.pg_total_relation_size(c.oid) AS bytes FROM pg_catalog.pg_class c WHERE c.oid=$1::regclass;"
+	}
+	if p.ReadOnlyQuery == "" && (p.Category == "structure" || p.Category == "query_and_index") {
+		p.ReadOnlyQuery = "SELECT c.oid::regclass, c.relkind, c.reltuples::bigint FROM pg_catalog.pg_class c WHERE c.oid=$1::regclass;"
 	}
 	return p
 }

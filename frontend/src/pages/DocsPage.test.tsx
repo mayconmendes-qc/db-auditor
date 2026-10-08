@@ -8,7 +8,7 @@ describe("DocsPage", () => {
     for (const term of [
       "Relatórios",
       "Contas e permissões",
-      "Total de Databases",
+      "Total de bancos",
       "cobertura parcial",
       "Configuração inicial (ops)",
     ]) {

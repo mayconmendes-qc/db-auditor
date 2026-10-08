@@ -14,6 +14,33 @@ import { downloadBlob } from "../lib/export";
 import { api } from "../services/api";
 import type { AuditRun, ReportFilters, ReportJob } from "../types";
 
+const severityLabels: Record<string, string> = {
+  critical: "Crítica",
+  high: "Alta",
+  medium: "Média",
+  low: "Baixa",
+  info: "Informativa",
+};
+
+const runStatusLabels: Record<string, string> = {
+  success: "Concluída",
+  partial_success: "Parcial",
+};
+
+const reportStatusLabels: Record<string, string> = {
+  queued: "Na fila",
+  running: "Em andamento",
+  success: "Concluído",
+  failed: "Falhou",
+  canceled: "Cancelado",
+};
+
+const reportTypeLabels: Record<ReportJob["report_type"], string> = {
+  executive: "Executivo",
+  technical: "Técnico",
+  table: "Tabela",
+};
+
 export function reportJobActions(
   job: ReportJob,
   now = Date.now(),
@@ -194,7 +221,7 @@ export function ReportsPage() {
                 { value: "", label: "Selecione" },
                 ...runs.map((run) => ({
                   value: run.id,
-                  label: `${run.id.slice(0, 8)}… · ${run.status}`,
+                  label: `${run.id.slice(0, 8)}… · ${runStatusLabels[run.status] ?? run.status}`,
                 })),
               ]}
             />
@@ -217,7 +244,7 @@ export function ReportsPage() {
               options={[
                 { value: "", label: "Todas" },
                 ...["critical", "high", "medium", "low", "info"].map(
-                  (value) => ({ value, label: value }),
+                  (value) => ({ value, label: severityLabels[value] }),
                 ),
               ]}
             />
@@ -249,8 +276,8 @@ export function ReportsPage() {
               className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
             <input
-              aria-label="Schema"
-              placeholder="Schema (opcional)"
+              aria-label="Esquema"
+              placeholder="Esquema (opcional)"
               value={schema}
               onChange={(event) => setSchema(event.target.value)}
               className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
@@ -316,7 +343,7 @@ export function ReportsPage() {
         {jobs.map((job) => (
           <Card
             key={job.id}
-            title={`${job.report_type} · ${job.audit_run_id.slice(0, 8)}…`}
+            title={`${reportTypeLabels[job.report_type]} · ${job.audit_run_id.slice(0, 8)}…`}
             subtitle={`Solicitado em ${new Date(job.created_at).toLocaleString()} · expira em ${new Date(job.expires_at).toLocaleDateString()}`}
           >
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-300">
@@ -332,7 +359,7 @@ export function ReportsPage() {
               >
                 {Date.parse(job.expires_at) <= Date.now()
                   ? "expirado"
-                  : job.status}
+                  : (reportStatusLabels[job.status] ?? job.status)}
               </Badge>
               <span>Tentativa {job.attempts}/3</span>
               {job.sha256 ? (

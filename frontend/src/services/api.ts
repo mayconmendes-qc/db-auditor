@@ -75,12 +75,33 @@ let sessionRole = "";
 let sessionUser = "";
 let restorePromise: Promise<{ username: string; role: string } | null> | null =
   null;
+const sessionChannel =
+  typeof window !== "undefined" &&
+  typeof document !== "undefined" &&
+  typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel("db-auditor-session")
+    : null;
 
 function clearSession(): void {
   sessionActive = false;
   csrfToken = "";
   sessionRole = "";
   sessionUser = "";
+}
+
+function announceSessionRevocation(): void {
+  sessionChannel?.postMessage("revoked");
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event("auditor:session-expired"));
+}
+
+if (sessionChannel) {
+  sessionChannel.onmessage = (event: MessageEvent) => {
+    if (event.data !== "revoked") return;
+    clearSession();
+    if (typeof window !== "undefined")
+      window.dispatchEvent(new Event("auditor:session-expired"));
+  };
 }
 
 function authHeaders(method = "GET"): Record<string, string> {
@@ -96,7 +117,7 @@ function handleSessionExpiry(response: Response, path: string): void {
     sessionActive
   ) {
     clearSession();
-    window.dispatchEvent(new Event("auditor:session-expired"));
+    announceSessionRevocation();
   }
 }
 
@@ -255,6 +276,8 @@ export type TableScopeParams = {
 /** Typed API client — frontend never talks to databases directly. */
 export const api = {
   contractVersion: apiContractVersion,
+  actionExportURL: (environmentId: string, format: "csv" | "jsonl") =>
+    `${API_BASE}/api/v1/environments/${encodeURIComponent(environmentId)}/actions/export?format=${format}`,
   hasSession: () => sessionActive,
   currentUser: () => sessionUser,
   restoreSession: () => {
@@ -308,6 +331,7 @@ export const api = {
     } finally {
       clearSession();
       reportToken = "";
+      announceSessionRevocation();
     }
   },
   changePassword: async (current: string, next: string) => {
@@ -316,7 +340,7 @@ export const api = {
       { current, new: next },
     );
     clearSession();
-    window.dispatchEvent(new Event("auditor:session-expired"));
+    announceSessionRevocation();
     return result;
   },
   accounts: () => getJSON<ItemsResponse<AuditorAccount>>("/api/v1/auth/users"),
@@ -437,9 +461,9 @@ export const api = {
       `/api/v1/environments/${env}/quality-issues/${issue}`,
       body,
     ),
-  trackedActions: (env: string) =>
-    getJSON<ItemsResponse<TrackedAction>>(
-      `/api/v1/environments/${env}/actions`,
+  trackedActions: (env: string, offset = 0, limit = 50) =>
+    getJSON<PagedResponse<TrackedAction>>(
+      `/api/v1/environments/${env}/actions?offset=${offset}&limit=${limit}`,
     ),
   databases: (environmentId: string) =>
     getJSON<ItemsResponse<DatabaseSnapshot>>(
@@ -892,9 +916,9 @@ export const api = {
     getJSON<FindingAction>(`/api/v1/findings/${id}/action`),
   findingActionEvents: (id: string) =>
     getJSON<ItemsResponse<ActionEvent>>(`/api/v1/findings/${id}/action/events`),
-  actionMeasurements: (id: string) =>
-    getJSON<ItemsResponse<ActionMeasurement>>(
-      `/api/v1/findings/${id}/action/measurements`,
+  actionMeasurements: (id: string, offset = 0, limit = 50) =>
+    getJSON<PagedResponse<ActionMeasurement>>(
+      `/api/v1/findings/${id}/action/measurements?offset=${offset}&limit=${limit}`,
     ),
   recordActionMeasurement: (
     id: string,

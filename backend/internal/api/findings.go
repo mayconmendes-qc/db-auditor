@@ -149,6 +149,8 @@ func registerFindingActionRoutes(mux *http.ServeMux, store FindingStore) {
 		item, err := backend.UpdateFindingAction(r.Context(), id, actor, body)
 		if err == repository.ErrActionNotFound {
 			writeError(w, http.StatusNotFound, CodeNotFound, "Achado não encontrado.")
+		} else if err == repository.ErrActionEvidenceRequired {
+			writeError(w, http.StatusConflict, CodeConflict, "Para validar a ação, registre uma medição comparável em uma coleta completa posterior à mudança.")
 		} else if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível salvar a ação.")
 		} else {

@@ -58,12 +58,15 @@ const KINDS: InventoryObjectKind[] = [
 
 const KIND_LABELS: Record<InventoryObjectKind, string> = {
   tables: "Tabelas",
-  hypertables: "Hypertables",
+  hypertables: "Tabelas temporais",
   indexes: "Índices",
-  views: "Views",
+  views: "Visões",
   functions: "Funções",
-  caggs: "CAGGs",
+  caggs: "Agregados contínuos",
 };
+
+const detailButtonClass =
+  "rounded text-left font-medium text-slate-100 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400";
 
 function rowClass(selected: boolean): string {
   return `cursor-pointer border-t border-slate-800/80 transition-colors ${
@@ -81,6 +84,21 @@ function boolLabel(v: boolean | null | undefined): string {
   return v ? "Sim" : "Não";
 }
 
+function runStatusLabel(status: string): string {
+  return (
+    (
+      {
+        success: "concluída",
+        partial_success: "parcial",
+        failed: "falhou",
+        running: "em andamento",
+        queued: "na fila",
+        cancelled: "cancelada",
+      } as Record<string, string>
+    )[status] ?? "desconhecido"
+  );
+}
+
 export function InventoryPage() {
   const {
     environmentId,
@@ -92,6 +110,8 @@ export function InventoryPage() {
     closeInventory,
   } = useApp();
   const envId = environmentId;
+  const isMongo =
+    environments.find((item) => item.id === envId)?.engine === "mongodb";
 
   const [error, setError] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseSnapshot[] | null>(null);
@@ -99,6 +119,9 @@ export function InventoryPage() {
   const [selectedDb, setSelectedDb] = useState<string | null>(null);
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
   const [kind, setKind] = useState<InventoryObjectKind>("tables");
+  useEffect(() => {
+    if (isMongo && kind !== "tables" && kind !== "indexes") setKind("tables");
+  }, [isMongo, kind]);
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<PageSize>(20);
@@ -347,7 +370,7 @@ export function InventoryPage() {
       },
       t.audit_run_id,
     );
-    if (!envId) return;
+    if (!envId || isMongo) return;
     const scope = {
       database: t.database_name,
       schema: t.schema_name,
@@ -465,10 +488,9 @@ export function InventoryPage() {
         eyebrow="INVENTÁRIO"
         title="Explorer de inventário"
         description={
-          <>
-            Ambiente → database → schema → objeto. Clique em uma linha para
-            abrir o painel de detalhes.
-          </>
+          isMongo
+            ? "Ambiente → banco → coleção. A coleta mostra somente metadados e índices; documentos não são lidos."
+            : "Ambiente → banco → esquema → objeto. Clique em uma linha para abrir o painel de detalhes."
         }
         actions={
           envName ? (
@@ -508,7 +530,7 @@ export function InventoryPage() {
               }
             >
               <div className="font-medium">
-                Snapshot{" "}
+                Inventário{" "}
                 {snapshotStatus.completeness === "complete"
                   ? "completo"
                   : snapshotStatus.completeness === "partial"
@@ -518,10 +540,10 @@ export function InventoryPage() {
                       : "desconhecido"}
               </div>
               <div className="mt-0.5 text-xs opacity-90">
-                Run {snapshotStatus.audit_run_id.slice(0, 8)}… · status{" "}
-                {snapshotStatus.run_status}
+                Execução {snapshotStatus.audit_run_id.slice(0, 8)}… ·{" "}
+                {runStatusLabel(snapshotStatus.run_status)}
                 {snapshotStatus.analysis_status
-                  ? ` · análise ${snapshotStatus.analysis_status}`
+                  ? ` · análise ${runStatusLabel(snapshotStatus.analysis_status)}`
                   : ""}
               </div>
             </div>
@@ -544,7 +566,7 @@ export function InventoryPage() {
               <Card title="Filtros">
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <Select
-                    label="Database"
+                    label="Banco"
                     value={selectedDb ?? ""}
                     onChange={(e) => {
                       setSelectedDb(e.target.value || null);
@@ -560,7 +582,7 @@ export function InventoryPage() {
                     ]}
                   />
                   <Select
-                    label="Schema"
+                    label="Esquema"
                     value={selectedSchema ?? ""}
                     onChange={(e) => {
                       setSelectedSchema(e.target.value || null);
@@ -585,7 +607,9 @@ export function InventoryPage() {
                   />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {KINDS.map((k) => (
+                  {KINDS.filter(
+                    (k) => !isMongo || k === "tables" || k === "indexes",
+                  ).map((k) => (
                     <button
                       key={k}
                       type="button"
@@ -600,7 +624,7 @@ export function InventoryPage() {
                           : "bg-slate-800/80 text-slate-300 hover:bg-slate-800"
                       }`}
                     >
-                      {KIND_LABELS[k]}
+                      {isMongo && k === "tables" ? "Coleções" : KIND_LABELS[k]}
                     </button>
                   ))}
                 </div>
@@ -614,7 +638,11 @@ export function InventoryPage() {
                 ) : null}
               </Card>
 
-              <Card title={KIND_LABELS[kind]}>
+              <Card
+                title={
+                  isMongo && kind === "tables" ? "Coleções" : KIND_LABELS[kind]
+                }
+              >
                 {loading ? (
                   <Skeleton className="h-64 w-full" />
                 ) : kind === "tables" ? (
@@ -631,13 +659,33 @@ export function InventoryPage() {
                       }}
                       headers={[
                         { id: "database", label: "Banco", sortable: true },
-                        { id: "schema", label: "Esquema", sortable: true },
-                        { id: "name", label: "Tabela", sortable: true },
+                        {
+                          id: "schema",
+                          label: isMongo ? "Grupo" : "Esquema",
+                          sortable: true,
+                        },
+                        {
+                          id: "name",
+                          label: isMongo ? "Coleção" : "Tabela",
+                          sortable: true,
+                        },
                         { id: "type", label: "Tipo", sortable: true },
-                        { id: "cols", label: "Colunas", sortable: true },
-                        { id: "rows", label: "Linhas", sortable: true },
+                        {
+                          id: "cols",
+                          label: isMongo ? "Campos" : "Colunas",
+                          sortable: true,
+                        },
+                        {
+                          id: "rows",
+                          label: isMongo ? "Documentos estimados" : "Linhas",
+                          sortable: true,
+                        },
                         { id: "size", label: "Tamanho", sortable: true },
-                        { id: "pk", label: "PK", sortable: true },
+                        {
+                          id: "pk",
+                          label: isMongo ? "ID único" : "PK",
+                          sortable: true,
+                        },
                       ]}
                     >
                       {sortedTables.map((t) => {
@@ -650,8 +698,18 @@ export function InventoryPage() {
                           >
                             <td className="px-3 py-2">{t.database_name}</td>
                             <td className="px-3 py-2">{t.schema_name}</td>
-                            <td className="px-3 py-2 font-medium text-slate-100">
-                              {t.table_name}
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                className={detailButtonClass}
+                                aria-label={`Abrir detalhes de ${isMongo ? "coleção" : "tabela"} ${t.table_name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openTable(t);
+                                }}
+                              >
+                                {t.table_name}
+                              </button>
                             </td>
                             <td className="px-3 py-2">
                               <span
@@ -666,7 +724,9 @@ export function InventoryPage() {
                               </span>
                             </td>
                             <td className="px-3 py-2">
-                              {fmtNum(t.column_count)}
+                              {isMongo
+                                ? "não coletado"
+                                : fmtNum(t.column_count)}
                             </td>
                             <td className="px-3 py-2">
                               {fmtNum(t.row_estimate)}
@@ -713,8 +773,18 @@ export function InventoryPage() {
                             onClick={() => openRow(key)}
                           >
                             <td className="px-3 py-2">{i.schema_name}</td>
-                            <td className="px-3 py-2 font-medium text-slate-100">
-                              {i.index_name}
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                className={detailButtonClass}
+                                aria-label={`Abrir detalhes do índice ${i.index_name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openRow(key);
+                                }}
+                              >
+                                {i.index_name}
+                              </button>
                             </td>
                             <td className="px-3 py-2">{i.table_name}</td>
                             <td className="px-3 py-2">
@@ -769,8 +839,18 @@ export function InventoryPage() {
                             onClick={() => openRow(key)}
                           >
                             <td className="px-3 py-2">{v.schema_name}</td>
-                            <td className="px-3 py-2 font-medium text-slate-100">
-                              {v.view_name}
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                className={detailButtonClass}
+                                aria-label={`Abrir detalhes da visão ${v.view_name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openRow(key);
+                                }}
+                              >
+                                {v.view_name}
+                              </button>
                             </td>
                             <td className="px-3 py-2">{v.owner_name ?? "—"}</td>
                             <td className="px-3 py-2">
@@ -815,8 +895,18 @@ export function InventoryPage() {
                             onClick={() => openRow(key)}
                           >
                             <td className="px-3 py-2">{f.schema_name}</td>
-                            <td className="px-3 py-2 font-medium text-slate-100">
-                              {f.function_name}
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                className={detailButtonClass}
+                                aria-label={`Abrir detalhes da função ${f.function_name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openRow(key);
+                                }}
+                              >
+                                {f.function_name}
+                              </button>
                             </td>
                             <td className="px-3 py-2">{f.kind ?? "—"}</td>
                             <td className="px-3 py-2">
@@ -845,7 +935,11 @@ export function InventoryPage() {
                       }}
                       headers={[
                         { id: "schema", label: "Esquema", sortable: true },
-                        { id: "name", label: "Hypertable", sortable: true },
+                        {
+                          id: "name",
+                          label: "Tabela temporal",
+                          sortable: true,
+                        },
                         { id: "size", label: "Tamanho", sortable: true },
                         { id: "chunks", label: "Chunks", sortable: true },
                         {
@@ -864,8 +958,18 @@ export function InventoryPage() {
                             onClick={() => openRow(key)}
                           >
                             <td className="px-3 py-2">{h.schema_name}</td>
-                            <td className="px-3 py-2 font-medium text-slate-100">
-                              {h.hypertable_name}
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                className={detailButtonClass}
+                                aria-label={`Abrir detalhes da tabela temporal ${h.hypertable_name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openRow(key);
+                                }}
+                              >
+                                {h.hypertable_name}
+                              </button>
                             </td>
                             <td className="px-3 py-2">
                               {formatBytes(h.total_size_bytes)}
@@ -895,7 +999,25 @@ export function InventoryPage() {
             title={selectedKey ?? "Detalhe"}
             wide
           >
-            {selectedTable ? (
+            {selectedTable && isMongo ? (
+              <div className="space-y-2 text-sm text-slate-200">
+                <p>
+                  Coleção {selectedTable.database_name}.
+                  {selectedTable.table_name}
+                </p>
+                <p>
+                  Documentos estimados: {fmtNum(selectedTable.row_estimate)}
+                </p>
+                <p>
+                  Armazenamento e índices:{" "}
+                  {formatBytes(selectedTable.total_size_bytes)}
+                </p>
+                <p>
+                  O auditor leu apenas metadados. Regras específicas do
+                  PostgreSQL não são aplicadas a esta coleção.
+                </p>
+              </div>
+            ) : selectedTable ? (
               <TableAssessmentPanel
                 t={selectedTable}
                 env={envId ?? selectedTable.environment_id}

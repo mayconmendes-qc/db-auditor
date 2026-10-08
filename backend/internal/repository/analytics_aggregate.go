@@ -189,29 +189,30 @@ ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	return out, nil
 }
 
-// ListFindingTrend only includes runs with a successful analysis. A completed
-// analysis with no observed events is a genuine zero; missing analysis is a gap.
+// ListFindingTrend keeps runs without a successful analysis as nil measurements.
+// A completed analysis with no observed events is a genuine zero; missing
+// analysis must remain visible as a gap in the timeline.
 func (s *Store) ListFindingTrend(ctx context.Context, environmentID string, from, to time.Time, granularity string) ([]RunTrendPoint, error) {
 	rows, err := s.pool.Query(ctx, `WITH ranked AS (
  SELECT ar.id, ar.environment_id, e.name, ar.status, ar.started_at,ar.profile,ar.collector_version,
- COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version,'') AS rule_version,
- CASE WHEN ar.status='success' AND NOT EXISTS(SELECT 1 FROM audit_run_coverage c WHERE c.audit_run_id=ar.id AND c.status IN ('failed','skipped','attempted')) THEN 'complete' ELSE 'partial' END AS coverage,
+ COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version,'') AS rule_version,a.status AS analysis_status,
+ CASE WHEN ar.status='success' AND a.status='success' AND NOT EXISTS(SELECT 1 FROM audit_run_coverage c WHERE c.audit_run_id=ar.id AND c.status IN ('failed','skipped','attempted')) THEN 'complete' ELSE 'partial' END AS coverage,
  row_number() OVER (PARTITION BY ar.environment_id,
    date_trunc($4, ar.started_at AT TIME ZONE 'UTC')
    ORDER BY ar.started_at DESC, ar.id DESC) AS position
  FROM audit_run ar JOIN audit_environment e ON e.id=ar.environment_id
- JOIN analysis_run a ON a.audit_run_id=ar.id AND a.status='success'
+ LEFT JOIN analysis_run a ON a.audit_run_id=ar.id
  WHERE ar.status IN ('success','partial_success')
    AND ar.started_at >= $2 AND ar.started_at < $3
    AND ($1='' OR ar.environment_id=$1::uuid)
 )
 SELECT r.environment_id::text, r.name, r.id::text, r.started_at, r.status,r.profile,r.collector_version,r.rule_version,r.coverage,
- count(f.id)::integer,
- count(f.id) FILTER (WHERE f.severity='critical')::integer,
- count(f.id) FILTER (WHERE f.severity='high')::integer
+ CASE WHEN r.analysis_status='success' THEN count(f.id)::integer END,
+ CASE WHEN r.analysis_status='success' THEN count(f.id) FILTER (WHERE f.severity='critical')::integer END,
+ CASE WHEN r.analysis_status='success' THEN count(f.id) FILTER (WHERE f.severity='high')::integer END
 FROM ranked r LEFT JOIN finding_event f ON f.audit_run_id=r.id AND f.event_type='observed'
 WHERE r.position=1
-GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status,r.profile,r.collector_version,r.rule_version,r.coverage
+GROUP BY r.environment_id,r.name,r.id,r.started_at,r.status,r.profile,r.collector_version,r.rule_version,r.coverage,r.analysis_status
 ORDER BY r.started_at,r.environment_id`, environmentID, from, to, granularity)
 	if err != nil {
 		return nil, err

@@ -74,6 +74,7 @@ var portuguese = map[string]Text{
 	"security.definer_search_path":        {"Uma função privilegiada pode depender de um caminho de busca inseguro.", "Revise search_path e resolução de objetos com o administrador."},
 	"security.rls_disabled_hypothesis":    {"Uma tabela pode exigir controle de acesso por linha.", "Confirme a política de acesso antes de habilitar RLS."},
 	"security.public_schema_create":       {"Contas podem criar objetos no schema público.", "Confirme dependências antes de restringir CREATE."},
+	"security.account_inactive_review":    {"Uma conta expirou ou não apareceu ativa nas amostras disponíveis.", "Confirme o uso real com a equipe antes de desativar a conta."},
 	"replication.lag_high":                {"A réplica apresenta atraso elevado.", "Verifique origem, rede, aplicação do WAL e impacto esperado."},
 	"replication.archive_stalled":         {"O arquivamento de WAL pode estar parado.", "Confira logs, destino e recuperação antes de alterar configuração."},
 	"timescale.chunk_dead_tuples":         {"Um chunk tem muitos registros antigos.", "Revise autovacuum e atividade desse chunk."},

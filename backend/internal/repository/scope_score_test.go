@@ -15,7 +15,7 @@ func TestScopeScoreGolden(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			categories, score := calculateScopeCategories(tc.observations)
+			categories, score := calculateScopeCategories(tc.observations, 1, 1)
 			if score != tc.score {
 				t.Fatalf("score=%d want %d", score, tc.score)
 			}
@@ -26,18 +26,22 @@ func TestScopeScoreGolden(t *testing.T) {
 			}
 		})
 	}
+	withoutPrimaryKey, score := calculateScopeCategories(nil, 0, 1)
+	if score != 96 || withoutPrimaryKey[3].Positive != 0 {
+		t.Fatalf("missing primary key looked fully healthy: score=%d categories=%+v", score, withoutPrimaryKey)
+	}
 }
 
 func TestAggregateNullsScoreWhenIndexesMissing(t *testing.T) {
-	got := AggregateScopeScores("db", "public", [][2]string{{"security", "low"}}, 3, true, false)
+	got := AggregateScopeScores("db", "public", [][2]string{{"security", "low"}}, 3, 3, true, false)
 	if got.Score != nil || got.Status != "insufficient_coverage" {
 		t.Fatalf("missing indexes must not look like 100: %+v", got)
 	}
-	ok := AggregateScopeScores("db", "public", nil, 2, false, true)
+	ok := AggregateScopeScores("db", "public", nil, 2, 2, false, true)
 	if ok.Score == nil || *ok.Score != 100 || ok.Confidence != 0.75 {
 		t.Fatalf("covered partial score: %+v", ok)
 	}
-	empty := AggregateScopeScores("db", "", nil, 0, false, false)
+	empty := AggregateScopeScores("db", "", nil, 0, 0, false, false)
 	if empty.Score != nil {
 		t.Fatalf("no tables must not score 100")
 	}

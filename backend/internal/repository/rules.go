@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/osmendes/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/capabilities"
 )
 
 // EnsureRuleCatalog only inserts new immutable versions. Existing catalog
@@ -70,14 +72,52 @@ FROM rule_policy WHERE environment_id=$1::uuid ORDER BY schema_name,rule_id`, en
 }
 
 func (s *Store) EffectiveRules(ctx context.Context, environmentID, schema string) ([]analyzer.EffectiveRule, error) {
+	capabilitiesForEnvironment, err := s.GetEnvironmentCapabilities(ctx, environmentID, false)
+	if err != nil {
+		return nil, err
+	}
+	if capabilitiesForEnvironment == nil {
+		return nil, pgx.ErrNoRows
+	}
+	engine := capabilitiesForEnvironment.Engine
+	timescaleObserved := false
+	for _, item := range capabilitiesForEnvironment.Items {
+		if item.Name == "timescale" && item.Applicable {
+			timescaleObserved = true
+		}
+	}
 	policies, err := s.ListRulePolicies(ctx, environmentID)
 	if err != nil {
 		return nil, err
 	}
-	return analyzer.EffectiveCatalog(analyzer.SnapshotFacts{EnvironmentID: environmentID, RulePolicies: policies}, schema), nil
+	all := analyzer.EffectiveCatalog(analyzer.SnapshotFacts{EnvironmentID: environmentID, RulePolicies: policies}, schema)
+	out := make([]analyzer.EffectiveRule, 0, len(all))
+	for _, rule := range all {
+		if capabilities.RuleApplicable(engine, rule.ID, timescaleObserved) {
+			out = append(out, rule)
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) SetRulePolicy(ctx context.Context, p analyzer.RulePolicy) error {
+	capabilitiesForEnvironment, err := s.GetEnvironmentCapabilities(ctx, p.EnvironmentID, false)
+	if err != nil {
+		return err
+	}
+	if capabilitiesForEnvironment == nil {
+		return pgx.ErrNoRows
+	}
+	engine := capabilitiesForEnvironment.Engine
+	timescaleObserved := false
+	for _, item := range capabilitiesForEnvironment.Items {
+		if item.Name == "timescale" && item.Applicable {
+			timescaleObserved = true
+		}
+	}
+	if !capabilities.RuleApplicable(engine, p.RuleID, timescaleObserved) {
+		return fmt.Errorf("rule not applicable to %s", engine)
+	}
 	valid := false
 	var defaults map[string]any
 	for _, rule := range analyzer.Catalog() {

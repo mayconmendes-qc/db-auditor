@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/osmendes/db-auditor/internal/repository"
 )
@@ -61,7 +63,7 @@ func registerScopeScoreRoutes(mux *http.ServeMux, store InventoryStore) {
 		if items == nil {
 			items = []repository.ScopeAggregate{}
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": items, "version": "scope-v2"})
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "version": repository.ScopeScoreFormulaVersion})
 	})
 	mux.HandleFunc("GET /api/v1/environments/{id}/runs/{run}/score/compare", func(w http.ResponseWriter, r *http.Request) {
 		backend, ok := store.(interface {
@@ -102,7 +104,29 @@ func registerScopeScoreRoutes(mux *http.ServeMux, store InventoryStore) {
 			writeJSON(w, http.StatusOK, map[string]any{"status": "incompatible", "reason": "Cobertura, análise ou versão insuficiente para uma comparação confiável.", "current": current, "baseline": previous})
 			return
 		}
+		changes := []map[string]any{}
+		prior := map[string]repository.ScoreCategory{}
+		for _, category := range previous.Categories {
+			prior[category.Category] = category
+		}
+		for _, category := range current.Categories {
+			before := prior[category.Category]
+			if category.Score == before.Score && category.Findings == before.Findings && category.Positive == before.Positive {
+				continue
+			}
+			changes = append(changes, map[string]any{"category": category.Category, "score_delta": category.Score - before.Score,
+				"findings_delta": category.Findings - before.Findings, "positive_delta": category.Positive - before.Positive,
+				"penalty_delta": category.Penalty - before.Penalty})
+		}
+		reason := "A nota permaneceu estável nas categorias; confira as observações e a janela de comparação."
+		if len(changes) > 0 {
+			parts := make([]string, 0, len(changes))
+			for _, change := range changes {
+				parts = append(parts, fmt.Sprintf("%s: %+d pontos, %+d achados, %+d pontos positivos", change["category"], change["score_delta"], change["findings_delta"], change["positive_delta"]))
+			}
+			reason = "Categorias alteradas: " + strings.Join(parts, "; ") + ". A diferença observada não comprova causa."
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "comparable", "current": current, "baseline": previous, "delta": *current.Score - *previous.Score,
-			"reason": "Variação da nota entre execuções com a mesma fórmula e cobertura completa; consulte os achados para explicar as categorias alteradas."})
+			"category_changes": changes, "reason": reason})
 	})
 }

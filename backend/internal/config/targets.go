@@ -82,6 +82,9 @@ func loadDiscreteTargetDSNs() map[string]string {
 	out := make(map[string]string)
 	for n := 1; n <= maxTargetSlots; n++ {
 		prefix := fmt.Sprintf("AUDITOR_TARGET_%d_", n)
+		if strings.EqualFold(envTrim(prefix+"ENGINE"), "mongodb") {
+			continue
+		}
 		envID := strings.ToLower(envTrim(prefix + "ENVIRONMENT_ID"))
 		host := envTrim(prefix + "HOST")
 		if envID == "" || host == "" {

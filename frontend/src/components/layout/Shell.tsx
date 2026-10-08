@@ -275,7 +275,7 @@ export function Shell({
           <Input
             label="Busca"
             value={query}
-            placeholder="Objeto ou id do finding"
+            placeholder="Objeto ou ID do achado"
             onChange={(event) => setQuery(event.target.value)}
           />
         </form>
@@ -318,7 +318,15 @@ export function Shell({
                             : undefined
                         }
                       >
-                        <span className="min-w-0 truncate">{section}</span>
+                        <span className="min-w-0 truncate">
+                          {section === "Findings"
+                            ? "Achados"
+                            : section === "Dashboard"
+                              ? "Visão geral"
+                              : section === "Desvio de schema"
+                                ? "Desvio de esquema"
+                                : section}
+                        </span>
                         {count != null ? (
                           <span
                             className={

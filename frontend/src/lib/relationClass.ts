@@ -4,6 +4,7 @@ export function relationClassLabel(
   relkind?: string | null,
 ): string {
   const c = (relationClass || "").toLowerCase();
+  if (c === "collection") return "Coleção";
   if (c === "partitioned_table") return "Particionada";
   if (c === "partition") return "Partição";
   if (c === "foreign_table") return "Foreign table";

@@ -13,6 +13,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { labels } from "../lib/labels";
+import { trendEntries } from "../lib/trend-gaps";
 import { api } from "../services/api";
 import type {
   ConnectionStatus,
@@ -66,7 +67,6 @@ function MiniBar({
         </span>
         <span className="shrink-0 font-mono text-slate-100">
           {valueLabel ?? value}
-          {max > 0 ? <span className="ml-1 text-slate-400">{pct}%</span> : null}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
@@ -92,12 +92,14 @@ function KpiGroup({ title, children }: { title: string; children: ReactNode }) {
 function TrendBars({
   points,
   metric,
+  granularity,
 }: {
   points: RunTrendPoint[];
   metric: "size_bytes" | "findings" | "score" | "score_confidence";
+  granularity: "day" | "week" | "month";
 }) {
-  const available = points.filter((point) => point[metric] != null);
-  const visible = available.slice(-60);
+  const visible = points.slice(-60);
+  const entries = trendEntries(visible, granularity);
   const max = Math.max(1, ...visible.map((point) => point[metric] ?? 0));
   if (visible.length === 0) {
     return (
@@ -108,7 +110,37 @@ function TrendBars({
   }
   return (
     <div className="max-h-72 space-y-3 overflow-y-auto pr-2">
-      {visible.map((point) => {
+      {entries.map((entry) => {
+        if (entry.kind === "gap") {
+          return (
+            <p
+              key={entry.key}
+              className="border-l-2 border-dashed border-amber-500 pl-2 text-xs text-amber-200"
+            >
+              {entry.environment}: {entry.periods}{" "}
+              {entry.periods === 1
+                ? "período sem coleta"
+                : "períodos sem coleta"}
+              .
+            </p>
+          );
+        }
+        const { point } = entry;
+        if (point[metric] == null) {
+          return (
+            <p
+              key={point.audit_run_id}
+              className="border-l-2 border-dashed border-amber-500 pl-2 text-xs text-amber-200"
+            >
+              {new Date(point.at).toLocaleDateString("pt-BR")} ·{" "}
+              {point.environment_name}: sem dado para esta métrica (
+              {point.coverage === "partial"
+                ? "coleta ou análise parcial"
+                : "inventário ausente"}
+              ).
+            </p>
+          );
+        }
         const value = point[metric] ?? 0;
         const when = new Date(point.at).toLocaleDateString("pt-BR");
         return (
@@ -137,8 +169,8 @@ function TrendBars({
       <p className="text-xs text-slate-400">
         Cada barra representa a última execução elegível do período. Períodos
         sem coleta não são tratados como zero. Mostrando {visible.length} de{" "}
-        {available.length} pontos; selecione um ambiente ou aumente a
-        granularidade para facilitar a leitura.
+        {points.length} pontos; selecione um ambiente ou aumente a granularidade
+        para facilitar a leitura.
       </p>
     </div>
   );
@@ -249,7 +281,7 @@ export function DashboardPage() {
       <PageHeader
         eyebrow="Dashboard"
         title="Auditoria com evidências, sem mudanças automáticas"
-        description="Conexões, KPIs, storage, findings e saúde de jobs. Use o filtro de ambiente na barra lateral quando precisar focar um alvo."
+        description="Conexões, indicadores, armazenamento, achados e saúde de tarefas. Use o filtro de ambiente na barra lateral para focar um alvo."
       />
 
       {environmentId && envName ? (
@@ -346,31 +378,33 @@ export function DashboardPage() {
         <div className="mt-8 space-y-6">
           <KpiGroup title="Risco">
             <Card
-              subtitle="Findings abertos"
+              subtitle="Achados abertos"
               title={String(kpis.open_findings)}
               onClick={() => setSection("Findings")}
             />
             <Card
-              subtitle="Critical / High"
+              subtitle="Críticos / altos"
               title={`${kpis.critical_findings} / ${kpis.high_findings}`}
               onClick={() => setSection("Findings")}
             />
             <Card
-              subtitle="Runs ok / falha"
+              subtitle="Execuções concluídas / com falha"
               title={`${kpis.successful_runs_recent} / ${kpis.failed_runs_recent}`}
               onClick={() => setSection("Execuções")}
             />
           </KpiGroup>
           {scores.length > 0 ? (
-            <KpiGroup title="Score por schema">
+            <KpiGroup title="Nota por esquema">
               {scores.slice(0, 6).map((item) => (
                 <Card
                   key={`${item.database_name}.${item.schema_name ?? ""}`}
-                  subtitle={`${item.database_name}.${item.schema_name ?? ""} · ${item.tables} tabelas`}
+                  subtitle={`${item.database_name}.${item.schema_name ?? ""} · ${item.tables} ${item.status === "not_applicable" ? "coleções" : "tabelas"}`}
                   title={
-                    item.score == null
-                      ? "cobertura insuficiente"
-                      : `${item.score}/100`
+                    item.status === "not_applicable"
+                      ? "não aplicável"
+                      : item.score == null
+                        ? "cobertura insuficiente"
+                        : `${item.score}/100`
                   }
                 />
               ))}
@@ -378,12 +412,12 @@ export function DashboardPage() {
           ) : null}
           <KpiGroup title="Capacidade">
             <Card
-              subtitle="Total de Databases"
+              subtitle="Total de bancos"
               title={kpis.databases == null ? "—" : String(kpis.databases)}
               onClick={() => setSection("Inventário")}
             />
             <Card
-              subtitle="Total de Schemas"
+              subtitle="Total de esquemas"
               title={kpis.schemas == null ? "—" : String(kpis.schemas)}
               onClick={() => setSection("Inventário")}
             />
@@ -393,12 +427,15 @@ export function DashboardPage() {
               onClick={() => setSection("Inventário")}
             />
             <Card
-              subtitle="Storage total"
+              subtitle="Armazenamento total"
               title={formatBytes(kpis.total_storage_bytes)}
               onClick={() => setSection("Inventário")}
             />
-            <Card subtitle="Hypertables" title={String(kpis.hypertables)} />
-            <Card subtitle="Policies" title={String(kpis.policies)} />
+            <Card
+              subtitle="Tabelas temporais"
+              title={String(kpis.hypertables)}
+            />
+            <Card subtitle="Políticas" title={String(kpis.policies)} />
           </KpiGroup>
           {kpis.inventory_status !== "complete" ? (
             <p className="text-sm text-amber-300" role="status">
@@ -414,7 +451,7 @@ export function DashboardPage() {
               onClick={() => setSection("Ambientes")}
             />
             <Card
-              subtitle="Jobs agendados"
+              subtitle="Tarefas agendadas"
               title={String(kpis.jobs_scheduled)}
             />
           </KpiGroup>
@@ -433,7 +470,7 @@ export function DashboardPage() {
 
           {trends ? (
             <Card
-              title={`Findings (total ${trends.total})`}
+              title={`Achados (total ${trends.total})`}
               className="min-h-[22rem]"
             >
               <div className="mt-2 grid flex-1 gap-4 sm:grid-cols-2">
@@ -484,6 +521,7 @@ export function DashboardPage() {
           {storage?.top_consumers && storage.top_consumers.length > 0 ? (
             <Card
               title="Maiores consumidores (tabelas)"
+              subtitle="A barra é relativa ao maior objeto da lista; o tamanho aparece ao lado."
               className="min-h-[22rem]"
             >
               <ul className="mt-1 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
@@ -503,7 +541,7 @@ export function DashboardPage() {
           ) : null}
 
           {trends?.by_type && trends.by_type.length > 0 ? (
-            <Card title="Findings por tipo" className="min-h-[22rem]">
+            <Card title="Achados por tipo" className="min-h-[22rem]">
               <ul className="mt-1 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
                 {trends.by_type.slice(0, 12).map((b) => (
                   <li key={b.key}>
@@ -559,16 +597,28 @@ export function DashboardPage() {
           </div>
           <div className="mt-3 grid gap-4 lg:grid-cols-2">
             <Card title="Armazenamento ao longo do tempo">
-              <TrendBars points={storage.series ?? []} metric="size_bytes" />
+              <TrendBars
+                points={storage.series ?? []}
+                metric="size_bytes"
+                granularity={historyGranularity}
+              />
             </Card>
             <Card title="Achados observados por execução">
-              <TrendBars points={trends.series ?? []} metric="findings" />
+              <TrendBars
+                points={trends.series ?? []}
+                metric="findings"
+                granularity={historyGranularity}
+              />
             </Card>
             <Card
               title="Score ao longo do tempo"
               subtitle="A nota só aparece quando a coleta e a análise têm cobertura suficiente."
             >
-              <TrendBars points={trends.series ?? []} metric="score" />
+              <TrendBars
+                points={trends.series ?? []}
+                metric="score"
+                granularity={historyGranularity}
+              />
             </Card>
             <Card
               title="Cobertura do score"
@@ -577,6 +627,7 @@ export function DashboardPage() {
               <TrendBars
                 points={trends.series ?? []}
                 metric="score_confidence"
+                granularity={historyGranularity}
               />
             </Card>
           </div>
@@ -586,7 +637,7 @@ export function DashboardPage() {
       {!loading && jobs ? (
         <section className="mt-8" aria-labelledby="jobs-heading">
           <h2 id="jobs-heading" className="text-sm font-medium text-slate-300">
-            Saúde de jobs / policies
+            Saúde de tarefas e políticas
           </h2>
           {jobs.items.length === 0 ? (
             <p className="mt-2 text-sm text-slate-400">
@@ -597,7 +648,7 @@ export function DashboardPage() {
             <div className="mt-3">
               <Table
                 dense
-                headers={["Ambiente", "Jobs", "Agendados", "Policies"]}
+                headers={["Ambiente", "Tarefas", "Agendadas", "Políticas"]}
               >
                 {jobs.items.map((item) => (
                   <tr key={item.environment_id}>

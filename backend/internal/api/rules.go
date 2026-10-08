@@ -78,7 +78,7 @@ func registerRuleRoutes(mux *http.ServeMux, store InventoryStore) {
 		}
 		if err := writer.SetRulePolicy(r.Context(), policy); err != nil {
 			msg := err.Error()
-			if strings.Contains(msg, "unknown rule") || strings.Contains(msg, "invalid") || strings.Contains(msg, "unknown rule_id") {
+			if strings.Contains(msg, "unknown rule") || strings.Contains(msg, "invalid") || strings.Contains(msg, "unknown rule_id") || strings.Contains(msg, "not applicable") {
 				writeError(w, http.StatusBadRequest, CodeValidation, "Parâmetro ou regra desconhecidos. A política não foi gravada.")
 				return
 			}

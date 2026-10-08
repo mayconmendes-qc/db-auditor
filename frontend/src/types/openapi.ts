@@ -25,6 +25,7 @@ export type ApiPath =
   | "/api/v1/environments"
   | "/api/v1/environments/connection-status"
   | "/api/v1/environments/{id}/actions"
+  | "/api/v1/environments/{id}/actions/export"
   | "/api/v1/environments/{id}/annotations"
   | "/api/v1/environments/{id}/baseline"
   | "/api/v1/environments/{id}/baseline/comparisons"
@@ -111,5 +112,6 @@ export interface ScopeScoreCategory {
   weight: number;
   score: number;
   penalty: number;
+  positive: number;
   findings: number;
 }
