@@ -34,6 +34,7 @@ import type {
   GrantSnapshot,
   HealthResponse,
   HypertableSnapshot,
+  IndexHistoryPoint,
   IndexSnapshot,
   ItemsResponse,
   JobHealthResponse,
@@ -65,7 +66,11 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
-import { apiContractVersion, type ScopeScore } from "../types/openapi";
+import {
+  apiContractVersion,
+  type IndexDetailSnapshot,
+  type ScopeScore,
+} from "../types/openapi";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -255,6 +260,16 @@ function viewScopePath(
   view: string,
 ): string {
   return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/views/${encodeURIComponent(view)}`;
+}
+
+function indexScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  index: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/indexes/${encodeURIComponent(index)}`;
 }
 
 export type InventoryListParams = {
@@ -642,6 +657,40 @@ export const api = {
   indexes: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<IndexSnapshot>>(
       `/api/v1/environments/${environmentId}/indexes${qs(params)}`,
+    ),
+  indexDetail: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    index: string,
+  ) =>
+    getJSON<IndexDetailSnapshot>(
+      `${indexScopePath(env, run, database, schema, index)}/detail`,
+    ),
+  indexHistory: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    index: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<IndexHistoryPoint>>(
+      `${indexScopePath(env, run, database, schema, index)}/history${qs({ limit, offset })}`,
+    ),
+  indexFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    index: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${indexScopePath(env, run, database, schema, index)}/findings${qs({ limit, offset })}`,
     ),
   views: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<ViewSnapshot>>(

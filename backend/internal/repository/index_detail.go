@@ -77,15 +77,16 @@ WHERE i.environment_id=$1::uuid AND i.audit_run_id=$2::uuid AND i.database_name=
 }
 
 type IndexHistoryPoint struct {
-	AuditRunID    string     `json:"audit_run_id"`
-	RunStatus     string     `json:"run_status"`
-	SizeBytes     int64      `json:"size_bytes"`
-	IdxScan       int64      `json:"idx_scan"`
-	IdxTupRead    int64      `json:"idx_tup_read"`
-	IdxTupFetch   int64      `json:"idx_tup_fetch"`
-	StatsReset    *time.Time `json:"stats_reset"`
-	UsageObserved *bool      `json:"usage_observed"`
-	CollectedAt   time.Time  `json:"collected_at"`
+	AuditRunID            string     `json:"audit_run_id"`
+	RunStatus             string     `json:"run_status"`
+	DefinitionFingerprint string     `json:"definition_fingerprint"`
+	SizeBytes             int64      `json:"size_bytes"`
+	IdxScan               int64      `json:"idx_scan"`
+	IdxTupRead            int64      `json:"idx_tup_read"`
+	IdxTupFetch           int64      `json:"idx_tup_fetch"`
+	StatsReset            *time.Time `json:"stats_reset"`
+	UsageObserved         *bool      `json:"usage_observed"`
+	CollectedAt           time.Time  `json:"collected_at"`
 }
 
 func (s *Store) ListIndexHistory(ctx context.Context, env, run, database, schema, name string, limit, offset int) ([]IndexHistoryPoint, int, error) {
@@ -101,7 +102,7 @@ func (s *Store) ListIndexHistory(ctx context.Context, env, run, database, schema
 	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM index_snapshot i JOIN audit_run ar ON ar.id=i.audit_run_id WHERE `+scope, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.pool.Query(ctx, `SELECT i.audit_run_id::text, ar.status, i.size_bytes, i.idx_scan,
+	rows, err := s.pool.Query(ctx, `SELECT i.audit_run_id::text, ar.status, i.index_definition, i.size_bytes, i.idx_scan,
   i.idx_tup_read, i.idx_tup_fetch, i.stats_reset, i.usage_observed, i.collected_at
 FROM index_snapshot i JOIN audit_run ar ON ar.id=i.audit_run_id WHERE `+scope+`
 ORDER BY ar.started_at DESC, ar.id DESC LIMIT $6 OFFSET $7`, append(args, limit, offset)...)
@@ -112,11 +113,13 @@ ORDER BY ar.started_at DESC, ar.id DESC LIMIT $6 OFFSET $7`, append(args, limit,
 	out := make([]IndexHistoryPoint, 0)
 	for rows.Next() {
 		var item IndexHistoryPoint
-		if err := rows.Scan(&item.AuditRunID, &item.RunStatus, &item.SizeBytes, &item.IdxScan,
+		var definition string
+		if err := rows.Scan(&item.AuditRunID, &item.RunStatus, &definition, &item.SizeBytes, &item.IdxScan,
 			&item.IdxTupRead, &item.IdxTupFetch, &item.StatsReset, &item.UsageObserved,
 			&item.CollectedAt); err != nil {
 			return nil, 0, err
 		}
+		item.DefinitionFingerprint = indexFingerprint(definition)
 		out = append(out, item)
 	}
 	return out, total, rows.Err()

@@ -43,7 +43,7 @@ func TestIndexDetailScopeHistoryAndFindingsIntegration(t *testing.T) {
 		}
 		usage := i != 0
 		if err := s.SaveObjectInventory(ctx, envUUID, runUUID,
-			[]postgres.TableFacts{{DatabaseName: "db", SchemaName: "public", TableName: "orders", Owner: "owner"}}, nil,
+			[]postgres.TableFacts{{DatabaseName: "db", SchemaName: "public", TableName: "orders", Owner: "owner", Relkind: "r", StorageParameters: []string{}}}, nil,
 			[]postgres.IndexFacts{{DatabaseName: "db", SchemaName: "public", TableName: "orders", IndexName: "orders_idx",
 				IndexDefinition: "CREATE INDEX orders_idx ON orders(id) WHERE secret = 'private literal'", Predicate: "secret = 'private literal'",
 				KeyColumns: []string{"id"}, IncludeColumns: []string{"created_at"}, IsValid: i != 1, IsReady: true,
@@ -62,7 +62,7 @@ func TestIndexDetailScopeHistoryAndFindingsIntegration(t *testing.T) {
 		t.Fatal("environment leaked")
 	}
 	points, total, err := s.ListIndexHistory(ctx, env, selected, "db", "public", "orders_idx", 1, 0)
-	if err != nil || total != 2 || len(points) != 1 || points[0].AuditRunID != selected {
+	if err != nil || total != 2 || len(points) != 1 || points[0].AuditRunID != selected || points[0].DefinitionFingerprint != item.DefinitionFingerprint {
 		t.Fatalf("history page: %#v %d %v", points, total, err)
 	}
 	points, total, err = s.ListIndexHistory(ctx, env, selected, "db", "public", "orders_idx", 1, 1)

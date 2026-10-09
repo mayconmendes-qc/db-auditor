@@ -565,12 +565,24 @@ export interface IndexSnapshot {
   schema_name: string;
   table_name: string;
   index_name: string;
-  index_definition: string;
   access_method: string | null;
   is_unique: boolean;
   is_primary: boolean;
   size_bytes: number;
   idx_scan: number;
+  collected_at: string;
+}
+
+export interface IndexHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  definition_fingerprint: string;
+  size_bytes: number;
+  idx_scan: number;
+  idx_tup_read: number;
+  idx_tup_fetch: number;
+  stats_reset: string | null;
+  usage_observed: boolean | null;
   collected_at: string;
 }
 
