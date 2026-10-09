@@ -61,6 +61,7 @@ import type {
   TableSnapshot,
   TrackedAction,
   TriggerSnapshot,
+  ViewDetailSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
@@ -244,6 +245,16 @@ function tableScopePath(
   table: string,
 ): string {
   return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}`;
+}
+
+function viewScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  view: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/views/${encodeURIComponent(view)}`;
 }
 
 export type InventoryListParams = {
@@ -635,6 +646,52 @@ export const api = {
   views: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<ViewSnapshot>>(
       `/api/v1/environments/${environmentId}/views${qs(params)}`,
+    ),
+  viewDetail: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    view: string,
+  ) =>
+    getJSON<ViewDetailSnapshot>(
+      `${viewScopePath(env, run, database, schema, view)}/detail`,
+    ),
+  viewDependencies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    view: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<DependencySnapshot>>(
+      `${viewScopePath(env, run, database, schema, view)}/dependencies${qs({ limit, offset })}`,
+    ),
+  viewGrants: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    view: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<GrantSnapshot>>(
+      `${viewScopePath(env, run, database, schema, view)}/grants${qs({ limit, offset })}`,
+    ),
+  viewFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    view: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${viewScopePath(env, run, database, schema, view)}/findings${qs({ limit, offset })}`,
     ),
   functions: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<FunctionSnapshot>>(
