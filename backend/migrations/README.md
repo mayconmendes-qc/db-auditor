@@ -14,6 +14,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `10_account_activity.sql`: guarda apenas validade e presença de sessão no instante da coleta para sugerir revisão de contas possivelmente inativas. Não guarda senhas nem comprova ausência de uso entre amostras.
 - `11_quality_validation.sql`: vincula a decisão de validação de qualidade ao diagnóstico posterior comparável, preservando o vínculo também no evento.
 - `12_view_detail.sql`: adiciona colunas, opções de segurança e estado de população às visões. Snapshots antigos ficam com valor ausente; uma nova coleta preenche os campos. A migração não remove dados.
+- `13_index_detail.sql`: registra colunas incluídas e se as estatísticas de uso do índice estavam disponíveis. Em snapshots anteriores, esses campos ficam ausentes até uma nova coleta; os índices históricos permanecem preservados.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

@@ -57,6 +57,12 @@ func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
 				registered[base+"/"+kind+" get"] = true
 			}
 		}
+		if strings.Contains(text, "registerIndexDetailRoutes") {
+			base := "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}"
+			for _, kind := range []string{"detail", "history", "findings"} {
+				registered[base+"/"+kind+" get"] = true
+			}
+		}
 		if strings.Contains(text, "registerPDFReportRoutes") {
 			base := "/api/v1/environments/{id}/reports"
 			registered[base+" post"] = true

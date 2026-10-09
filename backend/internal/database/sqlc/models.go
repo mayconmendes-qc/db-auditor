@@ -533,6 +533,8 @@ type IndexSnapshot struct {
 	IsReady         bool
 	KeyColumns      []string
 	Predicate       string
+	IncludeColumns  []string
+	UsageObserved   pgtype.Bool
 }
 
 type JobSnapshot struct {

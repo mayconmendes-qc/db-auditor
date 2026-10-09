@@ -623,6 +623,15 @@
     "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/findings": {
       "get": {"description":"Achados observados da visão, paginados e limitados à execução.","responses":{"200":{"description":"Página de achados"}}}
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail": {
+      "get": {"description":"Estrutura e métricas do índice na execução selecionada, sem SQL bruto.","responses":{"200":{"description":"Índice observado","content":{"application/json":{"schema":{"$ref":"#/components/schemas/IndexDetailSnapshot"}}}},"404":{"description":"Índice ou execução não encontrado"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history": {
+      "get": {"description":"Métricas históricas do mesmo índice até a execução selecionada, paginadas.","responses":{"200":{"description":"Página de histórico"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings": {
+      "get": {"description":"Achados observados para o índice nesta execução, paginados.","responses":{"200":{"description":"Página de achados"}}}
+    },
     "/api/v1/finding-categories/{category}": {
       "get": {
         "responses": {
@@ -894,6 +903,20 @@
   },
   "components": {
     "schemas": {
+      "IndexDetailSnapshot": {
+        "type": "object",
+        "required": ["id", "environment_id", "audit_run_id", "database_name", "schema_name", "table_name", "index_name", "is_unique", "is_primary", "is_valid", "is_ready", "is_partial", "size_bytes", "idx_scan", "idx_tup_read", "idx_tup_fetch", "collected_at"],
+        "properties": {
+          "id": {"type":"string"}, "environment_id": {"type":"string"}, "audit_run_id": {"type":"string"},
+          "database_name": {"type":"string"}, "schema_name": {"type":"string"}, "table_name": {"type":"string"},
+          "table_owner_name": {"type":["string","null"]}, "index_name": {"type":"string"}, "access_method": {"type":["string","null"]},
+          "is_unique": {"type":"boolean"}, "is_primary": {"type":"boolean"}, "is_valid": {"type":"boolean"}, "is_ready": {"type":"boolean"},
+          "key_columns": {"type":["array","null"],"items":{"type":"string"}}, "include_columns": {"type":["array","null"],"items":{"type":"string"}},
+          "is_partial": {"type":"boolean"}, "definition_fingerprint": {"type":"string"}, "predicate_fingerprint": {"type":"string"},
+          "size_bytes": {"type":"integer"}, "idx_scan": {"type":"integer"}, "idx_tup_read": {"type":"integer"}, "idx_tup_fetch": {"type":"integer"},
+          "stats_reset": {"type":["string","null"]}, "usage_observed": {"type":["boolean","null"]}, "collected_at": {"type":"string"}
+        }
+      },
       "ViewDetailSnapshot": {
         "type": "object",
         "required": ["id", "environment_id", "audit_run_id", "database_name", "schema_name", "view_name", "relkind", "size_bytes", "collected_at"],

@@ -151,6 +151,8 @@ type IndexFacts struct {
 	IsValid         bool       `json:"is_valid"`
 	IsReady         bool       `json:"is_ready"`
 	KeyColumns      []string   `json:"key_columns,omitempty"`
+	IncludeColumns  []string   `json:"include_columns,omitempty"`
+	UsageObserved   bool       `json:"usage_observed"`
 	Predicate       string     `json:"predicate,omitempty"`
 }
 
