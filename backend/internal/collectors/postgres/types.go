@@ -176,13 +176,17 @@ type ConstraintFacts struct {
 
 // ViewFacts is one row from the view collector (views and matviews).
 type ViewFacts struct {
-	DatabaseName   string `json:"database_name"`
-	SchemaName     string `json:"schema_name"`
-	ViewName       string `json:"view_name"`
-	Owner          string `json:"owner_name"`
-	Relkind        string `json:"relkind"`
-	ViewDefinition string `json:"view_definition"`
-	SizeBytes      int64  `json:"size_bytes"`
+	DatabaseName    string `json:"database_name"`
+	SchemaName      string `json:"schema_name"`
+	ViewName        string `json:"view_name"`
+	Owner           string `json:"owner_name"`
+	Relkind         string `json:"relkind"`
+	ViewDefinition  string `json:"view_definition"`
+	SizeBytes       int64  `json:"size_bytes"`
+	ColumnsJSON     string `json:"columns_json"`
+	SecurityInvoker *bool  `json:"security_invoker"`
+	SecurityBarrier *bool  `json:"security_barrier"`
+	IsPopulated     *bool  `json:"is_populated"`
 }
 
 // FunctionFacts is one row from the function/procedure collector.

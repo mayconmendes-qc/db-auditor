@@ -585,6 +585,16 @@ export interface ViewSnapshot {
   collected_at: string;
 }
 
+export interface ViewDetailSnapshot extends ViewSnapshot {
+  audit_run_id: string;
+  environment_id: string;
+  columns: { name: string; type: string; position: number }[] | null;
+  security_invoker: boolean | null;
+  security_barrier: boolean | null;
+  is_populated: boolean | null;
+  definition_fingerprint: string;
+}
+
 export interface FunctionSnapshot {
   id: string;
   database_name: string;

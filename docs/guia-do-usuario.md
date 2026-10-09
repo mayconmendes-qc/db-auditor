@@ -31,6 +31,8 @@ O painel de cada tipo de objeto oferece as mesmas seções: visão geral, estrut
 
 Tabelas, índices, visualizações, funções, hypertables e agregados contínuos dependem das capacidades da coleta. Se um tipo não se aplica ao mecanismo ou não foi coletado, a aplicação indica a limitação. Um número de linhas é estimado pelo PostgreSQL e pode diferir da contagem real.
 
+Em **Visões**, abra uma linha para consultar colunas, dependências registradas, acessos efetivos observados e achados daquela execução. A definição SQL fica protegida porque pode conter valores sensíveis; a impressão digital permite perceber uma mudança sem revelar o texto. Uma visão comum não armazena dados próprios, então seu tamanho não representa o custo da consulta. Uma visão materializada ocupa espaço, mas a coleta atual não informa o instante do último `REFRESH` nem o custo das consultas. As opções `security_invoker` e `security_barrier` aparecem quando o PostgreSQL permite observá-las; “não coletado” não significa que estejam desativadas. Dependências e acessos ausentes na lista também não comprovam ausência de uso ou acesso.
+
 ## 4. Investigar achados
 
 Em **Achados**, filtre por severidade, estado e tipo. A **constatação** resume o que foi observado em português. Abra o achado para ver evidência, confiança, cobertura, objeto, orientação e histórico. Os termos e textos originais da regra ficam na seção técnica.
