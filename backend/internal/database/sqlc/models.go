@@ -479,6 +479,14 @@ type FunctionSnapshot struct {
 	FunctionDefinition pgtype.Text
 	CollectedAt        pgtype.Timestamptz
 	Proconfig          string
+	ReturnType         pgtype.Text
+	SearchPathPinned   pgtype.Bool
+	ExecuteRoles       []string
+	Calls              pgtype.Int8
+	TotalTimeMs        pgtype.Float8
+	SelfTimeMs         pgtype.Float8
+	StatsReset         pgtype.Timestamptz
+	StatsObserved      pgtype.Bool
 }
 
 type GrantSnapshot struct {

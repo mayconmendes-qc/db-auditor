@@ -68,6 +68,7 @@ import type {
 } from "../types";
 import {
   apiContractVersion,
+  type FunctionDetailSnapshot,
   type IndexDetailSnapshot,
   type ScopeScore,
 } from "../types/openapi";
@@ -270,6 +271,16 @@ function indexScopePath(
   index: string,
 ): string {
   return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/indexes/${encodeURIComponent(index)}`;
+}
+
+function functionScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  name: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/functions/${encodeURIComponent(name)}`;
 }
 
 export type InventoryListParams = {
@@ -745,6 +756,56 @@ export const api = {
   functions: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<FunctionSnapshot>>(
       `/api/v1/environments/${environmentId}/functions${qs(params)}`,
+    ),
+  functionDetail: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signature: string,
+  ) =>
+    getJSON<FunctionDetailSnapshot>(
+      `${functionScopePath(env, run, database, schema, name)}/detail${qs({ signature })}`,
+    ),
+  functionDependencies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signature: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<DependencySnapshot>>(
+      `${functionScopePath(env, run, database, schema, name)}/dependencies${qs({ signature, limit, offset })}`,
+    ),
+  functionGrants: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signature: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<GrantSnapshot>>(
+      `${functionScopePath(env, run, database, schema, name)}/grants${qs({ signature, limit, offset })}`,
+    ),
+  functionFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signature: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${functionScopePath(env, run, database, schema, name)}/findings${qs({ signature, limit, offset })}`,
     ),
   auditRuns: (params?: {
     environment_id?: string;

@@ -193,18 +193,26 @@ type ViewFacts struct {
 
 // FunctionFacts is one row from the function/procedure collector.
 type FunctionFacts struct {
-	DatabaseName       string `json:"database_name"`
-	SchemaName         string `json:"schema_name"`
-	FunctionName       string `json:"function_name"`
-	IdentityArguments  string `json:"identity_arguments"`
-	Owner              string `json:"owner_name"`
-	LanguageName       string `json:"language_name"`
-	IsSecurityDefiner  bool   `json:"is_security_definer"`
-	Volatility         string `json:"volatility"`
-	ParallelSafety     string `json:"parallel_safety"`
-	Kind               string `json:"kind"`
-	FunctionDefinition string `json:"function_definition"`
-	Proconfig          string `json:"proconfig,omitempty"`
+	DatabaseName       string     `json:"database_name"`
+	SchemaName         string     `json:"schema_name"`
+	FunctionName       string     `json:"function_name"`
+	IdentityArguments  string     `json:"identity_arguments"`
+	Owner              string     `json:"owner_name"`
+	LanguageName       string     `json:"language_name"`
+	IsSecurityDefiner  bool       `json:"is_security_definer"`
+	Volatility         string     `json:"volatility"`
+	ParallelSafety     string     `json:"parallel_safety"`
+	Kind               string     `json:"kind"`
+	FunctionDefinition string     `json:"function_definition"`
+	Proconfig          string     `json:"proconfig,omitempty"`
+	ReturnType         *string    `json:"return_type,omitempty"`
+	SearchPathPinned   bool       `json:"search_path_pinned"`
+	ExecuteRoles       []string   `json:"execute_roles,omitempty"`
+	Calls              int64      `json:"calls"`
+	TotalTimeMS        float64    `json:"total_time_ms"`
+	SelfTimeMS         float64    `json:"self_time_ms"`
+	StatsReset         *time.Time `json:"stats_reset,omitempty"`
+	StatsObserved      bool       `json:"stats_observed"`
 }
 
 // ExtensionFacts is one row from the extension collector.
