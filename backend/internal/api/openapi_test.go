@@ -69,6 +69,12 @@ func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
 				registered[base+"/"+kind+" get"] = true
 			}
 		}
+		if strings.Contains(text, "registerHypertableDetailRoutes") {
+			base := "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}"
+			for _, kind := range []string{"detail", "dimensions", "chunks", "policies", "jobs", "history", "indexes", "grants", "rls-policies", "findings"} {
+				registered[base+"/"+kind+" get"] = true
+			}
+		}
 		if strings.Contains(text, "registerPDFReportRoutes") {
 			base := "/api/v1/environments/{id}/reports"
 			registered[base+" post"] = true

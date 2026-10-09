@@ -33,6 +33,11 @@ import type {
   FunctionSnapshot,
   GrantSnapshot,
   HealthResponse,
+  HypertableChunkDetail,
+  HypertableDimensionDetail,
+  HypertableHistoryPoint,
+  HypertableJobDetail,
+  HypertablePolicyDetail,
   HypertableSnapshot,
   IndexHistoryPoint,
   IndexSnapshot,
@@ -69,6 +74,7 @@ import type {
 import {
   apiContractVersion,
   type FunctionDetailSnapshot,
+  type HypertableDetailSnapshot,
   type IndexDetailSnapshot,
   type ScopeScore,
 } from "../types/openapi";
@@ -281,6 +287,16 @@ function functionScopePath(
   name: string,
 ): string {
   return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/functions/${encodeURIComponent(name)}`;
+}
+
+function hypertableScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  name: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/hypertables/${encodeURIComponent(name)}`;
 }
 
 export type InventoryListParams = {
@@ -523,6 +539,124 @@ export const api = {
   hypertablesPage: (environmentId: string, params?: InventoryListParams) =>
     getJSON<PagedResponse<HypertableSnapshot>>(
       `/api/v1/environments/${environmentId}/hypertables/page${qs(params)}`,
+    ),
+  hypertableDetail: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+  ) =>
+    getJSON<HypertableDetailSnapshot>(
+      `${hypertableScopePath(env, run, database, schema, name)}/detail`,
+    ),
+  hypertableDimensions: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<HypertableDimensionDetail>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/dimensions${qs({ limit, offset })}`,
+    ),
+  hypertableChunks: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<HypertableChunkDetail>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/chunks${qs({ limit, offset })}`,
+    ),
+  hypertablePolicies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<HypertablePolicyDetail>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/policies${qs({ limit, offset })}`,
+    ),
+  hypertableJobs: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<HypertableJobDetail>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/jobs${qs({ limit, offset })}`,
+    ),
+  hypertableHistory: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<HypertableHistoryPoint>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/history${qs({ limit, offset })}`,
+    ),
+  hypertableIndexes: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<IndexSnapshot>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/indexes${qs({ limit, offset })}`,
+    ),
+  hypertableGrants: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<GrantSnapshot>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/grants${qs({ limit, offset })}`,
+    ),
+  hypertableRLSPolicies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<RLSPolicySnapshot>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/rls-policies${qs({ limit, offset })}`,
+    ),
+  hypertableFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${hypertableScopePath(env, run, database, schema, name)}/findings${qs({ limit, offset })}`,
     ),
   dimensions: (environmentId: string) =>
     getJSON<ItemsResponse<DimensionSnapshot>>(

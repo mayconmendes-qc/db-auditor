@@ -45,6 +45,7 @@ import type {
   WorkloadSnapshot,
 } from "../types";
 import { FunctionAssessmentPanel } from "./FunctionAssessmentPanel";
+import { HypertableAssessmentPanel } from "./HypertableAssessmentPanel";
 import { IndexAssessmentPanel } from "./IndexAssessmentPanel";
 import {
   FunctionDetail,
@@ -1315,11 +1316,25 @@ export function InventoryPage() {
                 snapshot={detailSnapshot}
               />
             ) : null}
+            {selectedItem?.kind === "hypertables" && envId && selectedRun ? (
+              <HypertableAssessmentPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun,
+                  targetFor(selectedItem),
+                )}
+                hypertable={selectedItem.item}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+              />
+            ) : null}
             {selectedItem &&
             selectedItem.kind !== "tables" &&
             (selectedItem.kind !== "views" || !selectedRun) &&
             (selectedItem.kind !== "indexes" || !selectedRun) &&
             (selectedItem.kind !== "functions" || !selectedRun) &&
+            (selectedItem.kind !== "hypertables" || !selectedRun) &&
             envId ? (
               <InventoryObjectPanel
                 key={inventoryTargetKey(

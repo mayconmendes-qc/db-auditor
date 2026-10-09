@@ -68,7 +68,7 @@ INSERT INTO function_snapshot (
 ON CONFLICT (audit_run_id, database_name, schema_name, function_name, identity_arguments) DO NOTHING
 `, auditRunID, environmentID, f.DatabaseName, f.SchemaName, f.FunctionName, f.IdentityArguments,
 			nullString(f.Owner), nullString(f.LanguageName), f.IsSecurityDefiner, nullString(f.Volatility),
-			nullString(f.ParallelSafety), nullString(f.Kind), nullString(f.FunctionDefinition), nullString(f.Proconfig),
+			nullString(f.ParallelSafety), nullString(f.Kind), nullString(f.FunctionDefinition), f.Proconfig,
 			nullStringPtr(f.ReturnType), f.SearchPathPinned, f.ExecuteRoles, f.Calls, f.TotalTimeMS,
 			f.SelfTimeMS, f.StatsReset, f.StatsObserved)
 		if err != nil {

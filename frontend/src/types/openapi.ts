@@ -59,6 +59,16 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/detail"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/grants"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/chunks"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/detail"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/dimensions"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/findings"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/grants"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/history"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/indexes"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/jobs"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/policies"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/rls-policies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history"
@@ -124,6 +134,25 @@ export interface FunctionDetailSnapshot {
   stats_observed?: boolean | null;
   definition_fingerprint?: string;
   collected_at: string;
+}
+
+export interface HypertableDetailSnapshot {
+  id: string;
+  audit_run_id: string;
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  hypertable_name: string;
+  owner_name?: string | null;
+  num_dimensions: number;
+  num_chunks: number;
+  compression_enabled: boolean;
+  is_distributed: boolean;
+  total_size_bytes: number;
+  data_size_bytes: number;
+  index_size_bytes: number;
+  collected_at: string;
+  base_table_observed: boolean;
 }
 
 export interface IndexDetailSnapshot {
