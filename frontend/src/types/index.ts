@@ -729,6 +729,23 @@ export interface CAGGSnapshot {
   collected_at: string;
 }
 
+export interface CAGGRefreshPolicy {
+  job_id: number;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number | null;
+}
+
+export interface CAGGHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  materialization_size_bytes: number | null;
+  lag_interval: string;
+  collected_at: string;
+}
+
 export interface JobSnapshot {
   id: string;
   database_name: string;

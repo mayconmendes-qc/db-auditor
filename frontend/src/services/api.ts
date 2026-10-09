@@ -10,6 +10,8 @@ import type {
   AuditRun,
   AuditRunCoverage,
   BaselineComparison,
+  CAGGHistoryPoint,
+  CAGGRefreshPolicy,
   CAGGSnapshot,
   ChunkSnapshot,
   CollectorRun,
@@ -73,6 +75,7 @@ import type {
 } from "../types";
 import {
   apiContractVersion,
+  type CAGGDetailSnapshot,
   type FunctionDetailSnapshot,
   type HypertableDetailSnapshot,
   type IndexDetailSnapshot,
@@ -297,6 +300,16 @@ function hypertableScopePath(
   name: string,
 ): string {
   return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/hypertables/${encodeURIComponent(name)}`;
+}
+
+function caggScopePath(
+  env: string,
+  run: string,
+  database: string,
+  schema: string,
+  name: string,
+): string {
+  return `/api/v1/environments/${encodeURIComponent(env)}/runs/${encodeURIComponent(run)}/databases/${encodeURIComponent(database)}/schemas/${encodeURIComponent(schema)}/continuous-aggregates/${encodeURIComponent(name)}`;
 }
 
 export type InventoryListParams = {
@@ -676,6 +689,76 @@ export const api = {
   ) =>
     getJSON<PagedResponse<CAGGSnapshot>>(
       `/api/v1/environments/${environmentId}/continuous-aggregates/page${qs(params)}`,
+    ),
+  caggDetail: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+  ) =>
+    getJSON<CAGGDetailSnapshot>(
+      `${caggScopePath(env, run, database, schema, name)}/detail`,
+    ),
+  caggRefreshPolicies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<CAGGRefreshPolicy>>(
+      `${caggScopePath(env, run, database, schema, name)}/refresh-policies${qs({ limit, offset })}`,
+    ),
+  caggHistory: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<CAGGHistoryPoint>>(
+      `${caggScopePath(env, run, database, schema, name)}/history${qs({ limit, offset })}`,
+    ),
+  caggDependencies: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<DependencySnapshot>>(
+      `${caggScopePath(env, run, database, schema, name)}/dependencies${qs({ limit, offset })}`,
+    ),
+  caggGrants: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<GrantSnapshot>>(
+      `${caggScopePath(env, run, database, schema, name)}/grants${qs({ limit, offset })}`,
+    ),
+  caggFindings: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    limit = 50,
+    offset = 0,
+  ) =>
+    getJSON<PagedResponse<Finding>>(
+      `${caggScopePath(env, run, database, schema, name)}/findings${qs({ limit, offset })}`,
     ),
   jobs: (environmentId: string) =>
     getJSON<ItemsResponse<JobSnapshot>>(

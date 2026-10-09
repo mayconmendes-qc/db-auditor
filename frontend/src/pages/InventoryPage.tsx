@@ -30,6 +30,7 @@ import {
 import { nextSort, type SortState } from "../lib/sort";
 import { api } from "../services/api";
 import type {
+  CAGGSnapshot,
   ColumnStatSnapshot,
   DatabaseSnapshot,
   FunctionSnapshot,
@@ -44,6 +45,7 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
+import { CAGGAssessmentPanel } from "./CAGGAssessmentPanel";
 import { FunctionAssessmentPanel } from "./FunctionAssessmentPanel";
 import { HypertableAssessmentPanel } from "./HypertableAssessmentPanel";
 import { IndexAssessmentPanel } from "./IndexAssessmentPanel";
@@ -60,7 +62,8 @@ import { ViewAssessmentPanel } from "./ViewAssessmentPanel";
 type SelectedInventoryItem =
   | { kind: "tables"; item: TableSnapshot }
   | { kind: "indexes"; item: IndexSnapshot }
-  | { kind: "views" | "caggs"; item: ViewSnapshot }
+  | { kind: "views"; item: ViewSnapshot }
+  | { kind: "caggs"; item: CAGGSnapshot }
   | { kind: "functions"; item: FunctionSnapshot }
   | { kind: "hypertables"; item: HypertableSnapshot };
 
@@ -76,6 +79,7 @@ function targetFor(item: SelectedInventoryItem): InventoryTarget {
     case "indexes":
       return { ...shared, kind: item.kind, name: item.item.index_name };
     case "views":
+      return { ...shared, kind: item.kind, name: item.item.view_name };
     case "caggs":
       return { ...shared, kind: item.kind, name: item.item.view_name };
     case "functions":
@@ -182,6 +186,7 @@ export function InventoryPage() {
   const [tables, setTables] = useState<TableSnapshot[]>([]);
   const [indexes, setIndexes] = useState<IndexSnapshot[]>([]);
   const [views, setViews] = useState<ViewSnapshot[]>([]);
+  const [caggs, setCaggs] = useState<CAGGSnapshot[]>([]);
   const [functions, setFunctions] = useState<FunctionSnapshot[]>([]);
   const [hypertables, setHypertables] = useState<HypertableSnapshot[]>([]);
   const [selectedItem, setSelectedItem] =
@@ -253,6 +258,7 @@ export function InventoryPage() {
       setTables([]);
       setIndexes([]);
       setViews([]);
+      setCaggs([]);
       setFunctions([]);
       setHypertables([]);
       setPage(null);
@@ -352,6 +358,7 @@ export function InventoryPage() {
         .then((res) => {
           if (!cancelled) {
             setPage(res.page);
+            setCaggs(res.items);
             setViews(
               res.items.map((c) => ({
                 id: c.id,
@@ -548,10 +555,7 @@ export function InventoryPage() {
               value.view_name === inventory.name,
           );
           if (!item) return null;
-          return {
-            kind: "caggs",
-            item: { ...item, relkind: "cagg", size_bytes: 0 },
-          };
+          return { kind: "caggs", item };
         }
         case "functions": {
           const item = await findPage(
@@ -630,9 +634,9 @@ export function InventoryPage() {
   const selectedIndex =
     selectedItem?.kind === "indexes" ? selectedItem.item : undefined;
   const selectedView =
-    selectedItem?.kind === "views" || selectedItem?.kind === "caggs"
-      ? selectedItem.item
-      : undefined;
+    selectedItem?.kind === "views" ? selectedItem.item : undefined;
+  const selectedCagg =
+    selectedItem?.kind === "caggs" ? selectedItem.item : undefined;
   const selectedFn =
     selectedItem?.kind === "functions" ? selectedItem.item : undefined;
   const selectedHt =
@@ -1040,6 +1044,15 @@ export function InventoryPage() {
                     >
                       {sortedViews.map((v) => {
                         const viewKind = kind === "caggs" ? "caggs" : "views";
+                        const selectedCaggRow =
+                          viewKind === "caggs"
+                            ? caggs.find((item) => item.id === v.id)
+                            : undefined;
+                        if (viewKind === "caggs" && !selectedCaggRow)
+                          return null;
+                        const selection: SelectedInventoryItem = selectedCaggRow
+                          ? { kind: "caggs", item: selectedCaggRow }
+                          : { kind: "views", item: v };
                         return (
                           <tr
                             key={v.id}
@@ -1047,22 +1060,17 @@ export function InventoryPage() {
                               selectedItem?.kind === viewKind &&
                                 selectedItem.item.id === v.id,
                             )}
-                            onClick={() =>
-                              openRow({ kind: viewKind, item: v }, currentRun)
-                            }
+                            onClick={() => openRow(selection, currentRun)}
                           >
                             <td className="px-3 py-2">{v.schema_name}</td>
                             <td className="px-3 py-2">
                               <button
                                 type="button"
                                 className={detailButtonClass}
-                                aria-label={`Abrir detalhes da visão ${v.view_name}`}
+                                aria-label={`Abrir detalhes ${viewKind === "caggs" ? "do agregado contínuo" : "da visão"} ${v.view_name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  openRow(
-                                    { kind: viewKind, item: v },
-                                    currentRun,
-                                  );
+                                  openRow(selection, currentRun);
                                 }}
                               >
                                 {v.view_name}
@@ -1070,9 +1078,15 @@ export function InventoryPage() {
                             </td>
                             <td className="px-3 py-2">{v.owner_name ?? "—"}</td>
                             <td className="px-3 py-2">
-                              {formatBytes(v.size_bytes)}
+                              {kind === "caggs"
+                                ? "Não coletado"
+                                : formatBytes(v.size_bytes)}
                             </td>
-                            <td className="px-3 py-2">{v.relkind}</td>
+                            <td className="px-3 py-2">
+                              {kind === "caggs"
+                                ? "Agregado contínuo"
+                                : v.relkind}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1329,12 +1343,26 @@ export function InventoryPage() {
                 snapshot={detailSnapshot}
               />
             ) : null}
+            {selectedCagg && envId && selectedRun ? (
+              <CAGGAssessmentPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun,
+                  targetFor({ kind: "caggs", item: selectedCagg }),
+                )}
+                cagg={selectedCagg}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+              />
+            ) : null}
             {selectedItem &&
             selectedItem.kind !== "tables" &&
             (selectedItem.kind !== "views" || !selectedRun) &&
             (selectedItem.kind !== "indexes" || !selectedRun) &&
             (selectedItem.kind !== "functions" || !selectedRun) &&
             (selectedItem.kind !== "hypertables" || !selectedRun) &&
+            (selectedItem.kind !== "caggs" || !selectedRun) &&
             envId ? (
               <InventoryObjectPanel
                 key={inventoryTargetKey(
@@ -1361,6 +1389,7 @@ export function InventoryPage() {
             !selectedView &&
             !selectedFn &&
             !selectedHt &&
+            !selectedCagg &&
             !inventory &&
             !detailError ? (
               <p className="text-sm text-slate-400">Nenhum detalhe.</p>

@@ -674,6 +674,24 @@
     "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/findings": {
       "get": {"description":"Achados da tabela temporal nesta execução, paginados.","responses":{"200":{"description":"Página de achados"}}}
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/detail": {
+      "get": {"description":"Detalhe do agregado contínuo na execução selecionada, sem definição SQL bruta.","responses":{"200":{"description":"Agregado observado","content":{"application/json":{"schema":{"$ref":"#/components/schemas/CAGGDetailSnapshot"}}}},"404":{"description":"Objeto ou execução não encontrado"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/refresh-policies": {
+      "get": {"description":"Políticas de atualização do agregado, paginadas.","responses":{"200":{"description":"Página de políticas"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/history": {
+      "get": {"description":"Histórico de atraso e tamanho da materialização até a execução, paginado.","responses":{"200":{"description":"Página de histórico"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/dependencies": {
+      "get": {"description":"Dependências observadas da visão do agregado, paginadas.","responses":{"200":{"description":"Página de dependências"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/grants": {
+      "get": {"description":"Acessos observados da visão do agregado, paginados.","responses":{"200":{"description":"Página de acessos"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/findings": {
+      "get": {"description":"Achados específicos do agregado nesta execução, paginados.","responses":{"200":{"description":"Página de achados"}}}
+    },
     "/api/v1/finding-categories/{category}": {
       "get": {
         "responses": {
@@ -945,6 +963,19 @@
   },
   "components": {
     "schemas": {
+      "CAGGDetailSnapshot": {
+        "type":"object",
+        "required":["id","environment_id","audit_run_id","database_name","schema_name","view_name","materialized_only","compression_enabled","lag_interval","definition_fingerprint","collected_at"],
+        "properties":{
+          "id":{"type":"string"},"environment_id":{"type":"string"},"audit_run_id":{"type":"string"},
+          "database_name":{"type":"string"},"schema_name":{"type":"string"},"view_name":{"type":"string"},
+          "owner_name":{"type":["string","null"]},"materialization_schema":{"type":["string","null"]},
+          "materialization_hypertable":{"type":["string","null"]},"materialized_only":{"type":"boolean"},
+          "compression_enabled":{"type":"boolean"},"finalized":{"type":["boolean","null"]},
+          "lag_interval":{"type":"string"},"definition_fingerprint":{"type":"string"},
+          "materialization_size_bytes":{"type":["integer","null"]},"collected_at":{"type":"string"}
+        }
+      },
       "HypertableDetailSnapshot": {
         "type":"object",
         "required":["id","audit_run_id","environment_id","database_name","schema_name","hypertable_name","num_dimensions","num_chunks","compression_enabled","is_distributed","total_size_bytes","data_size_bytes","index_size_bytes","collected_at","base_table_observed"],
