@@ -52,6 +52,7 @@ import {
 } from "./InventoryDetails";
 import { InventoryObjectPanel } from "./InventoryObjectPanel";
 import { TableAssessmentPanel } from "./TableAssessmentPanel";
+import { ViewAssessmentPanel } from "./ViewAssessmentPanel";
 
 type SelectedInventoryItem =
   | { kind: "tables"; item: TableSnapshot }
@@ -1273,7 +1274,23 @@ export function InventoryPage() {
                 onNavigate={navigateToRelatedTable}
               />
             ) : null}
-            {selectedItem && selectedItem.kind !== "tables" && envId ? (
+            {selectedItem?.kind === "views" && envId && selectedRun ? (
+              <ViewAssessmentPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun,
+                  targetFor(selectedItem),
+                )}
+                view={selectedItem.item}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+              />
+            ) : null}
+            {selectedItem &&
+            selectedItem.kind !== "tables" &&
+            (selectedItem.kind !== "views" || !selectedRun) &&
+            envId ? (
               <InventoryObjectPanel
                 key={inventoryTargetKey(
                   envId,

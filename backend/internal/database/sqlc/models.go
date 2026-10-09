@@ -897,17 +897,21 @@ type TriggerSnapshot struct {
 }
 
 type ViewSnapshot struct {
-	ID             pgtype.UUID
-	AuditRunID     pgtype.UUID
-	EnvironmentID  pgtype.UUID
-	DatabaseName   string
-	SchemaName     string
-	ViewName       string
-	OwnerName      pgtype.Text
-	Relkind        string
-	ViewDefinition string
-	SizeBytes      int64
-	CollectedAt    pgtype.Timestamptz
+	ID              pgtype.UUID
+	AuditRunID      pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	DatabaseName    string
+	SchemaName      string
+	ViewName        string
+	OwnerName       pgtype.Text
+	Relkind         string
+	ViewDefinition  string
+	SizeBytes       int64
+	CollectedAt     pgtype.Timestamptz
+	ColumnsJson     []byte
+	SecurityInvoker pgtype.Bool
+	SecurityBarrier pgtype.Bool
+	IsPopulated     pgtype.Bool
 }
 
 type WorkloadSnapshot struct {

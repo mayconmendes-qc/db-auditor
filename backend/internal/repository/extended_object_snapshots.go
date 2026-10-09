@@ -45,11 +45,13 @@ ON CONFLICT (audit_run_id, database_name, schema_name, constraint_name) DO NOTHI
 		_, err := tx.Exec(ctx, `
 INSERT INTO view_snapshot (
   audit_run_id, environment_id, database_name, schema_name, view_name, owner_name,
-  relkind, view_definition, size_bytes, collected_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+  relkind, view_definition, size_bytes, columns_json, security_invoker,
+  security_barrier, is_populated, collected_at
+) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13, now())
 ON CONFLICT (audit_run_id, database_name, schema_name, view_name) DO NOTHING
 `, auditRunID, environmentID, v.DatabaseName, v.SchemaName, v.ViewName, nullString(v.Owner),
-			v.Relkind, v.ViewDefinition, v.SizeBytes)
+			v.Relkind, v.ViewDefinition, v.SizeBytes, v.ColumnsJSON, v.SecurityInvoker,
+			v.SecurityBarrier, v.IsPopulated)
 		if err != nil {
 			return fmt.Errorf("insert view_snapshot %s.%s.%s: %w", v.DatabaseName, v.SchemaName, v.ViewName, err)
 		}

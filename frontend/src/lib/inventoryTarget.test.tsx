@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   InventoryDetailAvailability,
   InventoryDetailTabs,
+  nextInventoryTab,
 } from "../components/InventoryDetailTabs";
 import {
   formatLocation,
@@ -116,6 +117,13 @@ describe("inventory object links", () => {
 });
 
 describe("shared inventory tabs", () => {
+  it("supports keyboard navigation with wrapping and endpoints", () => {
+    expect(nextInventoryTab("overview", "ArrowLeft")).toBe("recommendations");
+    expect(nextInventoryTab("recommendations", "ArrowRight")).toBe("overview");
+    expect(nextInventoryTab("security", "Home")).toBe("overview");
+    expect(nextInventoryTab("overview", "End")).toBe("recommendations");
+    expect(nextInventoryTab("overview", "Tab")).toBeNull();
+  });
   it("renders the six sections with an explicit collection state", () => {
     const markup = renderToStaticMarkup(
       <InventoryDetailTabs tab="overview" onTabChange={() => {}}>
