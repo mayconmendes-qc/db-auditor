@@ -44,6 +44,7 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
+import { IndexAssessmentPanel } from "./IndexAssessmentPanel";
 import {
   FunctionDetail,
   HypertableDetail,
@@ -1287,9 +1288,23 @@ export function InventoryPage() {
                 snapshot={detailSnapshot}
               />
             ) : null}
+            {selectedItem?.kind === "indexes" && envId && selectedRun ? (
+              <IndexAssessmentPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun,
+                  targetFor(selectedItem),
+                )}
+                index={selectedItem.item}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+              />
+            ) : null}
             {selectedItem &&
             selectedItem.kind !== "tables" &&
             (selectedItem.kind !== "views" || !selectedRun) &&
+            (selectedItem.kind !== "indexes" || !selectedRun) &&
             envId ? (
               <InventoryObjectPanel
                 key={inventoryTargetKey(
