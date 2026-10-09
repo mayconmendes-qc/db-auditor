@@ -70,7 +70,8 @@ jobs:
         run: go build -o "$RUNNER_TEMP/staticcheck" honnef.co/go/tools/cmd/staticcheck
 
       - name: staticcheck
-        run: "$RUNNER_TEMP/staticcheck" ./...
+        run: |
+          "$RUNNER_TEMP/staticcheck" ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
