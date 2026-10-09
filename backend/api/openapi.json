@@ -644,6 +644,36 @@
     "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings": {
       "get": {"description":"Achados específicos da sobrecarga nesta execução, paginados.","parameters":[{"name":"signature","in":"query","required":true,"schema":{"type":"string"}}],"responses":{"200":{"description":"Página de achados"}}}
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/detail": {
+      "get": {"description":"Tabela temporal e cobertura da tabela base nesta execução.","responses":{"200":{"description":"Tabela temporal observada","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HypertableDetailSnapshot"}}}},"404":{"description":"Objeto ou execução não encontrado"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/dimensions": {
+      "get": {"description":"Dimensões da tabela temporal, paginadas.","responses":{"200":{"description":"Página de dimensões"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/chunks": {
+      "get": {"description":"Chunks da tabela temporal, paginados.","responses":{"200":{"description":"Página de chunks"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/policies": {
+      "get": {"description":"Políticas e estado observado dos jobs, paginados.","responses":{"200":{"description":"Página de políticas"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/jobs": {
+      "get": {"description":"Jobs associados à tabela temporal, com status observado, paginados.","responses":{"200":{"description":"Página de jobs"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/history": {
+      "get": {"description":"Evolução de espaço e chunks até a execução selecionada, paginada.","responses":{"200":{"description":"Página de histórico"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/indexes": {
+      "get": {"description":"Índices da tabela base observados na execução, paginados.","responses":{"200":{"description":"Página de índices"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/grants": {
+      "get": {"description":"Acessos efetivos observados da tabela base, paginados.","responses":{"200":{"description":"Página de acessos"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/rls-policies": {
+      "get": {"description":"Políticas RLS observadas da tabela base, paginadas.","responses":{"200":{"description":"Página de RLS"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/findings": {
+      "get": {"description":"Achados da tabela temporal nesta execução, paginados.","responses":{"200":{"description":"Página de achados"}}}
+    },
     "/api/v1/finding-categories/{category}": {
       "get": {
         "responses": {
@@ -915,6 +945,18 @@
   },
   "components": {
     "schemas": {
+      "HypertableDetailSnapshot": {
+        "type":"object",
+        "required":["id","audit_run_id","environment_id","database_name","schema_name","hypertable_name","num_dimensions","num_chunks","compression_enabled","is_distributed","total_size_bytes","data_size_bytes","index_size_bytes","collected_at","base_table_observed"],
+        "properties":{
+          "id":{"type":"string"},"audit_run_id":{"type":"string"},"environment_id":{"type":"string"},
+          "database_name":{"type":"string"},"schema_name":{"type":"string"},"hypertable_name":{"type":"string"},
+          "owner_name":{"type":["string","null"]},"num_dimensions":{"type":"integer"},"num_chunks":{"type":"integer"},
+          "compression_enabled":{"type":"boolean"},"is_distributed":{"type":"boolean"},
+          "total_size_bytes":{"type":"integer"},"data_size_bytes":{"type":"integer"},"index_size_bytes":{"type":"integer"},
+          "collected_at":{"type":"string"},"base_table_observed":{"type":"boolean"}
+        }
+      },
       "FunctionDetailSnapshot": {
         "type":"object",
         "required":["id","environment_id","audit_run_id","database_name","schema_name","function_name","identity_arguments","is_security_definer","collected_at"],

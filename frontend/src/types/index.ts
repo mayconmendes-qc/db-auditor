@@ -638,6 +638,57 @@ export interface HypertableSnapshot {
   collected_at: string;
 }
 
+export interface HypertableDimensionDetail {
+  dimension_number: number;
+  column_name: string;
+  column_type: string | null;
+  dimension_type: string | null;
+  time_interval: string | null;
+  integer_interval: string | null;
+  num_slices: number | null;
+}
+
+export interface HypertableChunkDetail {
+  chunk_schema: string;
+  chunk_name: string;
+  range_start: string | null;
+  range_end: string | null;
+  is_compressed: boolean;
+  total_size_bytes: number;
+  index_size_bytes: number;
+}
+
+export interface HypertablePolicyDetail {
+  job_id: number;
+  policy_type: string;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number | null;
+}
+
+export interface HypertableJobDetail {
+  job_id: number;
+  application_name: string | null;
+  proc_name: string | null;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number;
+}
+
+export interface HypertableHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  total_size_bytes: number;
+  data_size_bytes: number;
+  index_size_bytes: number;
+  num_chunks: number;
+  collected_at: string;
+}
+
 export interface DimensionSnapshot {
   id: string;
   database_name: string;
