@@ -302,12 +302,30 @@ export function ViewAssessmentPanel({
           <DetailSection title="Performance observável">
             {materialized ? (
               <>
-                <DetailGrid items={[{ label: "Espaço ocupado", value: formatBytes(view.size_bytes) }]} />
-                {detailState || <DetailGrid items={[{
-                  label: "Populada na coleta",
-                  value: detail?.is_populated === null || detail?.is_populated === undefined
-                    ? "Não coletado" : detail.is_populated ? "Sim" : "Não",
-                }]} />}
+                <DetailGrid
+                  items={[
+                    {
+                      label: "Espaço ocupado",
+                      value: formatBytes(view.size_bytes),
+                    },
+                  ]}
+                />
+                {detailState || (
+                  <DetailGrid
+                    items={[
+                      {
+                        label: "Populada na coleta",
+                        value:
+                          detail?.is_populated === null ||
+                          detail?.is_populated === undefined
+                            ? "Não coletado"
+                            : detail.is_populated
+                              ? "Sim"
+                              : "Não",
+                      },
+                    ]}
+                  />
+                )}
               </>
             ) : (
               <InventoryDetailAvailability
