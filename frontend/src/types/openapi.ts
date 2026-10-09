@@ -55,6 +55,10 @@ export type ApiPath =
   | "/api/v1/environments/{id}/reports/{job}/retry"
   | "/api/v1/environments/{id}/rules"
   | "/api/v1/environments/{id}/rules/{rule}"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/dependencies"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/detail"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/grants"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history"
@@ -95,6 +99,32 @@ export type ApiPath =
   | "/api/v1/reports/inventory"
   | "/api/v1/server-compare"
   | "/api/v1/status";
+
+export interface FunctionDetailSnapshot {
+  id: string;
+  environment_id: string;
+  audit_run_id: string;
+  database_name: string;
+  schema_name: string;
+  function_name: string;
+  identity_arguments: string;
+  owner_name?: string | null;
+  language_name?: string | null;
+  is_security_definer: boolean;
+  volatility?: string | null;
+  parallel_safety?: string | null;
+  kind?: string | null;
+  return_type?: string | null;
+  search_path_pinned?: boolean | null;
+  execute_role_count?: number | null;
+  calls?: number | null;
+  total_time_ms?: number | null;
+  self_time_ms?: number | null;
+  stats_reset?: string | null;
+  stats_observed?: boolean | null;
+  definition_fingerprint?: string;
+  collected_at: string;
+}
 
 export interface IndexDetailSnapshot {
   id: string;

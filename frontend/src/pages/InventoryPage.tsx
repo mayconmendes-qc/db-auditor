@@ -44,6 +44,7 @@ import type {
   ViewSnapshot,
   WorkloadSnapshot,
 } from "../types";
+import { FunctionAssessmentPanel } from "./FunctionAssessmentPanel";
 import { IndexAssessmentPanel } from "./IndexAssessmentPanel";
 import {
   FunctionDetail,
@@ -1301,10 +1302,24 @@ export function InventoryPage() {
                 snapshot={detailSnapshot}
               />
             ) : null}
+            {selectedItem?.kind === "functions" && envId && selectedRun ? (
+              <FunctionAssessmentPanel
+                key={inventoryTargetKey(
+                  envId,
+                  selectedRun,
+                  targetFor(selectedItem),
+                )}
+                fn={selectedItem.item}
+                environment={envId}
+                run={selectedRun}
+                snapshot={detailSnapshot}
+              />
+            ) : null}
             {selectedItem &&
             selectedItem.kind !== "tables" &&
             (selectedItem.kind !== "views" || !selectedRun) &&
             (selectedItem.kind !== "indexes" || !selectedRun) &&
+            (selectedItem.kind !== "functions" || !selectedRun) &&
             envId ? (
               <InventoryObjectPanel
                 key={inventoryTargetKey(
