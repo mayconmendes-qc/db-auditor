@@ -611,6 +611,18 @@
         }
       }
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/detail": {
+      "get": {"description":"Metadados de uma visão em uma execução. A definição SQL não é retornada; somente sua impressão digital.","responses":{"200":{"description":"Visão observada","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ViewDetailSnapshot"}}}},"404":{"description":"Objeto ou execução não encontrado"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/dependencies": {
+      "get": {"description":"Dependências coletadas da visão, paginadas e limitadas à execução.","responses":{"200":{"description":"Página de dependências"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/grants": {
+      "get": {"description":"Acessos efetivos observados, paginados e limitados à execução.","responses":{"200":{"description":"Página de acessos"}}}
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/findings": {
+      "get": {"description":"Achados observados da visão, paginados e limitados à execução.","responses":{"200":{"description":"Página de achados"}}}
+    },
     "/api/v1/finding-categories/{category}": {
       "get": {
         "responses": {
@@ -882,6 +894,19 @@
   },
   "components": {
     "schemas": {
+      "ViewDetailSnapshot": {
+        "type": "object",
+        "required": ["id", "environment_id", "audit_run_id", "database_name", "schema_name", "view_name", "relkind", "size_bytes", "collected_at"],
+        "properties": {
+          "id": {"type":"string"}, "environment_id": {"type":"string"}, "audit_run_id": {"type":"string"},
+          "database_name": {"type":"string"}, "schema_name": {"type":"string"}, "view_name": {"type":"string"},
+          "owner_name": {"type":["string","null"]}, "relkind": {"type":"string"}, "size_bytes": {"type":"integer"},
+          "columns": {"type":["array","null"],"items":{"type":"object"}},
+          "security_invoker": {"type":["boolean","null"]}, "security_barrier": {"type":["boolean","null"]},
+          "is_populated": {"type":["boolean","null"]}, "definition_fingerprint": {"type":"string"},
+          "collected_at": {"type":"string"}
+        }
+      },
       "ScopeScoreCategory": {
         "type": "object",
         "required": ["category", "weight", "score", "penalty", "positive", "findings"],

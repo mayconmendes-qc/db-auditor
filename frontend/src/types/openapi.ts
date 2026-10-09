@@ -62,6 +62,10 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/graph"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/rls-policies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/triggers"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/dependencies"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/detail"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/findings"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/grants"
   | "/api/v1/environments/{id}/runs/{run}/score"
   | "/api/v1/environments/{id}/runs/{run}/score/compare"
   | "/api/v1/environments/{id}/runs/{run}/scores"
@@ -114,4 +118,22 @@ export interface ScopeScoreCategory {
   penalty: number;
   positive: number;
   findings: number;
+}
+
+export interface ViewDetailSnapshot {
+  id: string;
+  environment_id: string;
+  audit_run_id: string;
+  database_name: string;
+  schema_name: string;
+  view_name: string;
+  owner_name?: string | null;
+  relkind: string;
+  size_bytes: number;
+  columns?: Record<string, unknown>[] | null;
+  security_invoker?: boolean | null;
+  security_barrier?: boolean | null;
+  is_populated?: boolean | null;
+  definition_fingerprint?: string;
+  collected_at: string;
 }
