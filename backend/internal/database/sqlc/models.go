@@ -309,6 +309,9 @@ type ContinuousAggregateSnapshot struct {
 	CollectedAt               pgtype.Timestamptz
 	ViewDefinition            string
 	LagInterval               string
+	SourceHypertableSchema    pgtype.Text
+	SourceHypertableName      pgtype.Text
+	BucketInterval            pgtype.Text
 }
 
 type DatabaseSnapshot struct {

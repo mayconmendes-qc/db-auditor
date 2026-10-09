@@ -972,6 +972,8 @@
           "owner_name":{"type":["string","null"]},"materialization_schema":{"type":["string","null"]},
           "materialization_hypertable":{"type":["string","null"]},"materialized_only":{"type":"boolean"},
           "compression_enabled":{"type":"boolean"},"finalized":{"type":["boolean","null"]},
+          "source_hypertable_schema":{"type":["string","null"]},"source_hypertable_name":{"type":["string","null"]},
+          "bucket_interval":{"type":["string","null"]},
           "lag_interval":{"type":"string"},"definition_fingerprint":{"type":"string"},
           "materialization_size_bytes":{"type":["integer","null"]},"collected_at":{"type":"string"}
         }

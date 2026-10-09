@@ -19,6 +19,9 @@ type CAGGDetail struct {
 	MaterializedOnly          bool      `json:"materialized_only"`
 	CompressionEnabled        bool      `json:"compression_enabled"`
 	Finalized                 *bool     `json:"finalized"`
+	SourceHypertableSchema    *string   `json:"source_hypertable_schema"`
+	SourceHypertableName      *string   `json:"source_hypertable_name"`
+	BucketInterval            *string   `json:"bucket_interval"`
 	LagInterval               string    `json:"lag_interval"`
 	DefinitionFingerprint     string    `json:"definition_fingerprint"`
 	MaterializationSizeBytes  *int64    `json:"materialization_size_bytes"`
@@ -31,7 +34,7 @@ func (s *Store) GetCAGGDetail(ctx context.Context, env, run, database, schema, n
 	err := s.pool.QueryRow(ctx, `SELECT c.id::text,c.environment_id::text,c.audit_run_id::text,
   c.database_name,c.schema_name,c.view_name,c.owner_name,c.materialization_schema,
   c.materialization_hypertable,c.materialized_only,c.compression_enabled,c.finalized,
-  c.lag_interval,c.view_definition,
+  c.lag_interval,c.view_definition,c.source_hypertable_schema,c.source_hypertable_name,c.bucket_interval,
   (SELECT h.total_size_bytes FROM hypertable_snapshot h WHERE h.environment_id=c.environment_id
     AND h.audit_run_id=c.audit_run_id AND h.database_name=c.database_name
     AND h.schema_name=c.materialization_schema AND h.hypertable_name=c.materialization_hypertable),
@@ -43,7 +46,8 @@ WHERE c.environment_id=$1::uuid AND c.audit_run_id=$2::uuid AND c.database_name=
 		&item.ID, &item.EnvironmentID, &item.AuditRunID, &item.DatabaseName,
 		&item.SchemaName, &item.ViewName, &item.OwnerName, &item.MaterializationSchema,
 		&item.MaterializationHypertable, &item.MaterializedOnly, &item.CompressionEnabled,
-		&item.Finalized, &item.LagInterval, &definition, &item.MaterializationSizeBytes,
+		&item.Finalized, &item.LagInterval, &definition, &item.SourceHypertableSchema,
+		&item.SourceHypertableName, &item.BucketInterval, &item.MaterializationSizeBytes,
 		&item.CollectedAt)
 	if err != nil {
 		return nil, err

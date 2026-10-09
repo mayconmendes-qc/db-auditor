@@ -30,8 +30,8 @@ func TestCAGGDetailScopePolicyHistoryAndFindingsIntegration(t *testing.T) {
 		}
 	}
 	for _, item := range []struct{ run, name string }{{run, "daily"}, {run, "other"}, {otherRun, "daily"}} {
-		if _, err := pool.Exec(ctx, `INSERT INTO continuous_aggregate_snapshot(environment_id,audit_run_id,database_name,schema_name,view_name,materialization_schema,materialization_hypertable,view_definition,lag_interval)
-VALUES($1::uuid,$2::uuid,'db','public',$3,'_timescaledb_internal',$3 || '_mat','SELECT secret FROM raw','1 hour')`, env, item.run, item.name); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO continuous_aggregate_snapshot(environment_id,audit_run_id,database_name,schema_name,view_name,materialization_schema,materialization_hypertable,view_definition,lag_interval,source_hypertable_schema,source_hypertable_name,bucket_interval)
+VALUES($1::uuid,$2::uuid,'db','public',$3,'_timescaledb_internal',$3 || '_mat','SELECT secret FROM raw','1 hour','public','raw_metrics','1 hour')`, env, item.run, item.name); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -53,7 +53,7 @@ VALUES($1::uuid,$2::uuid,'db',$3,'refresh','_timescaledb_internal',$4)`, env, ru
 		}
 	}
 	item, err := s.GetCAGGDetail(ctx, env, run, "db", "public", "daily")
-	if err != nil || item == nil || item.MaterializationSizeBytes == nil || *item.MaterializationSizeBytes != 2048 || item.DefinitionFingerprint == "" {
+	if err != nil || item == nil || item.MaterializationSizeBytes == nil || *item.MaterializationSizeBytes != 2048 || item.DefinitionFingerprint == "" || item.SourceHypertableName == nil || *item.SourceHypertableName != "raw_metrics" || item.BucketInterval == nil || *item.BucketInterval != "1 hour" {
 		t.Fatalf("detail: %#v %v", item, err)
 	}
 	if _, err := s.GetCAGGDetail(ctx, env, run, "db", "public", "missing"); err == nil {

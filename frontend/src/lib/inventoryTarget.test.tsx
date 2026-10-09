@@ -15,6 +15,8 @@ import {
   inventoryPermalink,
   inventoryRunForSelection,
   inventoryTargetKey,
+  matchesInventorySelection,
+  timescaleUnavailableForRun,
 } from "./inventoryTarget";
 
 function location(
@@ -72,6 +74,27 @@ describe("inventory object links", () => {
     );
   });
 
+  it("hides an old sheet during rapid changes of object, run or environment", () => {
+    const old = cases[0];
+    const current = cases[1];
+    const key = inventoryTargetKey("env-1", "run-1", old);
+    expect(matchesInventorySelection("env-1", "run-1", old, old, key)).toBe(
+      true,
+    );
+    expect(matchesInventorySelection("env-1", "run-1", current, old, key)).toBe(
+      false,
+    );
+    expect(matchesInventorySelection("env-1", "run-2", old, old, key)).toBe(
+      false,
+    );
+    expect(matchesInventorySelection("env-2", "run-1", old, old, key)).toBe(
+      false,
+    );
+    expect(matchesInventorySelection("env-1", "run-1", null, old, key)).toBe(
+      false,
+    );
+  });
+
   it("keeps a requested historical run when opening another object", () => {
     expect(inventoryRunForSelection("historical", "latest")).toBe("historical");
     expect(inventoryRunForSelection(undefined, "latest")).toBe("latest");
@@ -113,6 +136,26 @@ describe("inventory object links", () => {
       parseLocationHash(url.split("#")[1] ? `#${url.split("#")[1]}` : "")
         .inventory,
     ).toEqual(target);
+  });
+
+  it("marks Timescale categories as not applicable only for the observed run", () => {
+    const capability = {
+      environment_id: "env-1",
+      engine: "postgresql",
+      audit_run_id: "run-1",
+      items: [{ name: "timescale", applicable: false }],
+    };
+    expect(timescaleUnavailableForRun("hypertables", "run-1", capability)).toBe(
+      true,
+    );
+    expect(timescaleUnavailableForRun("caggs", "run-1", capability)).toBe(true);
+    expect(timescaleUnavailableForRun("caggs", "historical", capability)).toBe(
+      false,
+    );
+    expect(timescaleUnavailableForRun("views", "run-1", capability)).toBe(
+      false,
+    );
+    expect(timescaleUnavailableForRun("caggs", "run-1", null)).toBe(false);
   });
 });
 

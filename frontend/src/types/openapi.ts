@@ -129,6 +129,9 @@ export interface CAGGDetailSnapshot {
   materialized_only: boolean;
   compression_enabled: boolean;
   finalized?: boolean | null;
+  source_hypertable_schema?: string | null;
+  source_hypertable_name?: string | null;
+  bucket_interval?: string | null;
   lag_interval: string;
   definition_fingerprint: string;
   materialization_size_bytes?: number | null;
