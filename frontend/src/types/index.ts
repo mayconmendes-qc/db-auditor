@@ -565,12 +565,24 @@ export interface IndexSnapshot {
   schema_name: string;
   table_name: string;
   index_name: string;
-  index_definition: string;
   access_method: string | null;
   is_unique: boolean;
   is_primary: boolean;
   size_bytes: number;
   idx_scan: number;
+  collected_at: string;
+}
+
+export interface IndexHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  definition_fingerprint: string;
+  size_bytes: number;
+  idx_scan: number;
+  idx_tup_read: number;
+  idx_tup_fetch: number;
+  stats_reset: string | null;
+  usage_observed: boolean | null;
   collected_at: string;
 }
 
@@ -626,6 +638,57 @@ export interface HypertableSnapshot {
   collected_at: string;
 }
 
+export interface HypertableDimensionDetail {
+  dimension_number: number;
+  column_name: string;
+  column_type: string | null;
+  dimension_type: string | null;
+  time_interval: string | null;
+  integer_interval: string | null;
+  num_slices: number | null;
+}
+
+export interface HypertableChunkDetail {
+  chunk_schema: string;
+  chunk_name: string;
+  range_start: string | null;
+  range_end: string | null;
+  is_compressed: boolean;
+  total_size_bytes: number;
+  index_size_bytes: number;
+}
+
+export interface HypertablePolicyDetail {
+  job_id: number;
+  policy_type: string;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number | null;
+}
+
+export interface HypertableJobDetail {
+  job_id: number;
+  application_name: string | null;
+  proc_name: string | null;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number;
+}
+
+export interface HypertableHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  total_size_bytes: number;
+  data_size_bytes: number;
+  index_size_bytes: number;
+  num_chunks: number;
+  collected_at: string;
+}
+
 export interface DimensionSnapshot {
   id: string;
   database_name: string;
@@ -663,6 +726,23 @@ export interface CAGGSnapshot {
   materialization_hypertable: string | null;
   materialized_only: boolean;
   compression_enabled: boolean;
+  collected_at: string;
+}
+
+export interface CAGGRefreshPolicy {
+  job_id: number;
+  scheduled: boolean;
+  schedule_interval: string | null;
+  next_start: string | null;
+  last_run_status: string | null;
+  total_failures: number | null;
+}
+
+export interface CAGGHistoryPoint {
+  audit_run_id: string;
+  run_status: string;
+  materialization_size_bytes: number | null;
+  lag_interval: string;
   collected_at: string;
 }
 
