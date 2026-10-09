@@ -55,6 +55,9 @@ export type ApiPath =
   | "/api/v1/environments/{id}/reports/{job}/retry"
   | "/api/v1/environments/{id}/rules"
   | "/api/v1/environments/{id}/rules/{rule}"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/assessment"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/dependencies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/findings"
@@ -92,6 +95,34 @@ export type ApiPath =
   | "/api/v1/reports/inventory"
   | "/api/v1/server-compare"
   | "/api/v1/status";
+
+export interface IndexDetailSnapshot {
+  id: string;
+  environment_id: string;
+  audit_run_id: string;
+  database_name: string;
+  schema_name: string;
+  table_name: string;
+  table_owner_name?: string | null;
+  index_name: string;
+  access_method?: string | null;
+  is_unique: boolean;
+  is_primary: boolean;
+  is_valid: boolean;
+  is_ready: boolean;
+  key_columns?: string[] | null;
+  include_columns?: string[] | null;
+  is_partial: boolean;
+  definition_fingerprint?: string;
+  predicate_fingerprint?: string;
+  size_bytes: number;
+  idx_scan: number;
+  idx_tup_read: number;
+  idx_tup_fetch: number;
+  stats_reset?: string | null;
+  usage_observed?: boolean | null;
+  collected_at: string;
+}
 
 export interface ScopeScore {
   version: string;
