@@ -55,6 +55,12 @@ export type ApiPath =
   | "/api/v1/environments/{id}/reports/{job}/retry"
   | "/api/v1/environments/{id}/rules"
   | "/api/v1/environments/{id}/rules/{rule}"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/dependencies"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/detail"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/findings"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/grants"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/history"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/refresh-policies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/dependencies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/detail"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings"
@@ -109,6 +115,25 @@ export type ApiPath =
   | "/api/v1/reports/inventory"
   | "/api/v1/server-compare"
   | "/api/v1/status";
+
+export interface CAGGDetailSnapshot {
+  id: string;
+  environment_id: string;
+  audit_run_id: string;
+  database_name: string;
+  schema_name: string;
+  view_name: string;
+  owner_name?: string | null;
+  materialization_schema?: string | null;
+  materialization_hypertable?: string | null;
+  materialized_only: boolean;
+  compression_enabled: boolean;
+  finalized?: boolean | null;
+  lag_interval: string;
+  definition_fingerprint: string;
+  materialization_size_bytes?: number | null;
+  collected_at: string;
+}
 
 export interface FunctionDetailSnapshot {
   id: string;

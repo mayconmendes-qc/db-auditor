@@ -238,8 +238,9 @@ export function HypertableAssessmentPanel({
                       <li key={`${item.chunk_schema}.${item.chunk_name}`}>
                         {item.chunk_schema}.{item.chunk_name}:{" "}
                         {formatBytes(item.total_size_bytes)};{" "}
-                        {item.is_compressed ? "comprimido" : "não comprimido"}{"; período "}{date(item.range_start)} a{" "}
-                        {date(item.range_end)}
+                        {item.is_compressed ? "comprimido" : "não comprimido"}
+                        {"; período "}
+                        {date(item.range_start)} a {date(item.range_end)}
                       </li>
                     ))}
                   </ul>
@@ -447,7 +448,9 @@ export function HypertableAssessmentPanel({
                     <ul className="text-sm text-slate-300">
                       {rls.data.items.map((item) => (
                         <li key={item.name}>
-                          {item.name}: {item.command ?? "comando não coletado"}{"; papéis "}{item.roles.join(", ")}
+                          {item.name}: {item.command ?? "comando não coletado"}
+                          {"; papéis "}
+                          {item.roles.join(", ")}
                         </li>
                       ))}
                     </ul>

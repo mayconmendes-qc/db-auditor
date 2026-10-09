@@ -85,6 +85,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerIndexDetailRoutes(mux, store)
 	registerFunctionDetailRoutes(mux, store)
 	registerHypertableDetailRoutes(mux, store)
+	registerCAGGDetailRoutes(mux, store)
 	registerAssessmentRoutes(mux, store)
 	registerBaselineRoutes(mux, store)
 	registerMonitoringRoutes(mux, store)
