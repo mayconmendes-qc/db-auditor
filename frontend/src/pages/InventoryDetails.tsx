@@ -317,10 +317,11 @@ export function IndexDetail({ i }: { i: IndexSnapshot }) {
           ]}
         />
       </DetailSection>
-      <DetailSection title="Definição">
-        <pre className="overflow-x-auto rounded-md border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-300">
-          {i.index_definition || "—"}
-        </pre>
+      <DetailSection title="Definição protegida">
+        <p className="text-sm text-slate-300">
+          A definição SQL pode conter dados sensíveis e não é exibida nesta
+          tela.
+        </p>
       </DetailSection>
     </>
   );
