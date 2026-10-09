@@ -185,11 +185,40 @@ export function CAGGAssessmentPanel({
                   sensíveis. Impressão digital:{" "}
                   {detail?.definition_fingerprint || "Não coletada"}.
                 </p>
+                <DetailGrid
+                  items={[
+                    {
+                      label: "Esquema da origem",
+                      value: detail?.source_hypertable_schema ?? "Não coletado",
+                    },
+                    {
+                      label: "Tabela temporal de origem",
+                      value: detail?.source_hypertable_name ?? "Não coletada",
+                    },
+                    {
+                      label: "Intervalo do bucket",
+                      value: detail?.bucket_interval ?? "Não coletado",
+                    },
+                  ]}
+                />
+                {detail?.source_hypertable_schema &&
+                  detail.source_hypertable_name && (
+                    <a
+                      className="text-cyan-300 underline"
+                      href={inventoryPermalink(environment, run, {
+                        kind: "hypertables",
+                        database,
+                        schema: detail.source_hypertable_schema,
+                        name: detail.source_hypertable_name,
+                      })}
+                    >
+                      Abrir a tabela temporal de origem nesta execução
+                    </a>
+                  )}
                 <p className="text-sm text-slate-300">
-                  A coluna de agrupamento temporal (bucket) e a hypertable de
-                  origem não são identificadas de forma segura nesta coleta.
-                  Consulte a definição no banco com acesso autorizado antes de
-                  alterar o agregado.
+                  O intervalo do bucket só aparece quando o catálogo o fornece;
+                  a coluna temporal usada no SQL deve ser confirmada no banco
+                  com acesso autorizado.
                 </p>
               </DetailSection>
               <DetailSection title="Materialização">
