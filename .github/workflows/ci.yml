@@ -66,10 +66,11 @@ jobs:
           go vet ./...
 
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+        working-directory: backend/tools/staticcheck
+        run: go build -o "$RUNNER_TEMP/staticcheck" honnef.co/go/tools/cmd/staticcheck
 
       - name: staticcheck
-        run: staticcheck ./...
+        run: "$RUNNER_TEMP/staticcheck" ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
