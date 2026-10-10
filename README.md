@@ -1,101 +1,200 @@
 # DB Auditor
 
-**Comece pelo [guia do usuário](docs/guia-do-usuario.md).** Operação, backup e retenção ficam no [guia operacional](docs/ops.md). Estes dois são a documentação canônica; os demais arquivos em `docs/` são notas de apoio.
+O DB Auditor olha para um banco de dados e conta, em linguagem clara, o que encontrou: o que existe, o que parece em risco e o que mudou desde a última vez.
 
-O [registro de verificação do backlog](docs/verificacao-do-backlog.md) reúne os testes executados e os aceites que dependem da infraestrutura e de usuários em homologação.
+Ele foi feito para quem cuida de bancos PostgreSQL, TimescaleDB ou do catálogo do MongoDB e precisa de um panorama confiável — sem abrir dezenas de consultas à mão e sem medo de alterar alguma coisa por engano.
 
-Serviço **somente leitura** de inventário, comparação e diagnóstico de ambientes PostgreSQL/TimescaleDB e catálogo de metadados MongoDB.
+## Qual problema ele resolve
 
-**MVP 0.12** — sprints 0–12 no backlog concluídas no repositório (fundação → inventário → findings → performance → ops → dashboard → release).
+Bancos crescem, ganham tabelas, índices, permissões e rotinas. Com o tempo fica difícil responder perguntas simples:
 
-## Pré-requisito no host
+- O que existe neste ambiente, e quanto espaço isso ocupa?
+- Há sinais de risco, como permissão ampla, índice sem uso ou rotina privilegiada?
+- Isso piorou ou melhorou em relação à coleta anterior?
+- Dá para mostrar um resumo para quem não lê SQL?
 
-Apenas **Podman** (ou Docker) com **Compose**. Não é necessário instalar Go, Bun, Node, sqlc ou curl na máquina local — o `Makefile` executa ferramentas em containers.
+O DB Auditor faz uma **coleta somente leitura**, guarda o retrato e mostra o resultado em telas: painel, inventário, achados, comparação entre execuções e relatório em PDF.
+
+Um achado é um **sinal para investigar**, não uma ordem para mudar o banco. A pessoa responsável confirma antes de agir. O auditor não apaga dados, não revoga acessos e não executa manutenção no banco analisado.
+
+## O que você consegue fazer
+
+- Entrar com uma conta e escolher o ambiente.
+- Rodar uma auditoria e ver se a coleta foi completa, parcial ou falhou.
+- Percorrer tabelas, índices, visões, funções e, no TimescaleDB, tabelas temporais e agregados.
+- No MongoDB, ver coleções e índices. O auditor não lê os documentos.
+- Ler achados com o que foi observado, a evidência e um próximo passo sugerido.
+- Comparar duas execuções, acompanhar regressões e baixar um PDF.
+- Opcionalmente, pedir um código do aplicativo autenticador (TOTP) para contas de operador.
+
+Os endereços e senhas dos bancos analisados ficam na configuração do servidor. Eles não são digitados na tela e não aparecem nos relatórios.
+
+Quem vai usar o dia a dia pode seguir o [guia do usuário](docs/guia-do-usuario.md). Quem instala, faz backup ou coloca no ar segue o [guia de operação](docs/ops.md).
+
+## O que precisa estar instalado
+
+No computador onde o sistema vai rodar, basta **Podman** ou **Docker**, com **Compose**. Não é preciso instalar Go, Node ou banco na máquina: o projeto sobe as peças dentro de containers.
+
+No Fedora ou RHEL, por exemplo:
 
 ```bash
-# exemplo Fedora / RHEL
 sudo dnf install podman podman-compose
 ```
 
-## Estrutura canônica
+Se usar Docker, os mesmos comandos `make` funcionam. Antes, avise o projeto:
+
+```bash
+make up COMPOSE="docker compose"
+```
+
+Você pode gravar essa escolha no ambiente, para não repetir em todo comando.
+
+## Como colocar para funcionar
+
+1. Copie o modelo de configuração:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Abra o arquivo `.env` e troque pelo menos estes valores:
+
+   | O que é | Variável | O que fazer |
+   | --- | --- | --- |
+   | Senha do banco interno do auditor | `POSTGRES_PASSWORD` | Use uma senha sua. O exemplo `change-me-locally` não deve ir para um servidor exposto. |
+   | Usuário do primeiro acesso | `AUDITOR_BOOTSTRAP_USER` | O exemplo é `admin`. |
+   | Senha do primeiro acesso | `AUDITOR_BOOTSTRAP_PASSWORD` | Precisa ter **no mínimo 16 caracteres**. O exemplo local é `db-auditor-local-1`. Troque antes de expor o serviço. |
+
+3. Suba o sistema:
+
+   ```bash
+   make up
+   ```
+
+4. Abra no navegador: <http://localhost:5173>
+
+   Entre com o usuário e a senha do passo 2.
+
+5. Se quiser só conferir se a API respondeu:
+
+   ```bash
+   make smoke
+   ```
+
+Para parar: `make down`. Para ver o que está acontecendo: `make logs`.
+
+### Primeiro acesso, em poucas regras
+
+- A conta de operador só é criada se ainda não existir nenhuma conta.
+- Mudar o `.env` **depois** não troca uma senha que já foi gravada.
+- A sessão dura até 8 horas. Recarregar a página não pede login de novo enquanto ela valer.
+- Se todas as contas de operador se perderem, não apague os usuários. Siga o procedimento de recuperação em [operações da segunda etapa](docs/second-stage-operations.md).
+
+### Ligar um banco para ser auditado
+
+No mesmo `.env`, preencha um “espaço” de ambiente. O primeiro espaço de demonstração já tem um identificador fixo:
+
+```bash
+AUDITOR_TARGET_1_ENVIRONMENT_ID=00000000-0000-0000-0000-000000000001
+AUDITOR_TARGET_1_HOST=endereco-do-banco
+AUDITOR_TARGET_1_PORT=5432
+AUDITOR_TARGET_1_DATABASE=nome_do_banco
+AUDITOR_TARGET_1_USER=usuario_somente_leitura
+AUDITOR_TARGET_1_PASSWORD=senha-desse-usuario
+AUDITOR_TARGET_1_SSLMODE=verify-full
+```
+
+Também informe o endereço na lista de hosts permitidos. Sem isso, o auditor recusa a conexão:
+
+```bash
+AUDITOR_TARGET_ALLOWED_HOSTS=endereco-do-banco
+```
+
+Use uma conta **somente leitura**. O padrão de TLS é `verify-full` (confere o certificado). Conexão sem essa verificação só é aceita se o host estiver, de propósito, em `AUDITOR_TARGET_INSECURE_HOSTS`. Deixe essa lista vazia, a menos que a política da rede exija o contrário.
+
+Há um segundo espaço de demonstração (`AUDITOR_TARGET_2_...`) e o mesmo desenho segue até o espaço 20. O identificador precisa ser o de um ambiente que já existe. Os dois de demonstração são criados automaticamente só quando o volume interno ainda está vazio.
+
+Depois de salvar o `.env`:
+
+```bash
+make down && make up
+```
+
+Não rode `make reset-volume` numa instalação que já tem coletas. Esse comando apaga o banco interno: snapshots, achados e relatórios.
+
+Para um servidor de verdade (domínio, HTTPS, backup), use o [guia de operação](docs/ops.md) e o exemplo em `deploy/env.prod.example`.
+
+### Endereços neste computador
+
+| O quê | Onde abrir |
+| --- | --- |
+| Telas | <http://localhost:5173> |
+| API | <http://localhost:8080> |
+| Saúde da API | <http://localhost:8080/api/v1/status> |
+
+A tela fala com a API pelo mesmo endereço do navegador. Isso é o que mantém o login no cookie. Não aponte o navegador direto para outra origem sem ajustar `AUDITOR_CORS_ORIGINS`.
+
+As métricas internas não ficam publicadas na sua máquina. Elas só existem na rede dos containers.
+
+## Pastas do projeto
 
 ```text
 .
-├── backend/          # API Go + sqlc + migrations + Containerfile
-├── frontend/         # React + TS + Tailwind + Bun
-├── deploy/           # compose.prod, Caddy, Grafana stub
-├── docs/             # ops, mvp-release, hardening
-├── compose.yaml
-├── Makefile
-└── README.md
+├── backend/       o programa que coleta, analisa e guarda os resultados
+├── frontend/      as telas do navegador
+├── deploy/        como publicar em um servidor, com proxy e scripts de backup
+├── docs/          guias para usar e operar
+├── compose.yaml   sobe banco interno, API e telas juntos
+├── Makefile       atalhos: subir, parar, testar
+├── .env.example   modelo de configuração (copie para .env)
+└── README.md      este texto
 ```
 
-## Ambiente local
+Dentro de `backend/`, o que mais importa no dia a dia:
 
-```bash
-cp .env.example .env   # defina POSTGRES_PASSWORD
-make up
-make smoke
-```
+- `cmd/` — ponto de entrada do programa
+- `migrations/` — evolução do banco interno, aplicada pela própria API
+- `sql/` — consultas versionadas
 
-| Serviço | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| API | http://localhost:8080 |
-| Metrics | `api:9090` inside the Compose network only. The port is not published on the host. |
-| Status | http://localhost:8080/api/v1/status |
-| Dashboard KPIs | http://localhost:8080/api/v1/analytics/kpis |
+Dentro de `frontend/`, o código das telas fica em `src/`.
 
-### Primeiro acesso
+`docs/guia-do-usuario.md` e `docs/ops.md` são os dois textos principais. Os outros arquivos em `docs/` são notas de apoio.
 
-Usuário e senha vêm do `.env`. O exemplo local é:
+## Tecnologias
 
-| Campo | Valor em `.env.example` |
+| Peça | Para quê |
 | --- | --- |
-| Usuário | `admin` (`AUDITOR_BOOTSTRAP_USER`) |
-| Senha | `db-auditor-local-1` (`AUDITOR_BOOTSTRAP_PASSWORD`, 18 caracteres) |
+| Go | API e regras de análise |
+| PostgreSQL | banco interno, onde ficam contas, coletas e achados |
+| MongoDB (driver) | leitura do catálogo de coleções e índices, quando o ambiente é MongoDB |
+| React, TypeScript e Vite | telas |
+| Tailwind CSS | visual das telas |
+| Bun | instalar e verificar o frontend |
+| Podman ou Docker Compose | subir tudo sem instalar as linguagens na máquina |
+| Caddy | entregar o site com HTTPS na instalação de produção |
 
-Copie essas duas variáveis para o seu `.env` se ele foi criado antes. A senha precisa ter pelo menos 16 caracteres. Troque o valor antes de expor o serviço.
+## Como contribuir
 
-```bash
-make up    # recompila a API
-```
+Toda ajuda é bem-vinda: texto mais claro, correção, teste ou função nova.
 
-Abra http://localhost:5173 e entre com esse par. A conta `operator` só é criada se `auditor_user` estiver vazia. Mudar o `.env` depois **não** troca uma senha já gravada. Se já houver um operador autenticado, ele pode criar outra conta pela API administrativa. Se todos os acessos de operador forem perdidos, preserve o banco interno e use o procedimento de recuperação controlada descrito em [operações da segunda etapa](docs/second-stage-operations.md); não apague `auditor_user`, pois isso remove contas existentes. A sessão dura 8 horas e usa cookie HttpOnly; um reload verifica a sessão com a API e não exige novo login enquanto ela estiver válida. O frontend deve acessar `/api` na mesma origem por proxy.
+1. Crie um ramo a partir de `main` com um nome curto, por exemplo `docs/ajuste-do-guia`.
+2. Faça a mudança pequena e fácil de revisar.
+3. **Nunca** envie o arquivo `.env`, senha, chave ou connection string. O modelo certo é o `.env.example`, com valores falsos.
+4. Se a mudança mexe em comportamento, rode as verificações:
 
-O schema está em `backend/migrations/01_baseline.sql` mais o seed local `02_seed_demo.sql`. Volumes antigos não reaplicam esse diretório; a API aplica migrações incrementais e cria as tabelas de login se faltarem. Para diagnóstico opcional de dados, capacidades por mecanismo e medições de ações, veja [docs/third-stage-operations.md](docs/third-stage-operations.md).
+   ```bash
+   make backend-fmt backend-check backend-test
+   make frontend-check frontend-typecheck frontend-test
+   ```
 
-Produção (VPS): ver `docs/ops.md` e `deploy/compose.prod.yaml`. Configure `AUDITOR_BOOTSTRAP_USER` e `AUDITOR_BOOTSTRAP_PASSWORD` no ambiente do Compose; o arquivo de produção os repassa ao container da API.
+5. Abra um Pull Request neste repositório. No texto, diga o que mudou e por quê. Se existir uma issue, cite o número.
 
-Release MVP: `docs/mvp-release.md`.
+Não é obrigatório saber toda a arquitetura para corrigir documentação ou um texto da tela. Se a dúvida for de produto, comece pelo [guia do usuário](docs/guia-do-usuario.md).
 
-### Relatórios PDF (Sprints 18–19)
+## Cuidados que valem para todo mundo
 
-As funcionalidades da segunda etapa (planos de ação, gestão de contas, redação de PDFs, acompanhamento e regressões) estão descritas em [docs/second-stage-operations.md](docs/second-stage-operations.md). As recomendações são orientações para revisão humana: o auditor não executa alterações no banco analisado.
-
-Na Sprint 20, relatórios e aprovação de baseline usam a sessão da conta local. O primeiro acesso está na seção acima. Use HTTPS em produção.
-
-Os pedidos são assíncronos e idempotentes por execução, versão de regras, tipo e filtros. Os PDFs ficam no snapshot store por 30 dias; o registro do pedido permanece como trilha de proveniência até que uma política de arquivamento aprovada seja aplicada. Uma execução parcial aparece com cobertura limitada e não é usada para inferir resolução de findings. A geração é limitada a 500 bancos, 5.000 tabelas, 2.000 findings e 16 MiB por PDF, com truncamento declarado no documento.
-
-Em uma instalação com volume PostgreSQL existente, não rode `make reset-volume`: ele apaga snapshots, findings e relatórios. A API cria as tabelas de login se o volume for anterior a elas. Veja [o guia operacional da Sprint 20](docs/sprint20-operations.md) e `backend/migrations/README.md`.
-
-Relatórios só podem ser solicitados para execuções de auditoria concluídas cuja análise de regras também tenha terminado com sucesso. O trabalho registra o hash do catálogo de regras da análise (ou a versão do analisador para execuções anteriores à migração).
-
-## Qualidade
-
-```bash
-make backend-fmt backend-check backend-staticcheck backend-lint backend-test
-make frontend-check frontend-typecheck frontend-test
-```
-
-## Segurança
-
-- Ambientes auditados: somente leitura
-- Secrets fora do repositório
-- Connection strings sanitizadas em logs
-- Allowlist/denylist de databases e schemas
-- Analyzers **nunca** recomendam DROP/REVOKE/VACUUM automático
-
-## Documentação de produto
-
-Notion: *Anotações / DB Auditor* (EF, Backlog, Fluxo de Desenvolvimento).
+- O banco analisado é só de leitura. Recomendações não são executadas sozinhas.
+- Segredos ficam fora do Git.
+- Senhas e endereços de conexão não devem aparecer em logs.
+- Listas de bancos e schemas podem limitar o que entra na coleta. O que está na denylist nunca entra.
+- Um PDF pedido fica guardado por 30 dias. O registro de que ele foi pedido permanece.
