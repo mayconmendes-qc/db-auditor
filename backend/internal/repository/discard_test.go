@@ -27,10 +27,14 @@ func TestDecideDiscard(t *testing.T) {
 }
 
 func TestEvidenceSignatureStable(t *testing.T) {
-	if EvidenceSignature([]byte(`{"a":1}`)) != EvidenceSignature([]byte(`{"a":1}`)) {
+	payload := []byte(`{"a":1}`)
+	changed := []byte(`{"a":2}`)
+	first := EvidenceSignature(payload)
+	again := EvidenceSignature(payload)
+	if first != again {
 		t.Fatal("signature drifted")
 	}
-	if EvidenceSignature([]byte(`{"a":1}`)) == EvidenceSignature([]byte(`{"a":2}`)) {
+	if first == EvidenceSignature(changed) {
 		t.Fatal("different evidence collided")
 	}
 }

@@ -8,8 +8,10 @@ else
   echo "golangci-lint is not installed; skipping local probe"
   exit 0
 fi
-if "$lint" run --disable-all --enable=gosec "$root" >/tmp/gosec-probe.out 2>&1; then
+# Own config: the backend config excludes this fixture so the main lint stays green.
+if (cd "$root" && "$lint" run --config .golangci.yml .) >/tmp/gosec-probe.out 2>&1; then
   echo "gosec accepted a known weak hash"
+  cat /tmp/gosec-probe.out
   exit 1
 fi
 echo "gosec rejected the fixture"
