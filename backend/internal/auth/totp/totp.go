@@ -4,7 +4,7 @@ package totp
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // G505: RFC 6238 TOTP uses HMAC-SHA1.
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
@@ -43,7 +43,7 @@ func Code(secret string, at time.Time) (string, error) {
 	if err != nil || len(key) == 0 {
 		return "", fmt.Errorf("invalid TOTP secret")
 	}
-	counter := uint64(at.UTC().Unix() / int64(step.Seconds()))
+	counter := uint64(at.UTC().Unix() / int64(step.Seconds())) //nolint:gosec // G115: counter is a non-negative Unix time step.
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], counter)
 	mac := hmac.New(sha1.New, key) //nolint:gosec // G401: RFC 6238 TOTP uses HMAC-SHA1.

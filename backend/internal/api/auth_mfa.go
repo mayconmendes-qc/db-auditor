@@ -164,7 +164,7 @@ func writeSession(w http.ResponseWriter, r *http.Request, store AuthStore, user 
 		return
 	}
 	if r.URL.Query().Get("mode") == "cookie" {
-		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800,
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800, //nolint:gosec // G124: Secure follows the request, same as the existing session cookie.
 			HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 		writeJSON(w, http.StatusOK, map[string]any{"user": user, "csrf_token": csrfToken(encoded), "expires_in": 28800})
 		return
