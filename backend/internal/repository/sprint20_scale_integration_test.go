@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,23 +71,45 @@ func TestSprint20LargeInventoryPagingIntegration(t *testing.T) {
 		latencies[i] = time.Since(started)
 	}
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
-	t.Logf("10k synthetic inventory, sorted 50-row pages: p95=%s", latencies[18])
+	p95 := latencies[18]
+	t.Logf("10k synthetic inventory, sorted 50-row pages: p95=%s", p95)
+	// CI budget for this fixed 10k-row mass. It is not a production SLO.
+	if p95 > 750*time.Millisecond {
+		t.Errorf("inventory page p95 %s exceeds the 750ms CI budget", p95)
+	}
 	if _, err := pool.Exec(ctx, `ANALYZE table_snapshot`); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := pool.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid ORDER BY database_name,schema_name,table_name,id LIMIT 50 OFFSET 9950`, env, run)
+	var indexName string
+	if err := pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename='table_snapshot' AND indexdef LIKE '%(environment_id, audit_run_id, database_name, schema_name, table_name, id)%'`).Scan(&indexName); err != nil {
+		t.Fatalf("paging index missing: %v", err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid ORDER BY database_name,schema_name,table_name,id LIMIT 50 OFFSET 9950`, env, run)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
+	plan := ""
 	for rows.Next() {
 		var line string
 		if err := rows.Scan(&line); err != nil {
 			t.Fatal(err)
 		}
+		plan += line + "\n"
 		t.Log(line)
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(plan, "Index") {
+		t.Fatalf("paging index %s is not usable for the inventory page:\n%s", indexName, plan)
 	}
 }
