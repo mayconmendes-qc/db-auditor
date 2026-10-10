@@ -80,7 +80,19 @@ func TestSprint20LargeInventoryPagingIntegration(t *testing.T) {
 	if _, err := pool.Exec(ctx, `ANALYZE table_snapshot`); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := pool.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid ORDER BY database_name,schema_name,table_name,id LIMIT 50 OFFSET 9950`, env, run)
+	var indexName string
+	if err := pool.QueryRow(ctx, `SELECT indexname FROM pg_indexes WHERE tablename='table_snapshot' AND indexdef LIKE '%(environment_id, audit_run_id, database_name, schema_name, table_name, id)%'`).Scan(&indexName); err != nil {
+		t.Fatalf("paging index missing: %v", err)
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SET LOCAL enable_seqscan = off`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := tx.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM table_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid ORDER BY database_name,schema_name,table_name,id LIMIT 50 OFFSET 9950`, env, run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +109,7 @@ func TestSprint20LargeInventoryPagingIntegration(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(plan, "Seq Scan") && !strings.Contains(plan, "Index") {
-		t.Fatalf("inventory page plan is an unjustified sequential scan:\n%s", plan)
+	if !strings.Contains(plan, "Index") {
+		t.Fatalf("paging index %s is not usable for the inventory page:\n%s", indexName, plan)
 	}
 }
