@@ -123,7 +123,6 @@ func RenderPDF(document Document) ([]byte, error) {
 			fontSize, step = 10, 14
 		}
 	}
-	lines = nil
 	var out bytes.Buffer
 	out.WriteString("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
 	offsets := []int{0}
@@ -157,7 +156,6 @@ func RenderPDF(document Document) ([]byte, error) {
 			return nil, err
 		}
 	}
-	pages = nil
 	kids := make([]string, pageCount)
 	for index := 0; index < pageCount; index++ {
 		kids[index] = fmt.Sprintf("%d 0 R", pageID(index))
