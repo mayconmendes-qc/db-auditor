@@ -64,6 +64,7 @@ Você pode gravar essa escolha no ambiente, para não repetir em todo comando.
    | Senha do banco interno do auditor | `POSTGRES_PASSWORD` | Use uma senha sua. O exemplo `change-me-locally` não deve ir para um servidor exposto. |
    | Usuário do primeiro acesso | `AUDITOR_BOOTSTRAP_USER` | O exemplo é `admin`. |
    | Senha do primeiro acesso | `AUDITOR_BOOTSTRAP_PASSWORD` | Precisa ter **no mínimo 16 caracteres**. O exemplo local é `db-auditor-local-1`. Troque antes de expor o serviço. |
+   | Nome da empresa | `AUDITOR_COMPANY_NAME` | Aparece debaixo do título DB Auditor. O exemplo é `Qualle Control`. |
 
 3. Suba o sistema:
 
@@ -92,10 +93,15 @@ Para parar: `make down`. Para ver o que está acontecendo: `make logs`.
 
 ### Ligar um banco para ser auditado
 
-No mesmo `.env`, preencha um “espaço” de ambiente. O primeiro espaço de demonstração já tem um identificador fixo:
+No mesmo `.env`, dê nome aos ambientes que a tela vai mostrar. Isso vale na primeira criação do banco interno. Use um UUID em cada id. O exemplo já traz dois, para você trocar:
 
 ```bash
+AUDITOR_COMPANY_NAME=Nome da empresa
+
+AUDITOR_TARGET_1_NAME=Banco principal
 AUDITOR_TARGET_1_ENVIRONMENT_ID=00000000-0000-0000-0000-000000000001
+AUDITOR_TARGET_1_TYPE=self_hosted
+AUDITOR_TARGET_1_DISCOVERY=single_database
 AUDITOR_TARGET_1_HOST=endereco-do-banco
 AUDITOR_TARGET_1_PORT=5432
 AUDITOR_TARGET_1_DATABASE=nome_do_banco
@@ -104,15 +110,11 @@ AUDITOR_TARGET_1_PASSWORD=senha-desse-usuario
 AUDITOR_TARGET_1_SSLMODE=verify-full
 ```
 
-Também informe o endereço na lista de hosts permitidos. Sem isso, o auditor recusa a conexão:
+O segundo espaço segue o mesmo desenho (`AUDITOR_TARGET_2_...`), até o espaço 20. Se nenhum id for preenchido, uma instalação nova cria dois ambientes de demonstração.
 
-```bash
-AUDITOR_TARGET_ALLOWED_HOSTS=endereco-do-banco
-```
+Um volume que já existe não apaga ambientes antigos. Se você mantiver o mesmo id e mudar só o nome, a API atualiza o nome na próxima subida. Um id novo cria outro ambiente. Para recomeçar do zero em desenvolvimento, `make reset-volume` apaga o banco interno — não use isso onde já há coletas.
 
-Use uma conta **somente leitura**. O padrão de TLS é `verify-full` (confere o certificado). Conexão sem essa verificação só é aceita se o host estiver, de propósito, em `AUDITOR_TARGET_INSECURE_HOSTS`. Deixe essa lista vazia, a menos que a política da rede exija o contrário.
-
-Há um segundo espaço de demonstração (`AUDITOR_TARGET_2_...`) e o mesmo desenho segue até o espaço 20. O identificador precisa ser o de um ambiente que já existe. Os dois de demonstração são criados automaticamente só quando o volume interno ainda está vazio.
+Use uma conta **somente leitura**. O padrão de TLS é `verify-full` (confere o certificado). Informe o endereço em `AUDITOR_TARGET_ALLOWED_HOSTS`; sem isso, o auditor recusa a conexão. Conexão sem essa verificação só é aceita se o host estiver, de propósito, em `AUDITOR_TARGET_INSECURE_HOSTS`. Deixe essa lista vazia, a menos que a política da rede exija o contrário.
 
 Depois de salvar o `.env`:
 

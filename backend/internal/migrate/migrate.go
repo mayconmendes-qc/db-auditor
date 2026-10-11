@@ -41,8 +41,8 @@ func Decide(version, checksum string, applied map[string]string, schemaPresent b
 	return Execute, nil
 }
 
-// Apply runs pending migrations from dir. 02_seed_demo.sql stays with the
-// empty-volume entrypoint and is never executed here.
+// Apply runs pending migrations from dir. Environment labels are not SQL;
+// the process upserts AUDITOR_TARGET_N_* after Apply returns.
 func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	if dir == "" {
 		dir = "migrations"
