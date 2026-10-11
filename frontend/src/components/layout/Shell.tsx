@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
-import type { Finding, NavigationSection, TableSnapshot } from "../../types";
-import { Input } from "../ui/Input";
+import type { NavigationSection } from "../../types";
 import { Select } from "../ui/Select";
 
 export const navigationSections: NavigationSection[] = [
@@ -137,20 +136,10 @@ export function Shell({
   onNavigate,
   onLogout,
 }: ShellProps) {
-  const {
-    environments,
-    environmentId,
-    setEnvironmentId,
-    setSearch,
-    openFinding,
-  } = useApp();
+  const { environments, environmentId, setEnvironmentId } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [dsnDown, setDsnDown] = useState(0);
   const [openFindings, setOpenFindings] = useState(0);
-  const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<
-    Array<{ id: string; label: string; go: () => void }>
-  >([]);
   const [runningRuns, setRunningRuns] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState(
@@ -158,92 +147,6 @@ export function Shell({
   );
   const navRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    const term = query.trim();
-    if (term.length < 2) {
-      setHits([]);
-      return;
-    }
-    const handle = window.setTimeout(() => {
-      void (async () => {
-        const next: Array<{ id: string; label: string; go: () => void }> = [];
-        if (/^[0-9a-f-]{36}$/i.test(term)) {
-          next.push({
-            id: term,
-            label: `Achado ${term.slice(0, 8)}…`,
-            go: () => openFinding(term),
-          });
-        }
-        try {
-          const findings = await api.findings({
-            environment_id: environmentId ?? undefined,
-            limit: 20,
-          });
-          const needle = term.toLowerCase();
-          for (const finding of findings.items as Finding[]) {
-            const blob =
-              `${finding.title} ${finding.object_name ?? ""} ${finding.finding_type}`.toLowerCase();
-            if (!blob.includes(needle)) continue;
-            next.push({
-              id: finding.id,
-              label: `Achado · ${finding.title}`,
-              go: () => openFinding(finding.id),
-            });
-            if (next.length >= 6) break;
-          }
-        } catch {
-          /* search stays best-effort */
-        }
-        if (environmentId) {
-          try {
-            const tables = await api.tables(environmentId, {
-              q: term,
-              limit: 5,
-              offset: 0,
-            });
-            for (const row of tables.items as TableSnapshot[]) {
-              next.push({
-                id: `t-${row.schema_name}.${row.table_name}`,
-                label: `Inventário · ${row.schema_name}.${row.table_name}`,
-                go: () => {
-                  setSearch({ q: term });
-                  onNavigate?.("Inventário");
-                },
-              });
-            }
-          } catch {
-            /* inventory search is optional */
-          }
-        }
-        try {
-          const runs = await api.auditRuns({
-            environment_id: environmentId ?? undefined,
-          });
-          const needle = term.toLowerCase();
-          for (const run of runs.items) {
-            if (
-              !run.id.toLowerCase().includes(needle) &&
-              !run.status.toLowerCase().includes(needle) &&
-              !run.profile.toLowerCase().includes(needle)
-            ) {
-              continue;
-            }
-            next.push({
-              id: `r-${run.id}`,
-              label: `Execução · ${run.profile} · ${run.status}`,
-              go: () => onNavigate?.("Execuções"),
-            });
-            if (next.length >= 8) break;
-          }
-        } catch {
-          /* runs search is optional */
-        }
-        setHits(next.slice(0, 8));
-      })();
-    }, 250);
-    return () => window.clearTimeout(handle);
-  }, [query, environmentId, openFinding, onNavigate, setSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -342,8 +245,8 @@ export function Shell({
       >
         Pular para o conteúdo
       </a>
-      <aside className="flex flex-col border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
-        <div className="flex items-start justify-between gap-3">
+      <aside className="flex max-h-screen flex-col border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-hidden md:border-b-0 md:border-r md:border-slate-800">
+        <div className="flex shrink-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <strong className="text-sm font-semibold text-slate-50">
               DB Auditor
@@ -371,7 +274,13 @@ export function Shell({
           </button>
         </div>
 
-        <div className={navOpen ? "mt-4" : "mt-4 hidden md:block"}>
+        <div
+          className={
+            navOpen
+              ? "mt-4 flex min-h-0 flex-1 flex-col"
+              : "mt-4 hidden min-h-0 flex-1 flex-col md:flex"
+          }
+        >
           <Select
             label="Ambiente"
             options={envOptions}
@@ -379,45 +288,12 @@ export function Shell({
             onChange={(e) => setEnvironmentId(e.target.value || null)}
             aria-label="Ambiente global"
           />
-          <form
-            className="mt-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              hits[0]?.go();
-              setNavOpen(false);
-            }}
-          >
-            <Input
-              label="Busca"
-              value={query}
-              placeholder="Objeto, achado ou execução"
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            {hits.length > 0 ? (
-              <ul className="mt-1 max-h-48 overflow-auto rounded-md border border-slate-700 bg-slate-900 text-sm">
-                {hits.map((hit) => (
-                  <li key={hit.id}>
-                    <button
-                      type="button"
-                      className="w-full px-2 py-1 text-left text-slate-200 hover:bg-slate-800"
-                      onClick={() => {
-                        hit.go();
-                        setNavOpen(false);
-                      }}
-                    >
-                      {hit.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </form>
 
           <nav
             id="app-nav"
             ref={navRef}
             tabIndex={-1}
-            className="mt-5 min-h-0 flex-1 space-y-4 outline-none"
+            className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto outline-none"
             aria-label="Principal"
           >
             {navGroups.map((group) => {
@@ -515,7 +391,7 @@ export function Shell({
           </nav>
         </div>
 
-        <div className="mt-4 flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 pt-3">
+        <div className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 pt-3">
           <button
             type="button"
             onClick={() => onNavigate?.("Status")}
