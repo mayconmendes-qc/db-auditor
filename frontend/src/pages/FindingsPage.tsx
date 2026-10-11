@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Sheet } from "../components/ui";
 import type { PageSize } from "../components/ui/PaginationControls";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
@@ -16,12 +17,9 @@ import { FindingsBrowser } from "./parts/FindingsBrowser";
 import { fetchFindingsList } from "./parts/fetchFindingsList";
 import { bulkTriageFindings } from "./parts/findingsBulk";
 import { exportFindingsCSV, exportFindingsJSON } from "./parts/findingsExport";
+import { RulesCatalogSheet } from "./parts/RulesCatalogSheet";
 
-export function FindingsPage({
-  presetCategory,
-}: {
-  presetCategory?: "performance" | "security";
-} = {}) {
+export function FindingsPage() {
   const {
     environmentId,
     setSection,
@@ -109,13 +107,18 @@ export function FindingsPage({
   const [assignee, setAssignee] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [sort, setSort] = useState<SortState | null>(null);
+  const category: "" | "performance" | "security" =
+    search.category === "performance" || search.category === "security"
+      ? search.category
+      : "";
+  const rulesOpen = search.view === "rules";
 
   const load = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const result = await fetchFindingsList({
-        presetCategory,
+        presetCategory: category || undefined,
         severityFilter,
         statusFilter,
         environmentId,
@@ -145,7 +148,7 @@ export function FindingsPage({
     pageSize,
     mine,
     overdueOnly,
-    presetCategory,
+    category,
   ]);
 
   useEffect(() => {
@@ -321,71 +324,99 @@ export function FindingsPage({
 
   const selectionCount = selectedIds.size;
   return (
-    <FindingsBrowser
-      exportRows={exportRows}
-      exportJson={exportJson}
-      busy={busy}
-      items={items}
-      mine={mine}
-      setMine={setMine}
-      setOffset={setOffset}
-      overdueOnly={overdueOnly}
-      setOverdueOnly={setOverdueOnly}
-      setSeverityFilter={setSeverityFilter}
-      setStatusFilter={setStatusFilter}
-      severityFilter={severityFilter}
-      statusFilter={statusFilter}
-      load={load}
-      bulkBusy={bulkBusy}
-      selectionCount={selectionCount}
-      bulkTriage={bulkTriage}
-      error={error}
-      coverageKind={coverageKind}
-      emptyKind={emptyKind}
-      setSection={setSection}
-      sortedItems={sortedItems}
-      sort={sort}
-      setSort={setSort}
-      allSelected={allSelected}
-      toggleAll={toggleAll}
-      selectedIds={selectedIds}
-      toggleOne={toggleOne}
-      setSelected={setSelected}
-      openFinding={openFinding}
-      total={total}
-      pageSize={pageSize}
-      offset={offset}
-      setPageSize={setPageSize}
-      environmentId={environmentId}
-    >
-      <FindingDetailCard
-        selected={selected}
-        action={action}
-        openInventory={openInventory}
+    <>
+      <FindingsBrowser
+        exportRows={exportRows}
+        exportJson={exportJson}
+        busy={busy}
+        items={items}
+        mine={mine}
+        setMine={setMine}
+        setOffset={setOffset}
+        overdueOnly={overdueOnly}
+        setOverdueOnly={setOverdueOnly}
+        setSeverityFilter={setSeverityFilter}
+        setStatusFilter={setStatusFilter}
+        severityFilter={severityFilter}
+        statusFilter={statusFilter}
+        load={load}
+        bulkBusy={bulkBusy}
+        selectionCount={selectionCount}
+        bulkTriage={bulkTriage}
+        error={error}
+        coverageKind={coverageKind}
+        emptyKind={emptyKind}
         setSection={setSection}
-        actionStatus={actionStatus}
-        setActionStatus={setActionStatus}
-        actionOwner={actionOwner}
-        setActionOwner={setActionOwner}
-        actionJustification={actionJustification}
-        setActionJustification={setActionJustification}
-        actionResult={actionResult}
-        setActionResult={setActionResult}
-        saveAction={saveAction}
-        actionEvents={actionEvents}
-        triage={triage}
-        assignee={assignee}
-        setAssignee={setAssignee}
-        dueAt={dueAt}
-        setDueAt={setDueAt}
-        saveWorkflow={saveWorkflow}
-        suppressionReason={suppressionReason}
-        setSuppressionReason={setSuppressionReason}
-        suppressedUntil={suppressedUntil}
-        setSuppressedUntil={setSuppressedUntil}
-        suppressSelected={suppressSelected}
-        timeline={timeline}
+        sortedItems={sortedItems}
+        sort={sort}
+        setSort={setSort}
+        allSelected={allSelected}
+        toggleAll={toggleAll}
+        selectedIds={selectedIds}
+        toggleOne={toggleOne}
+        setSelected={setSelected}
+        openFinding={openFinding}
+        total={total}
+        pageSize={pageSize}
+        offset={offset}
+        setPageSize={setPageSize}
+        environmentId={environmentId}
+        category={category}
+        setCategory={(value) => {
+          setOffset(0);
+          setSearch({ category: value || null });
+        }}
+        onOpenRules={() => setSearch({ view: "rules" })}
       />
-    </FindingsBrowser>
+      <Sheet
+        open={selected != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelected(null);
+            openFinding(null);
+          }
+        }}
+        title={selected?.friendly_meaning || selected?.title || "Análise"}
+        description={
+          selected
+            ? `${labels.severity(selected.severity)} · ${selected.object_key || "objeto não informado"}`
+            : undefined
+        }
+        wide
+      >
+        <FindingDetailCard
+          selected={selected}
+          action={action}
+          openInventory={openInventory}
+          onOpenRules={() => setSearch({ view: "rules" })}
+          actionStatus={actionStatus}
+          setActionStatus={setActionStatus}
+          actionOwner={actionOwner}
+          setActionOwner={setActionOwner}
+          actionJustification={actionJustification}
+          setActionJustification={setActionJustification}
+          actionResult={actionResult}
+          setActionResult={setActionResult}
+          saveAction={saveAction}
+          actionEvents={actionEvents}
+          triage={triage}
+          assignee={assignee}
+          setAssignee={setAssignee}
+          dueAt={dueAt}
+          setDueAt={setDueAt}
+          saveWorkflow={saveWorkflow}
+          suppressionReason={suppressionReason}
+          setSuppressionReason={setSuppressionReason}
+          suppressedUntil={suppressedUntil}
+          setSuppressedUntil={setSuppressedUntil}
+          suppressSelected={suppressSelected}
+          timeline={timeline}
+        />
+      </Sheet>
+      <RulesCatalogSheet
+        open={rulesOpen}
+        onOpenChange={(open) => setSearch({ view: open ? "rules" : null })}
+      />
+    </>
   );
 }

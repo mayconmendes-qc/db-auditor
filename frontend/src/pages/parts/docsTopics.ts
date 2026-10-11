@@ -278,7 +278,7 @@ export const docTopics: DocTopic[] = [
     intro:
       "Um achado é um sinal de uma regra: algo que vale investigar. A tela explica o que foi visto, em que objeto, com que confiança e o que a equipe pode fazer em seguida. O auditor não executa a correção.",
     steps: [
-      "Filtre por gravidade, estado e tipo. Performance e Segurança são atalhos desta mesma lista, já filtrada.",
+      "Filtre por gravidade, estado e tema. Desempenho e Segurança são filtros desta mesma lista, não páginas separadas.",
       "Abra o achado. Leia a constatação, a evidência, a cobertura e a orientação.",
       "Se o seu papel permitir, reconheça o sinal, planeje uma ação ou justifique uma supressão.",
       "Para comparar duas visitas, escolha as duas execuções no painel de diferenças. A lista mostra o que surgiu, sumiu ou mudou.",
@@ -314,7 +314,7 @@ export const docTopics: DocTopic[] = [
     id: "performance",
     title: "Performance",
     intro:
-      "Performance reúne os achados de espaço, manutenção, índices e consultas. É a mesma lista de achados, aberta já nesse tema, para quem quer ir direto ao que pode estar pesado.",
+      "Performance reúne os sinais de espaço, manutenção, índices e consultas. Na página Análises, use o filtro Desempenho. Abra o item: o painel explica a melhoria e o passo a passo.",
     steps: [
       "Escolha o ambiente e a execução que quer ler.",
       "Abra cada sinal e confira se a evidência cobre uma janela representativa da carga.",
@@ -338,13 +338,13 @@ export const docTopics: DocTopic[] = [
           "Consultas parecidas, reunidas sem os valores literais, para ver o padrão e não cada chamada isolada.",
       },
     ],
-    goTo: "Performance",
+    goTo: "Findings",
   },
   {
     id: "seguranca",
     title: "Segurança",
     intro:
-      "Segurança reúne os achados de permissão, papéis e funções privilegiadas. Também é a lista de achados, filtrada nesse tema. A ausência de um alerta só tranquiliza quando a coleta daquela verificação terminou.",
+      "Segurança reúne os sinais de permissão, papéis e funções privilegiadas. Na página Análises, use o filtro Segurança. A ausência de um alerta só tranquiliza quando a coleta daquela verificação terminou.",
     steps: [
       "Comece pela gravidade crítica e alta.",
       "Abra o achado e veja o objeto, a permissão e o que foi de fato observado.",
@@ -368,13 +368,13 @@ export const docTopics: DocTopic[] = [
           "O fato observado: objeto, permissão, configuração ou contagem. Sem evidência, o texto diz o que faltou.",
       },
     ],
-    goTo: "Segurança",
+    goTo: "Findings",
   },
   {
     id: "regras",
     title: "Regras",
     intro:
-      "Regras são as verificações que geram achados. Esta tela mostra o catálogo, a versão e se uma regra está valendo para o esquema escolhido. Uma regra que não se aplica ao tipo de banco não é um resultado saudável. Ela simplesmente não roda ali.",
+      "Regras são as verificações que geram as análises. Em Análises, o botão Regras do ambiente abre o catálogo: a versão e se a regra está ligada no esquema escolhido. Uma regra que não se aplica ao tipo de banco não é um resultado saudável. Ela simplesmente não roda ali.",
     steps: [
       "Escolha o ambiente e o esquema.",
       "Leia o nome da regra e a explicação em português: o que ela procura e o que não afirma.",
@@ -397,7 +397,7 @@ export const docTopics: DocTopic[] = [
           "A regra não faz sentido naquele mecanismo, por exemplo uma verificação de PostgreSQL num catálogo MongoDB.",
       },
     ],
-    goTo: "Regras",
+    goTo: "Findings",
   },
   {
     id: "relatorios",
