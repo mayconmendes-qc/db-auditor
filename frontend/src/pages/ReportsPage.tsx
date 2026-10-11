@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  type InputHTMLAttributes,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { CoverageBanner } from "../components/CoverageBanner";
 import { PageHeader } from "../components/PageHeader";
 import { Button, Card, ErrorBanner, Select } from "../components/ui";
@@ -21,6 +26,23 @@ const runStatusLabels: Record<string, string> = {
   success: "Concluída",
   partial_success: "Parcial",
 };
+
+function ReportTextField({
+  label,
+  ...props
+}: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <label className="grid gap-1.5 text-sm text-slate-300">
+      <span className="text-xs font-medium tracking-wide text-slate-400">
+        {label}
+      </span>
+      <input
+        className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+        {...props}
+      />
+    </label>
+  );
+}
 
 export function reportJobActions(
   job: ReportJob,
@@ -187,9 +209,12 @@ export function ReportsPage() {
       <div className="mt-8 space-y-5">
         <Card
           title="Solicitar relatório"
-          subtitle="O processamento é assíncrono e o PDF expira após 30 dias."
+          contentClassName="flex flex-col gap-3"
         >
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <p className="-mt-1.5 text-sm text-slate-400">
+            O processamento é assíncrono e o PDF expira após 30 dias.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select
               label="Ambiente"
               value={env}
@@ -257,41 +282,39 @@ export function ReportsPage() {
                 },
               ]}
             />
-            <input
+            <ReportTextField
+              label="Banco (opcional)"
               aria-label="Banco"
-              placeholder="Banco (opcional)"
               value={database}
               onChange={(event) => setDatabase(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
-            <input
+            <ReportTextField
+              label="Esquema (opcional)"
               aria-label="Esquema"
-              placeholder="Esquema (opcional)"
               value={schema}
               onChange={(event) => setSchema(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
-            <input
+            <ReportTextField
+              label="Tabela"
               aria-label="Tabela"
-              placeholder="Tabela (obrigatória para relatório de tabela)"
+              placeholder="Obrigatória no relatório de tabela"
               value={table}
               onChange={(event) => setTable(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
             {!api.hasSession() && (
-              <input
+              <ReportTextField
+                label="Token de relatórios"
                 aria-label="Token de relatórios"
                 type="password"
                 autoComplete="off"
-                placeholder="Token de relatórios"
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
               />
             )}
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
+              className="h-10 w-full"
               disabled={
                 busy ||
                 !reportFormReady(
@@ -312,6 +335,7 @@ export function ReportsPage() {
               Gerar PDF
             </Button>
             <Button
+              className="h-10 w-full"
               variant="secondary"
               disabled={busy || !env || (!token && !api.hasSession())}
               onClick={() => void refresh()}
