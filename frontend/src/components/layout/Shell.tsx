@@ -17,9 +17,6 @@ export const navigationSections: NavigationSection[] = [
   "Desvio de schema",
   "Comparar",
   "Findings",
-  "Performance",
-  "Segurança",
-  "Regras",
   "Contas",
   "Acompanhamento",
   "Ações assistidas",
@@ -40,14 +37,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
   },
   {
     label: "Análise",
-    items: [
-      "Desvio de schema",
-      "Comparar",
-      "Findings",
-      "Performance",
-      "Segurança",
-      "Regras",
-    ],
+    items: ["Desvio de schema", "Comparar", "Findings"],
   },
   {
     label: "Sistema",
@@ -362,7 +352,7 @@ export function Shell({
                             >
                               <span className="min-w-0 truncate">
                                 {section === "Findings"
-                                  ? "Achados"
+                                  ? "Análises"
                                   : section === "Dashboard"
                                     ? "Visão geral"
                                     : section === "Desvio de schema"

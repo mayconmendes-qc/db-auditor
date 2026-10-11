@@ -50,24 +50,13 @@ const MappingsPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import("./pages/MonitoringPage").then((m) => ({ default: m.MonitoringPage })),
 );
-const PerformancePage = lazy(() =>
-  import("./pages/PerformancePage").then((m) => ({
-    default: m.PerformancePage,
-  })),
-);
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
-);
-const RulesPage = lazy(() =>
-  import("./pages/RulesPage").then((m) => ({ default: m.RulesPage })),
 );
 const SchemaDriftPage = lazy(() =>
   import("./pages/SchemaDriftPage").then((m) => ({
     default: m.SchemaDriftPage,
   })),
-);
-const SecurityPage = lazy(() =>
-  import("./pages/SecurityPage").then((m) => ({ default: m.SecurityPage })),
 );
 const ServerComparePage = lazy(() =>
   import("./pages/ServerComparePage").then((m) => ({
@@ -93,9 +82,6 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     "Desvio de schema": <SchemaDriftPage />,
     Comparar: <ServerComparePage />,
     Findings: <FindingsPage />,
-    Performance: <PerformancePage />,
-    Segurança: <SecurityPage />,
-    Regras: <RulesPage />,
     Status: <StatusPage />,
     Contas: <AccountsPage />,
     Acompanhamento: <MonitoringPage />,

@@ -55,6 +55,9 @@ export function FindingsBrowser({
   offset,
   setPageSize,
   environmentId,
+  category,
+  setCategory,
+  onOpenRules,
   children,
 }: {
   exportRows: () => void;
@@ -92,6 +95,9 @@ export function FindingsBrowser({
   offset: number;
   setPageSize: (value: PageSize) => void;
   environmentId: string | null;
+  category: "" | "performance" | "security";
+  setCategory: (value: "" | "performance" | "security") => void;
+  onOpenRules: () => void;
   children?: ReactNode;
 }) {
   const health = useMemo(() => {
@@ -132,11 +138,14 @@ export function FindingsBrowser({
   return (
     <>
       <PageHeader
-        eyebrow="ACHADOS"
-        title="Achados"
-        description="Sinais de risco em armazenamento, índices, manutenção e segurança. Confirme cada hipótese antes de mudar o banco; o auditor não exclui objetos automaticamente."
+        eyebrow="Análises"
+        title="Análises"
+        description="Os sinais de desempenho, segurança e modelo ficam nesta lista. Abra um item para ver a melhoria sugerida e como fazê-la. O auditor não altera o banco."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={onOpenRules}>
+              Regras do ambiente
+            </Button>
             <Button
               variant="secondary"
               onClick={exportRows}
@@ -164,6 +173,24 @@ export function FindingsBrowser({
         </div>
 
         <FindingsDiffPanel environmentId={environmentId} />
+
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["", "Todas"],
+              ["performance", "Desempenho"],
+              ["security", "Segurança"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={label}
+              variant={category === value ? "primary" : "secondary"}
+              onClick={() => setCategory(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
 
         <div className="flex flex-wrap gap-2">
           <Button
