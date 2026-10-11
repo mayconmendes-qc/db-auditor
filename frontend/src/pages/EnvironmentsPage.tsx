@@ -8,12 +8,14 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import { connectionPresentation } from "../lib/connectionStatus";
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { labels } from "../lib/labels";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
+  ConnectionStatus,
   DatabaseSnapshot,
   Environment,
   NavigationSection,
@@ -26,6 +28,9 @@ export interface EnvironmentsPageProps {
 
 export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const [items, setItems] = useState<Environment[] | null>(null);
+  const [connections, setConnections] = useState<ConnectionStatus[] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseSnapshot[] | null>(null);
@@ -42,18 +47,29 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const loadEnvironments = useCallback(() => {
     setError(null);
     setItems(null);
+    setConnections(null);
     api
       .environments()
       .then((res) => {
         setItems(res.items);
-        if (res.items.length > 0) {
-          setSelectedId((prev) => prev ?? res.items[0].id);
-        }
+        setSelectedId((prev) => {
+          if (prev && res.items.some((item) => item.id === prev)) {
+            return prev;
+          }
+          const first = [...res.items].sort((a, b) =>
+            a.id.localeCompare(b.id, "en", { numeric: true }),
+          )[0];
+          return first?.id ?? null;
+        });
       })
       .catch((err: unknown) => {
         setError(formatError(err, "Falha ao carregar ambientes"));
         setItems([]);
       });
+    api
+      .connectionStatus()
+      .then((res) => setConnections(res.items))
+      .catch(() => setConnections([]));
   }, []);
 
   useEffect(() => {
@@ -89,17 +105,29 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
     };
   }, [selectedId]);
 
+  const connectionById = useMemo(() => {
+    const map = new Map<string, ConnectionStatus>();
+    for (const item of connections ?? []) {
+      map.set(item.environment_id, item);
+    }
+    return map;
+  }, [connections]);
+
   const sortedEnvironments = useMemo(() => {
     if (!items) {
       return null;
     }
-    return sortBy(items, envSort, {
+    const byId = [...items].sort((a, b) =>
+      a.id.localeCompare(b.id, "en", { numeric: true }),
+    );
+    return sortBy(byId, envSort, {
       name: (e) => e.name,
       type: (e) => labels.envType(e.type),
       discovery: (e) => labels.discoveryMode(e.discovery_mode),
-      status: (e) => (e.active ? "ativo" : "inativo"),
+      status: (e) =>
+        connectionPresentation(connectionById.get(e.id) ?? null).label,
     });
-  }, [items, envSort]);
+  }, [items, envSort, connectionById]);
 
   const filteredDatabases = useMemo(() => {
     if (!databases) {
@@ -213,34 +241,45 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
             sortDir={envSort?.dir}
             onSort={(id) => setEnvSort((prev) => nextSort(prev, id))}
           >
-            {sortedEnvironments.map((env) => (
-              <tr
-                key={env.id}
-                className={`cursor-pointer border-t border-slate-800 ${
-                  selectedId === env.id ? "bg-slate-900/80" : ""
-                }`}
-                onClick={() => setSelectedId(env.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    setSelectedId(env.id);
-                  }
-                }}
-                tabIndex={0}
-              >
-                <td className="px-4 py-3 text-slate-100">{env.name}</td>
-                <td className="px-4 py-3 text-slate-300">
-                  {labels.envType(env.type)}
-                </td>
-                <td className="px-4 py-3 text-slate-300">
-                  {labels.discoveryMode(env.discovery_mode)}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={env.active ? "success" : "neutral"}>
-                    {env.active ? "ativo" : "inativo"}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
+            {sortedEnvironments.map((env) => {
+              const status = connectionPresentation(
+                connections === null
+                  ? null
+                  : (connectionById.get(env.id) ?? null),
+              );
+              const label =
+                connections === null ? "Verificando…" : status.label;
+              return (
+                <tr
+                  key={env.id}
+                  className={`cursor-pointer border-t border-slate-800 ${
+                    selectedId === env.id ? "bg-slate-900/80" : ""
+                  }`}
+                  onClick={() => setSelectedId(env.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setSelectedId(env.id);
+                    }
+                  }}
+                  tabIndex={0}
+                >
+                  <td className="px-4 py-3 text-slate-100">{env.name}</td>
+                  <td className="px-4 py-3 text-slate-300">
+                    {labels.envType(env.type)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-300">
+                    {labels.discoveryMode(env.discovery_mode)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      tone={connections === null ? "neutral" : status.tone}
+                    >
+                      {label}
+                    </Badge>
+                  </td>
+                </tr>
+              );
+            })}
           </Table>
         )}
 
