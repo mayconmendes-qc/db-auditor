@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useTheme } from "../../context/ThemeContext";
+import { companyName } from "../../lib/company";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
 import { Select } from "../ui/Select";
@@ -241,7 +242,7 @@ export function Shell({
             <strong className="text-sm font-semibold text-slate-50">
               DB Auditor
             </strong>
-            <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
+            <p className="mt-0.5 text-xs text-slate-400">{companyName()}</p>
           </div>
           <button
             ref={menuButtonRef}
