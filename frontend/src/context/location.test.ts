@@ -12,9 +12,15 @@ describe("parseLocationHash", () => {
     expect(parsed.search.status).toBe("open");
   });
 
-  it("keeps the performance and security shortcuts on their own hashes", () => {
-    expect(parseLocationHash("#/performance").section).toBe("Performance");
-    expect(parseLocationHash("#/security?env=env-1").section).toBe("Segurança");
-    expect(parseLocationHash("#/rules").section).toBe("Regras");
+  it("opens the old performance, security and rules links on Análises", () => {
+    expect(parseLocationHash("#/performance").section).toBe("Findings");
+    expect(parseLocationHash("#/performance").search.category).toBe(
+      "performance",
+    );
+    const security = parseLocationHash("#/security?env=env-1");
+    expect(security.section).toBe("Findings");
+    expect(security.env).toBe("env-1");
+    expect(security.search.category).toBe("security");
+    expect(parseLocationHash("#/rules").search.view).toBe("rules");
   });
 });
