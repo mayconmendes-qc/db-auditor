@@ -3,7 +3,7 @@
 O diretório contém o baseline, o seed local e migrações incrementais. O Postgres do Compose executa os `.sql` **somente na primeira inicialização** de um volume vazio, em ordem alfabética; a API registra e aplica as migrações incrementais pendentes em volumes existentes.
 
 - `01_baseline.sql`: schema completo. As migrations das sprints 13–20 foram incorporadas aqui.
-- `02_seed_demo.sql`: duas linhas locais de demonstração. A API não aplica este arquivo.
+- A API não aplica arquivo de seed. Depois das migrations, ela cria os ambientes de `AUDITOR_TARGET_N_ENVIRONMENT_ID` e `AUDITOR_TARGET_N_NAME`. Se o id já existe, só o nome é atualizado. Sem nenhum id, uma instalação sem essa configuração recebe dois ambientes de demonstração.
 - `03_audit_schedule.sql`: agenda persistente. A API aplica no boot se ainda não estiver registrada.
 - `04_p1.sql`: primeira ampliação incremental.
 - `05_p2.sql`: melhorias da primeira etapa.
@@ -44,11 +44,11 @@ Volumes em que a migração **falhou a meio** (objeto já existe, versão ausent
 
 ## Ambientes
 
-`02_seed_demo.sql` não descreve os Timescale da empresa. Ele só nomeia, em volume vazio:
+Os ambientes iniciais não ficam numa migration. A API, logo depois de aplicar as migrations, cria uma linha para cada `AUDITOR_TARGET_N_ENVIRONMENT_ID` e usa `AUDITOR_TARGET_N_NAME` como nome na tela. Sem nenhum id, entram dois ambientes de demonstração:
 
 | id | nome |
 | --- | --- |
 | `00000000-0000-0000-0000-000000000001` | Demo Tiger Cloud |
 | `00000000-0000-0000-0000-000000000002` | Demo Datacenter |
 
-Host, porta, database, usuário e senha ficam em `AUDITOR_TARGET_N_*` no `.env`. O `ENVIRONMENT_ID` do slot tem de ser um `id` que já exista em `audit_environment`. Não crie outra migration de seed para os servidores reais: ela não roda de novo num volume existente e não deve carregar senha.
+Host, porta, database, usuário e senha ficam em `AUDITOR_TARGET_N_*` no `.env`. O nome da empresa na tela é `AUDITOR_COMPANY_NAME`. Um volume existente não perde ambientes antigos. A API atualiza o nome quando o id é o mesmo.

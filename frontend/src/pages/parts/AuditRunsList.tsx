@@ -92,7 +92,7 @@ export function AuditRunsList({
       ) : runs.length === 0 ? (
         <EmptyState
           title="Nenhuma execução"
-          description="Dispare uma auditoria manual acima ou aguarde o scheduler. Ambientes demo vêm do seed local."
+          description="Dispare uma auditoria manual acima ou aguarde o scheduler. Os ambientes iniciais vêm do .env."
           action={
             <Button onClick={onTriggerClick} disabled={busy || !triggerEnv}>
               Executar agora

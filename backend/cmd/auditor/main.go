@@ -81,6 +81,15 @@ func main() {
 	}
 
 	store := repository.NewStore(pool)
+	seeds, err := config.LoadSeedEnvironments()
+	if err != nil {
+		slog.Error("ambientes iniciais inválidos", "error", err)
+		os.Exit(1)
+	}
+	if err := store.UpsertSeedEnvironments(ctx, seeds); err != nil {
+		slog.Error("não foi possível gravar os ambientes iniciais", "error", err)
+		os.Exit(1)
+	}
 	if err := store.EnsureIdentitySchema(ctx); err != nil {
 		slog.Error("could not ensure identity schema", "error", err)
 		os.Exit(1)

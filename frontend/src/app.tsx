@@ -11,6 +11,7 @@ import { navigationSections, Shell } from "./components/layout/Shell";
 import { Button, Input } from "./components/ui";
 import { AppProvider, useApp } from "./context/AppContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { companyName } from "./lib/company";
 import { formatError } from "./lib/errors";
 import { api } from "./services/api";
 import type { NavigationSection } from "./types";
@@ -168,6 +169,7 @@ function SessionApp() {
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
         <div className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7">
           <h1 className="text-xl font-semibold">DB Auditor</h1>
+          <p className="text-sm text-slate-400">{companyName()}</p>
           {restoreError ? (
             <>
               <p role="alert" className="text-sm text-rose-300">
@@ -248,7 +250,10 @@ function LoginScreen({
         className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7"
       >
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold">Entrar no DB Auditor</h1>
+          <div>
+            <h1 className="text-xl font-semibold">Entrar no DB Auditor</h1>
+            <p className="text-sm text-slate-400">{companyName()}</p>
+          </div>
           <button
             type="button"
             onClick={toggleTheme}
