@@ -297,95 +297,103 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
 
             {detailError ? <ErrorBanner message={detailError} /> : null}
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div>
+            <div className="grid items-stretch gap-6 lg:grid-cols-2">
+              <div className="flex h-full flex-col">
                 <h3 className="mb-2 text-sm font-medium text-slate-300">
                   Databases
                 </h3>
-                {filteredDatabases === null ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : filteredDatabases.length === 0 ? (
-                  <EmptyState
-                    title="Nenhum database"
-                    description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
-                  />
-                ) : (
-                  <Table
-                    headers={[
-                      { id: "name", label: "Nome", sortable: true },
-                      { id: "size", label: "Tamanho", sortable: true },
-                      {
-                        id: "connections",
-                        label: "Conexões",
-                        sortable: true,
-                      },
-                    ]}
-                    sortKey={dbSort?.key}
-                    sortDir={dbSort?.dir}
-                    onSort={(id) => setDbSort((prev) => nextSort(prev, id))}
-                  >
-                    {filteredDatabases.map((db) => (
-                      <tr key={db.id} className="border-t border-slate-800">
-                        <td className="px-4 py-3 text-slate-100">
-                          {db.database_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {formatBytes(db.size_bytes)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {db.connection_count}
-                        </td>
-                      </tr>
-                    ))}
-                  </Table>
-                )}
+                <div className="flex flex-1 flex-col">
+                  {filteredDatabases === null ? (
+                    <Skeleton className="h-40 w-full" />
+                  ) : filteredDatabases.length === 0 ? (
+                    <EmptyState
+                      className="flex h-full flex-1 flex-col justify-center"
+                      title="Nenhum database"
+                      description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
+                    />
+                  ) : (
+                    <Table
+                      headers={[
+                        { id: "name", label: "Nome", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                        {
+                          id: "connections",
+                          label: "Conexões",
+                          sortable: true,
+                        },
+                      ]}
+                      sortKey={dbSort?.key}
+                      sortDir={dbSort?.dir}
+                      onSort={(id) => setDbSort((prev) => nextSort(prev, id))}
+                    >
+                      {filteredDatabases.map((db) => (
+                        <tr key={db.id} className="border-t border-slate-800">
+                          <td className="px-4 py-3 text-slate-100">
+                            {db.database_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {formatBytes(db.size_bytes)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {db.connection_count}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </div>
               </div>
 
-              <div>
+              <div className="flex h-full flex-col">
                 <h3 className="mb-2 text-sm font-medium text-slate-300">
                   Schemas
                 </h3>
-                {filteredSchemas === null ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : filteredSchemas.length === 0 ? (
-                  <EmptyState
-                    title="Nenhum schema"
-                    description="Sem snapshots ou nenhum resultado para o filtro."
-                  />
-                ) : (
-                  <Table
-                    headers={[
-                      { id: "database", label: "Database", sortable: true },
-                      { id: "schema", label: "Schema", sortable: true },
-                      { id: "tables", label: "Tables", sortable: true },
-                      { id: "views", label: "Views", sortable: true },
-                      { id: "size", label: "Tamanho", sortable: true },
-                    ]}
-                    sortKey={schemaSort?.key}
-                    sortDir={schemaSort?.dir}
-                    onSort={(id) => setSchemaSort((prev) => nextSort(prev, id))}
-                  >
-                    {filteredSchemas.map((sc) => (
-                      <tr key={sc.id} className="border-t border-slate-800">
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.database_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-100">
-                          {sc.schema_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.table_count}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.view_count + sc.materialized_view_count}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {formatBytes(sc.size_bytes)}
-                        </td>
-                      </tr>
-                    ))}
-                  </Table>
-                )}
+                <div className="flex flex-1 flex-col">
+                  {filteredSchemas === null ? (
+                    <Skeleton className="h-40 w-full" />
+                  ) : filteredSchemas.length === 0 ? (
+                    <EmptyState
+                      className="flex h-full flex-1 flex-col justify-center"
+                      title="Nenhum schema"
+                      description="Sem snapshots ou nenhum resultado para o filtro."
+                    />
+                  ) : (
+                    <Table
+                      headers={[
+                        { id: "database", label: "Database", sortable: true },
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "tables", label: "Tables", sortable: true },
+                        { id: "views", label: "Views", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                      ]}
+                      sortKey={schemaSort?.key}
+                      sortDir={schemaSort?.dir}
+                      onSort={(id) =>
+                        setSchemaSort((prev) => nextSort(prev, id))
+                      }
+                    >
+                      {filteredSchemas.map((sc) => (
+                        <tr key={sc.id} className="border-t border-slate-800">
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.database_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-100">
+                            {sc.schema_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.table_count}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.view_count + sc.materialized_view_count}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {formatBytes(sc.size_bytes)}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </div>
               </div>
             </div>
           </section>
