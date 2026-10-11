@@ -7,7 +7,6 @@ import type {
   Finding,
   FindingAction,
   FindingEvent,
-  NavigationSection,
 } from "../../types";
 import { FindingActionPlan } from "./FindingActionPlan";
 
@@ -15,7 +14,7 @@ export function FindingDetailCard({
   selected,
   action,
   openInventory,
-  setSection,
+  onOpenRules,
   actionStatus,
   setActionStatus,
   actionOwner,
@@ -42,7 +41,7 @@ export function FindingDetailCard({
   selected: Finding | null;
   action: FindingAction | null;
   openInventory: (target: LegacyTableTarget) => void;
-  setSection: (section: NavigationSection) => void;
+  onOpenRules: () => void;
   actionStatus: string;
   setActionStatus: (value: string) => void;
   actionOwner: string;
@@ -73,7 +72,66 @@ export function FindingDetailCard({
           title={`Detalhe · ${labels.severity(selected.severity)}`}
           subtitle={action?.plan.meaning ?? selected.title}
         >
-          <ul className="mt-3 space-y-1 text-sm text-slate-300">
+          <section className="space-y-3" aria-labelledby="how-to-heading">
+            <h3
+              id="how-to-heading"
+              className="text-sm font-semibold text-slate-100"
+            >
+              Como melhorar
+            </h3>
+            <p>
+              {action?.plan.meaning ||
+                selected.friendly_meaning ||
+                selected.summary}
+            </p>
+            <p className="text-slate-200">
+              {action?.suggestion ||
+                selected.recommendation ||
+                "Ainda não há uma melhoria pronta para esta regra. Use a evidência e confirme com quem administra o banco."}
+            </p>
+            <ol className="list-decimal space-y-2 pl-5">
+              {action?.plan.prerequisites ? (
+                <li>Antes de mudar: {action.plan.prerequisites}</li>
+              ) : null}
+              <li>
+                O que fazer:{" "}
+                {action?.plan.next ||
+                  selected.friendly_next ||
+                  action?.plan.confirmation ||
+                  selected.recommendation ||
+                  "Revise o objeto com a equipe responsável. O auditor não executa a mudança."}
+              </li>
+              {action?.plan.confirmation && action.plan.next ? (
+                <li>Como conferir: {action.plan.confirmation}</li>
+              ) : null}
+              <li>
+                Depois:{" "}
+                {action?.plan.validation ||
+                  selected.validation ||
+                  "Faça uma nova coleta e veja se o sinal sumiu ou mudou."}
+              </li>
+            </ol>
+            {action?.plan.expected_benefit ? (
+              <p>Benefício esperado: {action.plan.expected_benefit}</p>
+            ) : null}
+            {action?.plan.risk ? <p>Cuidado: {action.plan.risk}</p> : null}
+            {action?.plan.read_only_query ? (
+              <div>
+                <p className="text-xs text-slate-400">
+                  Consulta só de leitura, para conferir o fato. Não use este
+                  texto para alterar o banco.
+                </p>
+                <pre className="mt-2 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-400">
+                  {action.plan.read_only_query}
+                </pre>
+              </div>
+            ) : null}
+            <p className="text-xs text-slate-400">
+              Quem administra o banco executa a melhoria. Depois, registre o
+              resultado nesta análise.
+            </p>
+          </section>
+          <ul className="mt-5 space-y-1 text-sm text-slate-300">
             <li>Status: {labels.findingStatus(selected.status)}</li>
             <li>
               Primeira observação:{" "}
@@ -140,8 +198,8 @@ export function FindingDetailCard({
                 Abrir objeto no inventário
               </Button>
             ) : null}
-            <Button variant="secondary" onClick={() => setSection("Regras")}>
-              Ver catálogo de regras
+            <Button variant="secondary" onClick={onOpenRules}>
+              Ver regras do ambiente
             </Button>
           </div>
           <FindingActionPlan
