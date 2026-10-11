@@ -1,4 +1,5 @@
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { connectionPresentation } from "../../lib/connectionStatus";
 import type { ConnectionStatus, NavigationSection } from "../../types";
 
 export function DashboardConnections({
@@ -28,19 +29,14 @@ export function DashboardConnections({
       ) : (
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {connections.map((c) => {
-            const ok = c.dsn_configured && c.reachable;
-            const statusLabel = ok
-              ? "Conectado"
-              : c.dsn_configured
-                ? "Indisponível"
-                : "DSN ausente";
+            const status = connectionPresentation(c);
             return (
               <Card key={c.environment_id}>
                 <div className="flex items-center justify-between gap-3">
                   <strong className="min-w-0 truncate text-base font-semibold text-slate-50">
                     {c.environment_name}
                   </strong>
-                  <Badge tone={ok ? "success" : "danger"}>{statusLabel}</Badge>
+                  <Badge tone={status.tone}>{status.label}</Badge>
                 </div>
                 {c.server_version ? (
                   <p className="mt-2 font-mono text-xs text-slate-400">
