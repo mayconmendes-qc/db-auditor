@@ -47,7 +47,10 @@ func (m *Metrics) ObserveHTTP(method, path string, status int, d time.Duration) 
 	codeKey := fmt.Sprintf("%s|%s|%d", method, path, status)
 	m.incMap(&m.httpRequests, codeKey)
 	durKey := fmt.Sprintf("%s|%s", method, path)
-	m.addMap(&m.httpDurationNs, durKey, uint64(d.Nanoseconds()))
+	if d < 0 {
+		d = 0
+	}
+	m.addMap(&m.httpDurationNs, durKey, uint64(d.Nanoseconds())) //nolint:gosec // G115: negative durations are clamped above.
 	m.incMap(&m.httpDurationN, durKey)
 }
 

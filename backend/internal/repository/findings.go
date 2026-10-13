@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/osmendes/db-auditor/internal/guidance"
+	"github.com/mayconmendes-qc/db-auditor/internal/guidance"
 )
 
 // Finding is a persisted diagnostic.
@@ -212,7 +212,11 @@ SELECT id::text, environment_id::text, audit_run_id::text,
   created_at, updated_at, recurrence_count, suppression_reason, suppressed_until, superseded_by::text, assignee, due_at
 FROM finding
 WHERE `+findingQueueWhere+`
-ORDER BY last_seen_at DESC,id DESC
+ORDER BY
+  CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+  confidence DESC,
+  last_seen_at DESC,
+  id DESC
 LIMIT $7 OFFSET $8
 `, environmentID, findingType, severity, status, assignee, overdue, limit, offset)
 	if err != nil {

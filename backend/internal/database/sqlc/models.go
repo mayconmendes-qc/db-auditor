@@ -108,6 +108,20 @@ type AuditSchedule struct {
 	UpdatedAt     pgtype.Timestamptz
 }
 
+type AuditorLoginAttempt struct {
+	KeyHash      []byte
+	WindowStart  pgtype.Timestamptz
+	Attempts     int32
+	BlockedUntil pgtype.Timestamptz
+}
+
+type AuditorMfaChallenge struct {
+	TokenHash []byte
+	UserID    pgtype.UUID
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+}
+
 type AuditorOperationLog struct {
 	ID            int64
 	UserID        pgtype.UUID
@@ -133,11 +147,26 @@ type AuditorPrivilegeSnapshot struct {
 	CollectedAt   pgtype.Timestamptz
 }
 
+type AuditorRecoveryCode struct {
+	ID       int64
+	UserID   pgtype.UUID
+	CodeHash []byte
+	UsedAt   pgtype.Timestamptz
+}
+
 type AuditorSession struct {
-	TokenHash []byte
-	UserID    pgtype.UUID
-	ExpiresAt pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
+	TokenHash         []byte
+	UserID            pgtype.UUID
+	ExpiresAt         pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+	LastSeenAt        pgtype.Timestamptz
+	AbsoluteExpiresAt pgtype.Timestamptz
+}
+
+type AuditorSetting struct {
+	Key       string
+	Value     string
+	UpdatedAt pgtype.Timestamptz
 }
 
 type AuditorUser struct {
@@ -148,6 +177,9 @@ type AuditorUser struct {
 	Active       bool
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+	TotpEnabled  bool
+	TotpRequired bool
+	TotpSecret   []byte
 }
 
 type AuditorUserEnvironment struct {
@@ -402,13 +434,15 @@ type Finding struct {
 }
 
 type FindingAction struct {
-	FindingID     pgtype.UUID
-	Status        string
-	OwnerName     string
-	Justification string
-	ResultNote    string
-	UpdatedBy     string
-	UpdatedAt     pgtype.Timestamptz
+	FindingID      pgtype.UUID
+	Status         string
+	OwnerName      string
+	Justification  string
+	ResultNote     string
+	UpdatedBy      string
+	UpdatedAt      pgtype.Timestamptz
+	EvidenceSha256 pgtype.Text
+	SuppressUntil  pgtype.Timestamptz
 }
 
 type FindingActionEvent struct {
@@ -732,6 +766,15 @@ type ReportJob struct {
 	StartedAt      pgtype.Timestamptz
 	FinishedAt     pgtype.Timestamptz
 	ExpiresAt      pgtype.Timestamptz
+}
+
+type RetentionPolicy struct {
+	ID                     bool
+	SnapshotRetentionDays  int32
+	ReportJobRetentionDays int32
+	OwnerName              string
+	EncryptionAtRest       string
+	UpdatedAt              pgtype.Timestamptz
 }
 
 type RlsPolicySnapshot struct {

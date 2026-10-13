@@ -5,6 +5,7 @@ export interface CardProps {
   subtitle?: string;
   children?: ReactNode;
   className?: string;
+  contentClassName?: string;
   onClick?: () => void;
 }
 
@@ -13,6 +14,7 @@ export function Card({
   subtitle,
   children,
   className = "",
+  contentClassName = "mt-auto flex flex-1 flex-col",
   onClick,
 }: CardProps) {
   const interactive = Boolean(onClick);
@@ -44,9 +46,7 @@ export function Card({
           {title}
         </strong>
       ) : null}
-      {children ? (
-        <div className="mt-auto flex flex-1 flex-col">{children}</div>
-      ) : null}
+      {children ? <div className={contentClassName}>{children}</div> : null}
     </article>
   );
 }

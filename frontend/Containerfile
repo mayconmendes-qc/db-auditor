@@ -5,7 +5,9 @@ COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile || bun install
 COPY . .
 ARG VITE_API_BASE_URL=/
+ARG VITE_COMPANY_NAME=Qualle Control
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_COMPANY_NAME=$VITE_COMPANY_NAME
 RUN bun run build
 
 FROM caddy:2.9-alpine

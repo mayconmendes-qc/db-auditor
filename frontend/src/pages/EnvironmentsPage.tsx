@@ -8,12 +8,14 @@ import {
   Skeleton,
   Table,
 } from "../components/ui";
+import { connectionPresentation } from "../lib/connectionStatus";
 import { formatError } from "../lib/errors";
 import { formatBytes, matchesSearch } from "../lib/format";
 import { labels } from "../lib/labels";
 import { nextSort, type SortState, sortBy } from "../lib/sort";
 import { api } from "../services/api";
 import type {
+  ConnectionStatus,
   DatabaseSnapshot,
   Environment,
   NavigationSection,
@@ -26,6 +28,9 @@ export interface EnvironmentsPageProps {
 
 export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const [items, setItems] = useState<Environment[] | null>(null);
+  const [connections, setConnections] = useState<ConnectionStatus[] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseSnapshot[] | null>(null);
@@ -36,22 +41,35 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
   const [envSort, setEnvSort] = useState<SortState | null>(null);
   const [dbSort, setDbSort] = useState<SortState | null>(null);
   const [schemaSort, setSchemaSort] = useState<SortState | null>(null);
+  const [labelName, setLabelName] = useState("");
+  const [labelError, setLabelError] = useState<string | null>(null);
 
   const loadEnvironments = useCallback(() => {
     setError(null);
     setItems(null);
+    setConnections(null);
     api
       .environments()
       .then((res) => {
         setItems(res.items);
-        if (res.items.length > 0) {
-          setSelectedId((prev) => prev ?? res.items[0].id);
-        }
+        setSelectedId((prev) => {
+          if (prev && res.items.some((item) => item.id === prev)) {
+            return prev;
+          }
+          const first = [...res.items].sort((a, b) =>
+            a.id.localeCompare(b.id, "en", { numeric: true }),
+          )[0];
+          return first?.id ?? null;
+        });
       })
       .catch((err: unknown) => {
         setError(formatError(err, "Falha ao carregar ambientes"));
         setItems([]);
       });
+    api
+      .connectionStatus()
+      .then((res) => setConnections(res.items))
+      .catch(() => setConnections([]));
   }, []);
 
   useEffect(() => {
@@ -87,17 +105,29 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
     };
   }, [selectedId]);
 
+  const connectionById = useMemo(() => {
+    const map = new Map<string, ConnectionStatus>();
+    for (const item of connections ?? []) {
+      map.set(item.environment_id, item);
+    }
+    return map;
+  }, [connections]);
+
   const sortedEnvironments = useMemo(() => {
     if (!items) {
       return null;
     }
-    return sortBy(items, envSort, {
+    const byId = [...items].sort((a, b) =>
+      a.id.localeCompare(b.id, "en", { numeric: true }),
+    );
+    return sortBy(byId, envSort, {
       name: (e) => e.name,
       type: (e) => labels.envType(e.type),
       discovery: (e) => labels.discoveryMode(e.discovery_mode),
-      status: (e) => (e.active ? "ativo" : "inativo"),
+      status: (e) =>
+        connectionPresentation(connectionById.get(e.id) ?? null).label,
     });
-  }, [items, envSort]);
+  }, [items, envSort, connectionById]);
 
   const filteredDatabases = useMemo(() => {
     if (!databases) {
@@ -138,11 +168,43 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
         Ambientes
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
-        Topologia registrada no Snapshot Store. A configuração de conexão dos
-        bancos auditados continua via{" "}
-        <code className="text-slate-300">.env</code> (somente leitura). Veja a
-        Documentação para o fluxo completo.
+        O rótulo nasce aqui. A conexão continua no segredo do servidor e não é
+        digitada nem devolvida por esta tela. A coleta só ocorre quando o slot
+        do ambiente corresponde a esse rótulo.
       </p>
+      {api.hasRole("operator") ? (
+        <form
+          className="mt-4 flex max-w-xl flex-wrap items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const name = labelName.trim();
+            if (!name) return;
+            setLabelError(null);
+            void api
+              .createEnvironmentLabel(name)
+              .then(() => {
+                setLabelName("");
+                setReloadKey((k) => k + 1);
+              })
+              .catch((err: unknown) =>
+                setLabelError(
+                  formatError(err, "Não foi possível criar o rótulo"),
+                ),
+              );
+          }}
+        >
+          <Input
+            label="Novo ambiente"
+            value={labelName}
+            placeholder="Nome do ambiente"
+            onChange={(event) => setLabelName(event.target.value)}
+          />
+          <Button type="submit">Criar rótulo</Button>
+        </form>
+      ) : null}
+      {labelError ? (
+        <p className="mt-2 text-sm text-rose-300">{labelError}</p>
+      ) : null}
 
       <div className="mt-6 space-y-6">
         {error ? (
@@ -179,34 +241,45 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
             sortDir={envSort?.dir}
             onSort={(id) => setEnvSort((prev) => nextSort(prev, id))}
           >
-            {sortedEnvironments.map((env) => (
-              <tr
-                key={env.id}
-                className={`cursor-pointer border-t border-slate-800 ${
-                  selectedId === env.id ? "bg-slate-900/80" : ""
-                }`}
-                onClick={() => setSelectedId(env.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    setSelectedId(env.id);
-                  }
-                }}
-                tabIndex={0}
-              >
-                <td className="px-4 py-3 text-slate-100">{env.name}</td>
-                <td className="px-4 py-3 text-slate-300">
-                  {labels.envType(env.type)}
-                </td>
-                <td className="px-4 py-3 text-slate-300">
-                  {labels.discoveryMode(env.discovery_mode)}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={env.active ? "success" : "neutral"}>
-                    {env.active ? "ativo" : "inativo"}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
+            {sortedEnvironments.map((env) => {
+              const status = connectionPresentation(
+                connections === null
+                  ? null
+                  : (connectionById.get(env.id) ?? null),
+              );
+              const label =
+                connections === null ? "Verificando…" : status.label;
+              return (
+                <tr
+                  key={env.id}
+                  className={`cursor-pointer border-t border-slate-800 ${
+                    selectedId === env.id ? "bg-slate-900/80" : ""
+                  }`}
+                  onClick={() => setSelectedId(env.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setSelectedId(env.id);
+                    }
+                  }}
+                  tabIndex={0}
+                >
+                  <td className="px-4 py-3 text-slate-100">{env.name}</td>
+                  <td className="px-4 py-3 text-slate-300">
+                    {labels.envType(env.type)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-300">
+                    {labels.discoveryMode(env.discovery_mode)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      tone={connections === null ? "neutral" : status.tone}
+                    >
+                      {label}
+                    </Badge>
+                  </td>
+                </tr>
+              );
+            })}
           </Table>
         )}
 
@@ -224,95 +297,103 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
 
             {detailError ? <ErrorBanner message={detailError} /> : null}
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div>
+            <div className="grid items-stretch gap-6 lg:grid-cols-2">
+              <div className="flex h-full flex-col">
                 <h3 className="mb-2 text-sm font-medium text-slate-300">
                   Databases
                 </h3>
-                {filteredDatabases === null ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : filteredDatabases.length === 0 ? (
-                  <EmptyState
-                    title="Nenhum database"
-                    description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
-                  />
-                ) : (
-                  <Table
-                    headers={[
-                      { id: "name", label: "Nome", sortable: true },
-                      { id: "size", label: "Tamanho", sortable: true },
-                      {
-                        id: "connections",
-                        label: "Conexões",
-                        sortable: true,
-                      },
-                    ]}
-                    sortKey={dbSort?.key}
-                    sortDir={dbSort?.dir}
-                    onSort={(id) => setDbSort((prev) => nextSort(prev, id))}
-                  >
-                    {filteredDatabases.map((db) => (
-                      <tr key={db.id} className="border-t border-slate-800">
-                        <td className="px-4 py-3 text-slate-100">
-                          {db.database_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {formatBytes(db.size_bytes)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {db.connection_count}
-                        </td>
-                      </tr>
-                    ))}
-                  </Table>
-                )}
+                <div className="flex flex-1 flex-col">
+                  {filteredDatabases === null ? (
+                    <Skeleton className="h-40 w-full" />
+                  ) : filteredDatabases.length === 0 ? (
+                    <EmptyState
+                      className="flex h-full flex-1 flex-col justify-center"
+                      title="Nenhum database"
+                      description="Sem snapshots ainda ou nenhum resultado para o filtro. Execute uma coleta em Execuções."
+                    />
+                  ) : (
+                    <Table
+                      headers={[
+                        { id: "name", label: "Nome", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                        {
+                          id: "connections",
+                          label: "Conexões",
+                          sortable: true,
+                        },
+                      ]}
+                      sortKey={dbSort?.key}
+                      sortDir={dbSort?.dir}
+                      onSort={(id) => setDbSort((prev) => nextSort(prev, id))}
+                    >
+                      {filteredDatabases.map((db) => (
+                        <tr key={db.id} className="border-t border-slate-800">
+                          <td className="px-4 py-3 text-slate-100">
+                            {db.database_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {formatBytes(db.size_bytes)}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {db.connection_count}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </div>
               </div>
 
-              <div>
+              <div className="flex h-full flex-col">
                 <h3 className="mb-2 text-sm font-medium text-slate-300">
                   Schemas
                 </h3>
-                {filteredSchemas === null ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : filteredSchemas.length === 0 ? (
-                  <EmptyState
-                    title="Nenhum schema"
-                    description="Sem snapshots ou nenhum resultado para o filtro."
-                  />
-                ) : (
-                  <Table
-                    headers={[
-                      { id: "database", label: "Database", sortable: true },
-                      { id: "schema", label: "Schema", sortable: true },
-                      { id: "tables", label: "Tables", sortable: true },
-                      { id: "views", label: "Views", sortable: true },
-                      { id: "size", label: "Tamanho", sortable: true },
-                    ]}
-                    sortKey={schemaSort?.key}
-                    sortDir={schemaSort?.dir}
-                    onSort={(id) => setSchemaSort((prev) => nextSort(prev, id))}
-                  >
-                    {filteredSchemas.map((sc) => (
-                      <tr key={sc.id} className="border-t border-slate-800">
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.database_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-100">
-                          {sc.schema_name}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.table_count}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {sc.view_count + sc.materialized_view_count}
-                        </td>
-                        <td className="px-4 py-3 text-slate-300">
-                          {formatBytes(sc.size_bytes)}
-                        </td>
-                      </tr>
-                    ))}
-                  </Table>
-                )}
+                <div className="flex flex-1 flex-col">
+                  {filteredSchemas === null ? (
+                    <Skeleton className="h-40 w-full" />
+                  ) : filteredSchemas.length === 0 ? (
+                    <EmptyState
+                      className="flex h-full flex-1 flex-col justify-center"
+                      title="Nenhum schema"
+                      description="Sem snapshots ou nenhum resultado para o filtro."
+                    />
+                  ) : (
+                    <Table
+                      headers={[
+                        { id: "database", label: "Database", sortable: true },
+                        { id: "schema", label: "Schema", sortable: true },
+                        { id: "tables", label: "Tables", sortable: true },
+                        { id: "views", label: "Views", sortable: true },
+                        { id: "size", label: "Tamanho", sortable: true },
+                      ]}
+                      sortKey={schemaSort?.key}
+                      sortDir={schemaSort?.dir}
+                      onSort={(id) =>
+                        setSchemaSort((prev) => nextSort(prev, id))
+                      }
+                    >
+                      {filteredSchemas.map((sc) => (
+                        <tr key={sc.id} className="border-t border-slate-800">
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.database_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-100">
+                            {sc.schema_name}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.table_count}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {sc.view_count + sc.materialized_view_count}
+                          </td>
+                          <td className="px-4 py-3 text-slate-300">
+                            {formatBytes(sc.size_bytes)}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </div>
               </div>
             </div>
           </section>

@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/osmendes/db-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 type pdfReportStore interface {
@@ -191,7 +191,7 @@ func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("ETag", `"`+artifact.SHA256+`"`)
-		_, _ = w.Write(artifact.Content)
+		_, _ = w.Write(artifact.Content) //nolint:gosec // G705: this is a PDF download with a fixed MIME type and nosniff.
 	})
 }
 

@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { PageHeader } from "../components/PageHeader";
 import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorBanner,
-  Select,
-} from "../components/ui";
+  type InputHTMLAttributes,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import { CoverageBanner } from "../components/CoverageBanner";
+import { PageHeader } from "../components/PageHeader";
+import { Button, Card, ErrorBanner, Select } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { downloadBlob } from "../lib/export";
 import { api } from "../services/api";
 import type { AuditRun, ReportFilters, ReportJob } from "../types";
+import { ReportJobList } from "./parts/ReportJobList";
 
 const severityLabels: Record<string, string> = {
   critical: "Crítica",
@@ -27,19 +27,22 @@ const runStatusLabels: Record<string, string> = {
   partial_success: "Parcial",
 };
 
-const reportStatusLabels: Record<string, string> = {
-  queued: "Na fila",
-  running: "Em andamento",
-  success: "Concluído",
-  failed: "Falhou",
-  canceled: "Cancelado",
-};
-
-const reportTypeLabels: Record<ReportJob["report_type"], string> = {
-  executive: "Executivo",
-  technical: "Técnico",
-  table: "Tabela",
-};
+function ReportTextField({
+  label,
+  ...props
+}: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <label className="grid gap-1.5 text-sm text-slate-300">
+      <span className="text-xs font-medium tracking-wide text-slate-400">
+        {label}
+      </span>
+      <input
+        className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+        {...props}
+      />
+    </label>
+  );
+}
 
 export function reportJobActions(
   job: ReportJob,
@@ -83,6 +86,9 @@ export function ReportsPage() {
     "none",
   );
   const [jobs, setJobs] = useState<ReportJob[]>([]);
+  const [coverageKind, setCoverageKind] = useState<
+    "partial" | "gap" | "permission" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -102,6 +108,11 @@ export function ReportsPage() {
           (run) => run.status === "success" || run.status === "partial_success",
         );
         setRuns(completed);
+        setCoverageKind(
+          completed.some((run) => run.status === "partial_success")
+            ? "partial"
+            : null,
+        );
         setRunId((current) =>
           completed.some((run) => run.id === current)
             ? current
@@ -198,9 +209,12 @@ export function ReportsPage() {
       <div className="mt-8 space-y-5">
         <Card
           title="Solicitar relatório"
-          subtitle="O processamento é assíncrono e o PDF expira após 30 dias."
+          contentClassName="flex flex-col gap-3"
         >
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <p className="-mt-1.5 text-sm text-slate-400">
+            O processamento é assíncrono e o PDF expira após 30 dias.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select
               label="Ambiente"
               value={env}
@@ -268,41 +282,39 @@ export function ReportsPage() {
                 },
               ]}
             />
-            <input
+            <ReportTextField
+              label="Banco (opcional)"
               aria-label="Banco"
-              placeholder="Banco (opcional)"
               value={database}
               onChange={(event) => setDatabase(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
-            <input
+            <ReportTextField
+              label="Esquema (opcional)"
               aria-label="Esquema"
-              placeholder="Esquema (opcional)"
               value={schema}
               onChange={(event) => setSchema(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
-            <input
+            <ReportTextField
+              label="Tabela"
               aria-label="Tabela"
-              placeholder="Tabela (obrigatória para relatório de tabela)"
+              placeholder="Obrigatória no relatório de tabela"
               value={table}
               onChange={(event) => setTable(event.target.value)}
-              className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
             />
             {!api.hasSession() && (
-              <input
+              <ReportTextField
+                label="Token de relatórios"
                 aria-label="Token de relatórios"
                 type="password"
                 autoComplete="off"
-                placeholder="Token de relatórios"
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
-                className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
               />
             )}
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <Button
+              className="h-10 w-full"
               disabled={
                 busy ||
                 !reportFormReady(
@@ -323,6 +335,7 @@ export function ReportsPage() {
               Gerar PDF
             </Button>
             <Button
+              className="h-10 w-full"
               variant="secondary"
               disabled={busy || !env || (!token && !api.hasSession())}
               onClick={() => void refresh()}
@@ -334,65 +347,12 @@ export function ReportsPage() {
         {error ? (
           <ErrorBanner message={error} onRetry={() => void refresh()} />
         ) : null}
-        {jobs.length === 0 ? (
-          <EmptyState
-            title="Sem relatórios"
-            description="Selecione o ambiente e solicite o primeiro PDF."
-          />
-        ) : null}
-        {jobs.map((job) => (
-          <Card
-            key={job.id}
-            title={`${reportTypeLabels[job.report_type]} · ${job.audit_run_id.slice(0, 8)}…`}
-            subtitle={`Solicitado em ${new Date(job.created_at).toLocaleString()} · expira em ${new Date(job.expires_at).toLocaleDateString()}`}
-          >
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-300">
-              <Badge
-                tone={
-                  job.status === "success" &&
-                  Date.parse(job.expires_at) > Date.now()
-                    ? "success"
-                    : job.status === "failed"
-                      ? "danger"
-                      : "warning"
-                }
-              >
-                {Date.parse(job.expires_at) <= Date.now()
-                  ? "expirado"
-                  : (reportStatusLabels[job.status] ?? job.status)}
-              </Badge>
-              <span>Tentativa {job.attempts}/3</span>
-              {job.sha256 ? (
-                <span title={job.sha256}>
-                  SHA-256: {job.sha256.slice(0, 12)}…
-                </span>
-              ) : null}
-            </div>
-            {job.error ? (
-              <p className="mt-2 text-xs text-rose-300">{job.error}</p>
-            ) : null}
-            <div className="mt-3 flex gap-2">
-              {reportJobActions(job).includes("download") ? (
-                <Button onClick={() => void act(job, "download")}>
-                  Baixar PDF
-                </Button>
-              ) : null}
-              {reportJobActions(job).includes("retry") ? (
-                <Button onClick={() => void act(job, "retry")}>
-                  Tentar novamente
-                </Button>
-              ) : null}
-              {reportJobActions(job).includes("cancel") ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => void act(job, "cancel")}
-                >
-                  Cancelar
-                </Button>
-              ) : null}
-            </div>
-          </Card>
-        ))}
+        <CoverageBanner kind={coverageKind} />
+        <ReportJobList
+          jobs={jobs}
+          act={act}
+          reportJobActions={reportJobActions}
+        />
       </div>
     </>
   );

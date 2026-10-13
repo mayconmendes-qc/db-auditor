@@ -10,17 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/osmendes/db-auditor/internal/analyzer"
-	"github.com/osmendes/db-auditor/internal/api"
-	"github.com/osmendes/db-auditor/internal/audit"
-	"github.com/osmendes/db-auditor/internal/buildinfo"
-	"github.com/osmendes/db-auditor/internal/config"
-	"github.com/osmendes/db-auditor/internal/database"
-	"github.com/osmendes/db-auditor/internal/migrate"
-	"github.com/osmendes/db-auditor/internal/observability"
-	"github.com/osmendes/db-auditor/internal/reportworker"
-	"github.com/osmendes/db-auditor/internal/repository"
-	"github.com/osmendes/db-auditor/internal/scheduler"
+	"github.com/mayconmendes-qc/db-auditor/internal/analyzer"
+	"github.com/mayconmendes-qc/db-auditor/internal/api"
+	"github.com/mayconmendes-qc/db-auditor/internal/audit"
+	"github.com/mayconmendes-qc/db-auditor/internal/buildinfo"
+	"github.com/mayconmendes-qc/db-auditor/internal/config"
+	"github.com/mayconmendes-qc/db-auditor/internal/database"
+	"github.com/mayconmendes-qc/db-auditor/internal/migrate"
+	"github.com/mayconmendes-qc/db-auditor/internal/observability"
+	"github.com/mayconmendes-qc/db-auditor/internal/reportworker"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/scheduler"
 )
 
 func main() {
@@ -50,6 +50,11 @@ func main() {
 		slog.Error("unsafe target configuration", "error", err)
 		os.Exit(1)
 	}
+	if hosts := config.InsecureTargetHosts(); len(hosts) > 0 {
+		slog.Warn("weak TLS allowlist is explicit and empty by default; these hosts may skip verify-full", "hosts", hosts)
+	} else {
+		slog.Info("target TLS default is verify-full; AUDITOR_TARGET_INSECURE_HOSTS is empty")
+	}
 	if err := config.ValidateMongoTargetURIs(mongoTargets); err != nil {
 		slog.Error("unsafe MongoDB target configuration", "error", err)
 		os.Exit(1)
@@ -76,6 +81,15 @@ func main() {
 	}
 
 	store := repository.NewStore(pool)
+	seeds, err := config.LoadSeedEnvironments()
+	if err != nil {
+		slog.Error("ambientes iniciais inválidos", "error", err)
+		os.Exit(1)
+	}
+	if err := store.UpsertSeedEnvironments(ctx, seeds); err != nil {
+		slog.Error("não foi possível gravar os ambientes iniciais", "error", err)
+		os.Exit(1)
+	}
 	if err := store.EnsureIdentitySchema(ctx); err != nil {
 		slog.Error("could not ensure identity schema", "error", err)
 		os.Exit(1)
@@ -91,7 +105,7 @@ func main() {
 		if password == "" {
 			secretPath := os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD_FILE")
 			if secretPath != "" {
-				secret, err := os.ReadFile(secretPath)
+				secret, err := os.ReadFile(secretPath) //nolint:gosec // G703: path is an operator-configured secret file, not a request parameter.
 				if err != nil {
 					slog.Error("could not read bootstrap secret", "error", err)
 					os.Exit(1)
@@ -123,10 +137,11 @@ func main() {
 	}
 	registry := audit.NewLiveRegistry(liveOpts)
 	audit.AttachStructuralCollectors(registry, liveOpts)
-	analysisService := analyzer.NewService(store, store, "1.0.0")
+	binaryVersion := buildinfo.String()
+	analysisService := analyzer.NewService(store, store, binaryVersion)
 	runner := audit.NewRunner(registry, runStore, audit.RunnerOptions{
-		ServiceVersion:           buildinfo.String(),
-		CollectorVersion:         "1.1.0",
+		ServiceVersion:           binaryVersion,
+		CollectorVersion:         binaryVersion,
 		MaxWorkers:               cfg.MaxCollectorWorkers,
 		MaxDatabaseConnections:   cfg.MaxDatabaseConnections,
 		OptionalCollectorTimeout: cfg.OptionalCollectorTimeout,
