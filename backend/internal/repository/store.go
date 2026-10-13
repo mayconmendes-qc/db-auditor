@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/osmendes/db-auditor/internal/database/sqlc"
+	"github.com/mayconmendes-qc/db-auditor/internal/database/sqlc"
 )
 
 type Store struct {
@@ -47,6 +47,14 @@ func (s *Store) CreateEnvironment(ctx context.Context, name, envType, discoveryM
 	return s.q.CreateEnvironment(ctx, sqlc.CreateEnvironmentParams{
 		Name: name, Type: envType, DiscoveryMode: discoveryMode, Active: active,
 	})
+}
+
+func (s *Store) CreateEnvironmentLabel(ctx context.Context, name, envType, discoveryMode string, active bool) (pgtype.UUID, string, error) {
+	row, err := s.CreateEnvironment(ctx, name, envType, discoveryMode, active)
+	if err != nil {
+		return pgtype.UUID{}, "", err
+	}
+	return row.ID, row.Name, nil
 }
 
 func (s *Store) ListActiveEnvironments(ctx context.Context) ([]sqlc.AuditEnvironment, error) {

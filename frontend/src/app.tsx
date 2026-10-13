@@ -1,16 +1,20 @@
 import {
   type FormEvent,
   lazy,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
   useState,
 } from "react";
 import { navigationSections, Shell } from "./components/layout/Shell";
+import { Button, Input } from "./components/ui";
 import { AppProvider, useApp } from "./context/AppContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { companyName } from "./lib/company";
 import { formatError } from "./lib/errors";
 import { api } from "./services/api";
+import type { NavigationSection } from "./types";
 
 // Keep the login and navigation shell small. Each section loads when opened.
 const AccountsPage = lazy(() =>
@@ -47,24 +51,13 @@ const MappingsPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import("./pages/MonitoringPage").then((m) => ({ default: m.MonitoringPage })),
 );
-const PerformancePage = lazy(() =>
-  import("./pages/PerformancePage").then((m) => ({
-    default: m.PerformancePage,
-  })),
-);
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
-);
-const RulesPage = lazy(() =>
-  import("./pages/RulesPage").then((m) => ({ default: m.RulesPage })),
 );
 const SchemaDriftPage = lazy(() =>
   import("./pages/SchemaDriftPage").then((m) => ({
     default: m.SchemaDriftPage,
   })),
-);
-const SecurityPage = lazy(() =>
-  import("./pages/SecurityPage").then((m) => ({ default: m.SecurityPage })),
 );
 const ServerComparePage = lazy(() =>
   import("./pages/ServerComparePage").then((m) => ({
@@ -79,57 +72,40 @@ export { navigationSections };
 
 function AppRoutes({ onLogout }: { onLogout: () => void }) {
   const { section, setSection } = useApp();
-
-  let content = <DashboardPage />;
-  if (section === "Documentação") {
-    content = <DocsPage onNavigate={setSection} />;
-  } else if (section === "Ambientes") {
-    content = <EnvironmentsPage onNavigate={setSection} />;
-  } else if (section === "Inventário") {
-    content = <InventoryPage />;
-  } else if (section === "Execuções") {
-    content = <AuditRunsPage />;
-  } else if (section === "Relatórios") {
-    content = <ReportsPage />;
-  } else if (section === "Mapeamentos") {
-    content = <MappingsPage />;
-  } else if (section === "Desvio de schema") {
-    content = <SchemaDriftPage />;
-  } else if (section === "Comparar") {
-    content = <ServerComparePage />;
-  } else if (section === "Findings") {
-    content = <FindingsPage />;
-  } else if (section === "Performance") {
-    content = <PerformancePage />;
-  } else if (section === "Segurança") {
-    content = <SecurityPage />;
-  } else if (section === "Regras") {
-    content = <RulesPage />;
-  } else if (section === "Status") {
-    content = <StatusPage />;
-  } else if (section === "Contas") {
-    content = <AccountsPage />;
-  } else if (section === "Acompanhamento") {
-    content = <MonitoringPage />;
-  } else if (section === "Ações assistidas") {
-    content = <AssistedActionsPage />;
-  }
+  const pages: Record<NavigationSection, ReactNode> = {
+    Dashboard: <DashboardPage />,
+    Documentação: <DocsPage onNavigate={setSection} />,
+    Ambientes: <EnvironmentsPage onNavigate={setSection} />,
+    Inventário: <InventoryPage />,
+    Execuções: <AuditRunsPage />,
+    Relatórios: <ReportsPage />,
+    Mapeamentos: <MappingsPage />,
+    "Desvio de schema": <SchemaDriftPage />,
+    Comparar: <ServerComparePage />,
+    Findings: <FindingsPage />,
+    Status: <StatusPage />,
+    Contas: <AccountsPage />,
+    Acompanhamento: <MonitoringPage />,
+    "Ações assistidas": <AssistedActionsPage />,
+  };
 
   return (
     <Shell activeSection={section} onNavigate={setSection} onLogout={onLogout}>
       <Suspense fallback={<p role="status">Carregando seção…</p>}>
-        {content}
+        {pages[section] ?? <DashboardPage />}
       </Suspense>
     </Shell>
   );
 }
 
-export function App() {
+function SessionApp() {
   const [user, setUser] = useState<{ username: string; role: string } | null>(
     null,
   );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(true);
@@ -160,10 +136,30 @@ export function App() {
     setBusy(true);
     setError("");
     try {
-      setUser(await api.login(username, password));
+      const result = await api.login(username, password);
+      if ("mfa_required" in result) {
+        setMfaToken(result.mfa_token);
+        setPassword("");
+        return;
+      }
+      setUser(result);
       setPassword("");
     } catch (cause) {
       setError(formatError(cause, "Não foi possível entrar."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirmCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      setUser(await api.confirmTotp(mfaToken, code));
+      setMfaToken("");
+      setCode("");
+    } catch (cause) {
+      setError(formatError(cause, "Código inválido."));
     } finally {
       setBusy(false);
     }
@@ -173,6 +169,7 @@ export function App() {
       <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
         <div className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7">
           <h1 className="text-xl font-semibold">DB Auditor</h1>
+          <p className="text-sm text-slate-400">{companyName()}</p>
           {restoreError ? (
             <>
               <p role="alert" className="text-sm text-rose-300">
@@ -195,62 +192,121 @@ export function App() {
   }
   if (!user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
-        <form
-          onSubmit={(event) => void login(event)}
-          className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7"
-        >
-          <h1 className="text-xl font-semibold">Entrar no DB Auditor</h1>
-          <p className="text-sm text-slate-400">
-            Sua sessão pode ser usada em outras abas deste site por até 8 horas.
-            Use Sair ao terminar.
-          </p>
-          <label className="block text-sm">
-            Usuário
-            <input
-              required
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 p-2"
-            />
-          </label>
-          <label className="block text-sm">
-            Senha
-            <input
-              required
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded border border-slate-600 bg-slate-950 p-2"
-            />
-          </label>
-          {error ? (
-            <p role="alert" className="text-sm text-rose-300">
-              {error}
-            </p>
-          ) : null}
-          <button
-            disabled={busy}
-            className="w-full rounded bg-cyan-600 px-4 py-2 font-medium disabled:opacity-50"
-            type="submit"
-          >
-            {busy ? "Entrando…" : "Entrar"}
-          </button>
-        </form>
-      </main>
+      <LoginScreen
+        username={username}
+        password={password}
+        code={code}
+        mfa={mfaToken !== ""}
+        error={error}
+        busy={busy}
+        onUsername={setUsername}
+        onPassword={setPassword}
+        onCode={setCode}
+        onSubmit={(event) =>
+          void (mfaToken ? confirmCode(event) : login(event))
+        }
+      />
     );
   }
   return (
-    <ThemeProvider>
-      <AppProvider>
-        <AppRoutes
-          onLogout={() => {
-            void api.logout().finally(() => setUser(null));
-          }}
+    <AppProvider>
+      <AppRoutes
+        onLogout={() => {
+          void api.logout().finally(() => setUser(null));
+        }}
+      />
+    </AppProvider>
+  );
+}
+
+function LoginScreen({
+  username,
+  password,
+  code,
+  mfa,
+  error,
+  busy,
+  onUsername,
+  onPassword,
+  onCode,
+  onSubmit,
+}: {
+  username: string;
+  password: string;
+  code: string;
+  mfa: boolean;
+  error: string;
+  busy: boolean;
+  onUsername: (value: string) => void;
+  onPassword: (value: string) => void;
+  onCode: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6 text-slate-100">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-sm space-y-4 rounded-xl border border-slate-700 bg-slate-900 p-7"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">Entrar no DB Auditor</h1>
+            <p className="text-sm text-slate-400">{companyName()}</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="text-xs text-slate-300 underline"
+          >
+            {theme === "dark" ? "Tema claro" : "Tema escuro"}
+          </button>
+        </div>
+        <p className="text-sm text-slate-400">
+          Sua sessão pode ser usada em outras abas deste site por até 8 horas.
+          Use Sair ao terminar.
+        </p>
+        <Input
+          label="Usuário"
+          required
+          autoComplete="username"
+          value={username}
+          onChange={(event) => onUsername(event.target.value)}
         />
-      </AppProvider>
+        <Input
+          label="Senha"
+          required
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => onPassword(event.target.value)}
+        />
+        {mfa ? (
+          <Input
+            label="Código TOTP ou recuperação"
+            required
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(event) => onCode(event.target.value)}
+          />
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-sm text-rose-300">
+            {error}
+          </p>
+        ) : null}
+        <Button disabled={busy} className="w-full" type="submit">
+          {busy ? "Entrando…" : mfa ? "Confirmar código" : "Entrar"}
+        </Button>
+      </form>
+    </main>
+  );
+}
+
+export function App() {
+  return (
+    <ThemeProvider>
+      <SessionApp />
     </ThemeProvider>
   );
 }

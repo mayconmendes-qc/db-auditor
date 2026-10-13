@@ -29,9 +29,6 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   "Desvio de schema": "schema-drift",
   Comparar: "compare",
   Findings: "findings",
-  Performance: "performance",
-  Segurança: "security",
-  Regras: "rules",
   Contas: "accounts",
   Acompanhamento: "monitoring",
   "Ações assistidas": "assisted-actions",
@@ -96,6 +93,21 @@ export function parseLocationHash(hash: string): LocationState {
     inventory = inventoryTargetFromParams(params);
   } else if (head === "compare") {
     section = "Comparar";
+  } else if (
+    head === "performance" ||
+    head === "security" ||
+    head === "rules"
+  ) {
+    section = "Findings";
+    if (head === "performance" && !search.category) {
+      search.category = "performance";
+    }
+    if (head === "security" && !search.category) {
+      search.category = "security";
+    }
+    if (head === "rules" && !search.view) {
+      search.view = "rules";
+    }
   } else if (head === "overview") {
     section = "Dashboard";
   } else {

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { useTheme } from "../../context/ThemeContext";
+import { companyName } from "../../lib/company";
 import { api } from "../../services/api";
 import type { NavigationSection } from "../../types";
-import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 
 export const navigationSections: NavigationSection[] = [
@@ -18,9 +18,6 @@ export const navigationSections: NavigationSection[] = [
   "Desvio de schema",
   "Comparar",
   "Findings",
-  "Performance",
-  "Segurança",
-  "Regras",
   "Contas",
   "Acompanhamento",
   "Ações assistidas",
@@ -41,14 +38,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
   },
   {
     label: "Análise",
-    items: [
-      "Desvio de schema",
-      "Comparar",
-      "Findings",
-      "Performance",
-      "Segurança",
-      "Regras",
-    ],
+    items: ["Desvio de schema", "Comparar", "Findings"],
   },
   {
     label: "Sistema",
@@ -137,18 +127,17 @@ export function Shell({
   onNavigate,
   onLogout,
 }: ShellProps) {
-  const {
-    environments,
-    environmentId,
-    setEnvironmentId,
-    setSearch,
-    openFinding,
-  } = useApp();
+  const { environments, environmentId, setEnvironmentId } = useApp();
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [dsnDown, setDsnDown] = useState(0);
   const [openFindings, setOpenFindings] = useState(0);
-  const [query, setQuery] = useState("");
   const [runningRuns, setRunningRuns] = useState(0);
+  const [navOpen, setNavOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState(
+    () => localStorage.getItem("auditor-nav-group") || "Início",
+  );
+  const navRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +197,7 @@ export function Shell({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, environmentId]);
+  }, [environmentId]);
 
   const { title: healthTitle, short: healthShort } = healthLabel(
     apiOk,
@@ -241,15 +230,48 @@ export function Shell({
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 md:grid-cols-[15rem_1fr]">
-      <aside className="flex flex-col border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-b-0 md:border-r md:border-slate-800">
-        <div className="min-w-0">
-          <strong className="text-sm font-semibold text-slate-50">
-            DB Auditor
-          </strong>
-          <p className="mt-0.5 text-xs text-slate-400">Qualle Control</p>
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-slate-100 focus:px-3 focus:py-2 focus:text-slate-900"
+      >
+        Pular para o conteúdo
+      </a>
+      <aside className="flex max-h-screen flex-col border-b border-slate-800 bg-slate-950 p-4 md:sticky md:top-0 md:h-screen md:overflow-hidden md:border-b-0 md:border-r md:border-slate-800">
+        <div className="flex shrink-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <strong className="text-sm font-semibold text-slate-50">
+              DB Auditor
+            </strong>
+            <p className="mt-0.5 text-xs text-slate-400">{companyName()}</p>
+          </div>
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200 md:hidden"
+            aria-expanded={navOpen}
+            aria-controls="app-nav"
+            onClick={() => {
+              setNavOpen((open) => {
+                const next = !open;
+                window.setTimeout(() => {
+                  if (next) navRef.current?.focus();
+                  else menuButtonRef.current?.focus();
+                }, 0);
+                return next;
+              });
+            }}
+          >
+            Menu
+          </button>
         </div>
 
-        <div className="mt-4">
+        <div
+          className={
+            navOpen
+              ? "mt-4 flex min-h-0 flex-1 flex-col"
+              : "mt-4 hidden min-h-0 flex-1 flex-col md:flex"
+          }
+        >
           <Select
             label="Ambiente"
             options={envOptions}
@@ -257,96 +279,110 @@ export function Shell({
             onChange={(e) => setEnvironmentId(e.target.value || null)}
             aria-label="Ambiente global"
           />
-        </div>
-        <form
-          className="mt-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const term = query.trim();
-            if (!term) return;
-            if (/^[0-9a-f-]{36}$/i.test(term)) {
-              openFinding(term);
-              return;
-            }
-            setSearch({ q: term });
-            onNavigate?.("Inventário");
-          }}
-        >
-          <Input
-            label="Busca"
-            value={query}
-            placeholder="Objeto ou ID do achado"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </form>
 
-        <nav className="mt-5 min-h-0 flex-1 space-y-4" aria-label="Principal">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <p className="mb-1 px-2 text-xs font-medium text-slate-500">
-                {group.label}
-              </p>
-              <div className="grid grid-cols-1 gap-0.5">
-                {group.items
-                  .filter(
-                    (section) =>
-                      api.hasRole("operator") ||
-                      (!["Mapeamentos", "Desvio de schema", "Status"].includes(
-                        section,
-                      ) &&
-                        (section !== "Relatórios" || api.hasRole("auditor"))),
-                  )
-                  .map((section) => {
-                    const isActive = section === activeSection;
-                    const count = badgeFor(section);
-                    return (
-                      <button
-                        key={section}
-                        type="button"
-                        onClick={() => onNavigate?.(section)}
-                        className={
-                          isActive
-                            ? "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                            : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                        }
-                        style={
-                          isActive
-                            ? {
-                                backgroundColor: "var(--nav-active-bg)",
-                                color: "var(--nav-active-fg)",
+          <nav
+            id="app-nav"
+            ref={navRef}
+            tabIndex={-1}
+            className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto outline-none"
+            aria-label="Principal"
+          >
+            {navGroups.map((group) => {
+              const expanded = openGroup === group.label;
+              return (
+                <div key={group.label}>
+                  <button
+                    type="button"
+                    className="mb-1 flex w-full items-center justify-between px-2 text-xs font-medium text-slate-500"
+                    aria-expanded={expanded}
+                    onClick={() => {
+                      const next = expanded ? "" : group.label;
+                      setOpenGroup(next || group.label);
+                      localStorage.setItem(
+                        "auditor-nav-group",
+                        next || group.label,
+                      );
+                    }}
+                  >
+                    {group.label}
+                    <span aria-hidden>{expanded ? "–" : "+"}</span>
+                  </button>
+                  {expanded ? (
+                    <div className="grid grid-cols-1 gap-0.5">
+                      {group.items
+                        .filter(
+                          (section) =>
+                            api.hasRole("operator") ||
+                            (![
+                              "Mapeamentos",
+                              "Desvio de schema",
+                              "Status",
+                            ].includes(section) &&
+                              (section !== "Relatórios" ||
+                                api.hasRole("auditor"))),
+                        )
+                        .map((section) => {
+                          const isActive = section === activeSection;
+                          const count = badgeFor(section);
+                          return (
+                            <button
+                              key={section}
+                              type="button"
+                              onClick={() => {
+                                setOpenGroup(group.label);
+                                localStorage.setItem(
+                                  "auditor-nav-group",
+                                  group.label,
+                                );
+                                onNavigate?.(section);
+                                setNavOpen(false);
+                              }}
+                              className={
+                                isActive
+                                  ? "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                                  : "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-300 transition hover:bg-slate-800 hover:text-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                               }
-                            : undefined
-                        }
-                      >
-                        <span className="min-w-0 truncate">
-                          {section === "Findings"
-                            ? "Achados"
-                            : section === "Dashboard"
-                              ? "Visão geral"
-                              : section === "Desvio de schema"
-                                ? "Desvio de esquema"
-                                : section}
-                        </span>
-                        {count != null ? (
-                          <span
-                            className={
-                              isActive
-                                ? "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] opacity-70"
-                                : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
-                            }
-                          >
-                            {count > 99 ? "99+" : count}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          ))}
-        </nav>
+                              style={
+                                isActive
+                                  ? {
+                                      backgroundColor: "var(--nav-active-bg)",
+                                      color: "var(--nav-active-fg)",
+                                    }
+                                  : undefined
+                              }
+                            >
+                              <span className="min-w-0 truncate">
+                                {section === "Findings"
+                                  ? "Análises"
+                                  : section === "Dashboard"
+                                    ? "Visão geral"
+                                    : section === "Desvio de schema"
+                                      ? "Desvio de esquema"
+                                      : section}
+                              </span>
+                              {count != null ? (
+                                <span
+                                  className={
+                                    isActive
+                                      ? "shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] opacity-70"
+                                      : "shrink-0 rounded-full bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+                                  }
+                                >
+                                  {count > 99 ? "99+" : count}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </nav>
+        </div>
 
-        <div className="mt-4 flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 pt-3">
+        <div className="mt-auto flex shrink-0 items-center justify-between gap-2 border-t border-slate-800 pt-3">
           <button
             type="button"
             onClick={() => onNavigate?.("Status")}
@@ -379,7 +415,10 @@ export function Shell({
         </div>
       </aside>
 
-      <main className="w-full min-w-0 px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-10">
+      <main
+        id="conteudo"
+        className="w-full min-w-0 px-4 py-6 sm:px-6 md:px-8 md:py-8 lg:px-10"
+      >
         <div className="mx-auto w-full max-w-[1600px]">{children}</div>
       </main>
     </div>

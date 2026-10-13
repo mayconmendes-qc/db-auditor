@@ -10,13 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/osmendes/db-auditor/internal/repository"
+	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
 type AuthStore interface {
@@ -46,46 +44,8 @@ func requestIdentity(r *http.Request) *repository.AuditorUser {
 	return user
 }
 
-type attemptWindow struct {
-	count int
-	start time.Time
-}
-
-type loginLimiter struct {
-	mu   sync.Mutex
-	byIP map[string]attemptWindow
-	max  int
-}
-
-func (l *loginLimiter) allow(remote string) bool {
-	host, _, err := net.SplitHostPort(remote)
-	if err != nil {
-		host = remote
-	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	if len(l.byIP) > 10000 {
-		for k, v := range l.byIP {
-			if now.Sub(v.start) > time.Minute {
-				delete(l.byIP, k)
-			}
-		}
-	}
-	v := l.byIP[host]
-	if now.Sub(v.start) >= time.Minute {
-		v = attemptWindow{start: now}
-	}
-	v.count++
-	l.byIP[host] = v
-	limit := l.max
-	if limit <= 0 {
-		limit = 10
-	}
-	return v.count <= limit
-}
-
 func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
+	registerTOTPRoutes(mux, store)
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		var body struct{ Username, Password string }
@@ -95,24 +55,16 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 		}
 		username := strings.TrimSpace(body.Username)
 		host := clientIP(r)
-		ipKey := sha256.Sum256([]byte("login-ip:" + host))
-		accountKey := sha256.Sum256([]byte("login-user:" + strings.ToLower(username)))
-		ipAttempts, err := store.RecordLoginAttempt(r.Context(), ipKey[:], time.Minute, false)
+		pairKey := sha256.Sum256([]byte("login-pair:" + host + "\n" + strings.ToLower(username)))
+		pairAttempts, err := store.RecordLoginAttempt(r.Context(), pairKey[:], 5*time.Minute, true)
 		if err != nil {
 			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
 			return
 		}
-		accountAttempts, err := store.RecordLoginAttempt(r.Context(), accountKey[:], 5*time.Minute, true)
-		if err != nil {
-			writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
-			return
-		}
-		if ipAttempts.Count > 600 || accountAttempts.Count > 10 || accountAttempts.RetryAfter > 0 {
-			retryAfter := "60"
-			if accountAttempts.Count > 10 {
-				retryAfter = "300"
-			} else if accountAttempts.RetryAfter > 0 {
-				retryAfter = fmt.Sprint(accountAttempts.RetryAfter)
+		if pairAttempts.Count > 10 || pairAttempts.RetryAfter > 0 {
+			retryAfter := "300"
+			if pairAttempts.RetryAfter > 0 {
+				retryAfter = fmt.Sprint(pairAttempts.RetryAfter)
 			}
 			w.Header().Set("Retry-After", retryAfter)
 			writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas tentativas. Aguarde e tente novamente.")
@@ -127,6 +79,12 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			writeError(w, http.StatusUnauthorized, CodeUnavailable, "Credenciais inválidas.")
 			return
 		}
+		if err := store.ClearLoginAttempt(r.Context(), pairKey[:]); err != nil {
+			slog.Warn("could not clear login attempt counter", "error", err)
+		}
+		if respondTOTPChallenge(w, r, store, user) {
+			return
+		}
 		token := make([]byte, 32)
 		if _, err := rand.Read(token); err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao criar sessão.")
@@ -138,11 +96,8 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao criar sessão.")
 			return
 		}
-		if err := store.ClearLoginAttempt(r.Context(), accountKey[:]); err != nil {
-			slog.Warn("could not clear login attempt counter", "error", err)
-		}
 		if r.URL.Query().Get("mode") == "cookie" {
-			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800,
+			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 				HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 			writeJSON(w, http.StatusOK, map[string]any{"user": user, "csrf_token": csrfToken(encoded), "expires_in": 28800})
 			return
@@ -164,7 +119,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao encerrar sessão.")
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 			HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 	})
@@ -307,14 +262,14 @@ func registerAccountRoutes(mux *http.ServeMux, store AuthStore) {
 }
 
 func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 		HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 }
 
 func authMiddleware(next http.Handler, store AuthStore) http.Handler {
-	limiter := &loginLimiter{byIP: make(map[string]attemptWindow), max: 600}
+	limiter := &apiWindow{byKey: make(map[string]attemptWindow), max: 600}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/auth/login" {
+		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/totp" {
 			next.ServeHTTP(w, r)
 			return
 		}

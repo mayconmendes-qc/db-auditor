@@ -97,6 +97,7 @@ services:
       dockerfile: Containerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/}
+        VITE_COMPANY_NAME: ${AUDITOR_COMPANY_NAME:-Qualle Control}
     restart: unless-stopped
     networks: [auditor]
     depends_on:

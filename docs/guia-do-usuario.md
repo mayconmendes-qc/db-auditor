@@ -12,6 +12,8 @@ Escolha um ambiente no seletor. Cada ambiente representa um banco ou conjunto de
 
 Os endereços e credenciais dos bancos analisados ficam na configuração do servidor. Eles não são digitados na interface nem aparecem nos relatórios.
 
+A navegação fica no fragmento da URL (`#/dashboard`, `#/findings/<id>?env=<ambiente>`), não num caminho do servidor. Recarregar a página, voltar no navegador ou enviar o link abre a mesma seção, o mesmo ambiente e o mesmo achado. Uma sessão expirada pede login de novo e, depois dele, o fragmento continua na barra de endereço.
+
 ## 2. Fazer uma coleta e entender a cobertura
 
 Em **Execuções**, selecione o ambiente e inicie uma auditoria quando seu papel permitir. Escolha o perfil de coleta adequado: perfis mais amplos observam mais aspectos e podem levar mais tempo. A tela mostra a execução, os coletores, avisos e falhas.
@@ -92,7 +94,7 @@ O artefato expira após 30 dias. A expiração remove o PDF, mas preserva o regi
 - **Mapeamentos, Desvio de schema e Comparar:** relacione objetos entre ambientes e examine diferenças. Versão, perfil e cobertura podem limitar a comparação.
 - **Regras:** veja o catálogo, sua versão e a explicação das verificações. Uma regra não aplicável ao mecanismo não deve ser interpretada como resultado saudável.
 - **Status:** veja se API, armazenamento interno, conexões e tarefas estão funcionando.
-- **Contas:** operadores gerenciam usuários e acessos. Não compartilhe senha; peça revogação se perder um dispositivo.
+- **Contas:** operadores gerenciam usuários e acessos. Não compartilhe senha; peça revogação se perder um dispositivo. TOTP é opcional: em Contas, gere o segredo, confirme o código do autenticador e guarde os códigos de recuperação. Só um operador pode exigir o código na própria conta. Não há SMS.
 - **Documentação:** consulte ajuda contextual e o glossário dentro do aplicativo.
 
 ## 10. Se algo parecer errado
