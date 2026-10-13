@@ -105,7 +105,7 @@ func main() {
 		if password == "" {
 			secretPath := os.Getenv("AUDITOR_BOOTSTRAP_PASSWORD_FILE")
 			if secretPath != "" {
-				secret, err := os.ReadFile(secretPath)
+				secret, err := os.ReadFile(secretPath) //nolint:gosec // G703: path is an operator-configured secret file, not a request parameter.
 				if err != nil {
 					slog.Error("could not read bootstrap secret", "error", err)
 					os.Exit(1)
