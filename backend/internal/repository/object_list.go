@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/mayconmendes-qc/db-auditor/internal/database/sqlc"
@@ -119,6 +120,9 @@ func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]Ta
 	})
 	if err != nil {
 		return nil, 0, err
+	}
+	if offset > math.MaxInt32 {
+		return []TableSnapshotRow{}, int(total), nil
 	}
 	params := sqlc.ListTableSnapshotsFilteredParams{
 		Column1: env,

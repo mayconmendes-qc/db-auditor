@@ -97,7 +97,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			return
 		}
 		if r.URL.Query().Get("mode") == "cookie" {
-			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800,
+			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: encoded, Path: "/", MaxAge: 28800, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 				HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 			writeJSON(w, http.StatusOK, map[string]any{"user": user, "csrf_token": csrfToken(encoded), "expires_in": 28800})
 			return
@@ -119,7 +119,7 @@ func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao encerrar sessão.")
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 			HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 	})
@@ -262,7 +262,7 @@ func registerAccountRoutes(mux *http.ServeMux, store AuthStore) {
 }
 
 func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1,
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1, //nolint:gosec // G124: Secure follows direct TLS or a trusted HTTPS proxy.
 		HttpOnly: true, Secure: secureRequest(r), SameSite: http.SameSiteLaxMode})
 }
 
