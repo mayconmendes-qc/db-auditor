@@ -133,7 +133,7 @@ func (s *Store) ListTableSnapshots(ctx context.Context, f InventoryFilter) ([]Ta
 		Column6: f.RelationClass,
 		Column7: q,
 		Limit:   int32(limit),
-		Offset:  int32(offset),
+		Offset:  int32(offset), //nolint:gosec // G115: offsets above MaxInt32 return before this conversion.
 	}
 	var rows []sqlc.ListTableSnapshotsFilteredRow
 	if f.OrderBy == "" {
