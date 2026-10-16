@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/mayconmendes-qc/db-auditor/internal/report"
 )
 
 var ErrReportIneligible = errors.New("report run is not completed in the requested environment")
@@ -26,27 +27,31 @@ type ReportRequest struct {
 	EnvironmentID  string        `json:"environment_id"`
 	AuditRunID     string        `json:"audit_run_id"`
 	Type           string        `json:"report_type"`
+	Format         string        `json:"format"`
 	Filters        ReportFilters `json:"filters"`
 	RequestedBy    string        `json:"requested_by"`
 	IdempotencyKey string        `json:"idempotency_key"`
 }
 type ReportJob struct {
-	ID            string        `json:"id"`
-	EnvironmentID string        `json:"environment_id"`
-	AuditRunID    string        `json:"audit_run_id"`
-	Type          string        `json:"report_type"`
-	Filters       ReportFilters `json:"filters"`
-	RequestedBy   string        `json:"requested_by"`
-	RuleVersion   string        `json:"rule_version"`
-	Status        string        `json:"status"`
-	Attempts      int           `json:"attempts"`
-	Error         *string       `json:"error,omitempty"`
-	CreatedAt     time.Time     `json:"created_at"`
-	StartedAt     *time.Time    `json:"started_at,omitempty"`
-	FinishedAt    *time.Time    `json:"finished_at,omitempty"`
-	ExpiresAt     time.Time     `json:"expires_at"`
-	SHA256        *string       `json:"sha256,omitempty"`
-	SizeBytes     *int64        `json:"size_bytes,omitempty"`
+	ID              string                        `json:"id"`
+	EnvironmentID   string                        `json:"environment_id"`
+	AuditRunID      string                        `json:"audit_run_id"`
+	Type            string                        `json:"report_type"`
+	Format          string                        `json:"format"`
+	Filters         ReportFilters                 `json:"filters"`
+	RequestedBy     string                        `json:"requested_by"`
+	RuleVersion     string                        `json:"rule_version"`
+	TemplateVersion string                        `json:"architecture_template_version,omitempty"`
+	Decisions       []report.ArchitectureDecision `json:"architecture_decisions,omitempty"`
+	Status          string                        `json:"status"`
+	Attempts        int                           `json:"attempts"`
+	Error           *string                       `json:"error,omitempty"`
+	CreatedAt       time.Time                     `json:"created_at"`
+	StartedAt       *time.Time                    `json:"started_at,omitempty"`
+	FinishedAt      *time.Time                    `json:"finished_at,omitempty"`
+	ExpiresAt       time.Time                     `json:"expires_at"`
+	SHA256          *string                       `json:"sha256,omitempty"`
+	SizeBytes       *int64                        `json:"size_bytes,omitempty"`
 }
 type ReportArtifact struct {
 	Content     []byte
@@ -55,22 +60,36 @@ type ReportArtifact struct {
 	ContentType string
 }
 
-const reportJobSelect = `SELECT j.id::text,j.environment_id::text,j.audit_run_id::text,j.report_type,j.filters,j.requested_by,j.rule_version,j.status,j.attempts,j.error,j.created_at,j.started_at,j.finished_at,j.expires_at,a.sha256,a.size_bytes FROM report_job j LEFT JOIN report_artifact a ON a.report_job_id=j.id`
+const reportJobSelect = `SELECT j.id::text,j.environment_id::text,j.audit_run_id::text,j.report_type,j.report_format,j.filters,j.requested_by,j.rule_version,j.architecture_template_version,j.status,j.attempts,j.error,j.created_at,j.started_at,j.finished_at,j.expires_at,a.sha256,a.size_bytes,j.architecture_decisions FROM report_job j LEFT JOIN report_artifact a ON a.report_job_id=j.id`
 
 func scanReportJob(row scannable) (*ReportJob, error) {
 	var j ReportJob
 	var raw []byte
-	err := row.Scan(&j.ID, &j.EnvironmentID, &j.AuditRunID, &j.Type, &raw, &j.RequestedBy, &j.RuleVersion, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.ExpiresAt, &j.SHA256, &j.SizeBytes)
+	var decisions []byte
+	err := row.Scan(&j.ID, &j.EnvironmentID, &j.AuditRunID, &j.Type, &j.Format, &raw, &j.RequestedBy, &j.RuleVersion, &j.TemplateVersion, &j.Status, &j.Attempts, &j.Error, &j.CreatedAt, &j.StartedAt, &j.FinishedAt, &j.ExpiresAt, &j.SHA256, &j.SizeBytes, &decisions)
 	if err != nil {
 		return nil, err
 	}
 	if err = json.Unmarshal(raw, &j.Filters); err != nil {
 		return nil, err
 	}
+	if err = json.Unmarshal(decisions, &j.Decisions); err != nil {
+		return nil, err
+	}
 	return &j, nil
 }
 
 func (s *Store) CreateReportJob(ctx context.Context, req ReportRequest) (*ReportJob, error) {
+	if req.Format == "" {
+		if req.Type == "architecture" {
+			req.Format = "markdown"
+		} else {
+			req.Format = "pdf"
+		}
+	}
+	if req.Type == "architecture" && req.Format != "markdown" || req.Type != "architecture" && req.Format != "pdf" {
+		return nil, fmt.Errorf("invalid report format")
+	}
 	var ruleVersion string
 	err := s.pool.QueryRow(ctx, `SELECT COALESCE(NULLIF(a.rule_manifest_hash,''),a.analyzer_version) FROM audit_run r JOIN analysis_run a ON a.audit_run_id=r.id AND a.status='success' WHERE r.id=$1::uuid AND r.environment_id=$2::uuid AND r.status IN ('success','partial_success')`, req.AuditRunID, req.EnvironmentID).Scan(&ruleVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -82,8 +101,19 @@ func (s *Store) CreateReportJob(ctx context.Context, req ReportRequest) (*Report
 	if req.RequestedBy == "" {
 		req.RequestedBy = "local"
 	}
+	frozen := []report.ArchitectureDecision{}
+	if req.Type == "architecture" {
+		frozen, err = s.LatestArchitectureDecisions(ctx, req.EnvironmentID, req.Filters.Database)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if req.IdempotencyKey == "" {
-		payload, _ := json.Marshal([]any{req.EnvironmentID, req.AuditRunID, req.Type, req.Filters, ruleVersion})
+		parts := []any{req.EnvironmentID, req.AuditRunID, req.Type, req.Filters, ruleVersion}
+		if req.Type == "architecture" {
+			parts = append(parts, req.Format, report.ArchitectureVersion, frozen)
+		}
+		payload, _ := json.Marshal(parts)
 		digest := sha256.Sum256(payload)
 		req.IdempotencyKey = hex.EncodeToString(digest[:])
 	}
@@ -91,11 +121,19 @@ func (s *Store) CreateReportJob(ctx context.Context, req ReportRequest) (*Report
 	if err != nil {
 		return nil, err
 	}
+	decisionsJSON, err := json.Marshal(frozen)
+	if err != nil {
+		return nil, err
+	}
+	templateVersion := ""
+	if req.Type == "architecture" {
+		templateVersion = report.ArchitectureVersion
+	}
 	for rotation := 0; rotation < 128; rotation++ {
 		var id string
-		err = s.pool.QueryRow(ctx, `INSERT INTO report_job(environment_id,audit_run_id,report_type,filters,requested_by,rule_version,idempotency_key) VALUES($1::uuid,$2::uuid,$3,$4::jsonb,$5,$6,$7)
+		err = s.pool.QueryRow(ctx, `INSERT INTO report_job(environment_id,audit_run_id,report_type,report_format,filters,requested_by,rule_version,idempotency_key,architecture_decisions,architecture_template_version) VALUES($1::uuid,$2::uuid,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10)
 ON CONFLICT(environment_id,idempotency_key) DO UPDATE SET idempotency_key=report_job.idempotency_key
-RETURNING id::text`, req.EnvironmentID, req.AuditRunID, req.Type, filters, req.RequestedBy, ruleVersion, req.IdempotencyKey).Scan(&id)
+RETURNING id::text`, req.EnvironmentID, req.AuditRunID, req.Type, req.Format, filters, req.RequestedBy, ruleVersion, req.IdempotencyKey, decisionsJSON, templateVersion).Scan(&id)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +141,11 @@ RETURNING id::text`, req.EnvironmentID, req.AuditRunID, req.Type, filters, req.R
 		if err != nil {
 			return nil, err
 		}
-		if job == nil || job.AuditRunID != req.AuditRunID || job.Type != req.Type || job.Filters != req.Filters || job.RuleVersion != ruleVersion {
+		if job == nil {
+			return nil, ErrReportConflict
+		}
+		jobDecisions, _ := json.Marshal(job.Decisions)
+		if job.AuditRunID != req.AuditRunID || job.Type != req.Type || job.Format != req.Format || job.TemplateVersion != templateVersion || job.Filters != req.Filters || job.RuleVersion != ruleVersion || string(jobDecisions) != string(decisionsJSON) {
 			return nil, ErrReportConflict
 		}
 		if job.ExpiresAt.After(time.Now()) {
@@ -167,25 +209,29 @@ func (s *Store) ClaimReportJob(ctx context.Context) (*ReportJob, error) {
 }
 
 func (s *Store) FinishReportJob(ctx context.Context, id string, artifact ReportArtifact) error {
-	if len(artifact.Content) == 0 || len(artifact.Content) > 16<<20 || artifact.ContentType != "application/pdf" {
-		return fmt.Errorf("invalid PDF artifact")
+	if len(artifact.Content) == 0 || len(artifact.Content) > 16<<20 || artifact.ContentType != "application/pdf" && artifact.ContentType != "text/markdown; charset=utf-8" {
+		return fmt.Errorf("invalid report artifact")
 	}
 	digest := sha256.Sum256(artifact.Content)
 	hash := hex.EncodeToString(digest[:])
 	if hash != artifact.SHA256 {
-		return fmt.Errorf("PDF hash mismatch")
+		return fmt.Errorf("report hash mismatch")
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	cmd, err := tx.Exec(ctx, `UPDATE report_job SET status='success',finished_at=now() WHERE id=$1::uuid AND status='running'`, id)
+	var format string
+	err = tx.QueryRow(ctx, `UPDATE report_job SET status='success',finished_at=now() WHERE id=$1::uuid AND status='running' RETURNING report_format`, id).Scan(&format)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrReportConflict
+	}
 	if err != nil {
 		return err
 	}
-	if cmd.RowsAffected() != 1 {
-		return ErrReportConflict
+	if format == "pdf" && artifact.ContentType != "application/pdf" || format == "markdown" && artifact.ContentType != "text/markdown; charset=utf-8" {
+		return fmt.Errorf("artifact MIME does not match report format")
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO report_artifact(report_job_id,content,sha256,size_bytes,filename,content_type) VALUES($1::uuid,$2,$3,$4,$5,$6)
 ON CONFLICT(report_job_id) DO UPDATE SET content=EXCLUDED.content,sha256=EXCLUDED.sha256,size_bytes=EXCLUDED.size_bytes,filename=EXCLUDED.filename,created_at=now()`, id, artifact.Content, hash, len(artifact.Content), artifact.Filename, artifact.ContentType); err != nil {

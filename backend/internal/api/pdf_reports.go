@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mayconmendes-qc/db-auditor/internal/report"
 	"github.com/mayconmendes-qc/db-auditor/internal/repository"
 )
 
@@ -20,6 +21,9 @@ type pdfReportStore interface {
 	CancelReportJob(context.Context, string, string) error
 	RetryReportJob(context.Context, string, string) (*repository.ReportJob, error)
 	GetReportArtifact(context.Context, string, string) (*repository.ReportArtifact, error)
+	LatestArchitectureDecisions(context.Context, string, string) ([]report.ArchitectureDecision, error)
+	ArchitectureDecisionHistory(context.Context, string, string) ([]report.ArchitectureDecision, error)
+	RecordArchitectureDecision(context.Context, string, string, string, string, string, string) (report.ArchitectureDecision, error)
 }
 
 // Report endpoints are fail-closed until an operator sets a private server-side
@@ -48,6 +52,70 @@ func authorizeReport(w http.ResponseWriter, r *http.Request) bool {
 
 func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 	base := "/api/v1/environments/{id}/reports"
+	mux.HandleFunc("GET "+base+"/architecture-decisions", func(w http.ResponseWriter, r *http.Request) {
+		if !authorizeReport(w, r) {
+			return
+		}
+		backend, env, ok := reportScope(w, r, store)
+		if !ok {
+			return
+		}
+		if os.Getenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED") != "true" {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Recurso indisponível.")
+			return
+		}
+		database := r.URL.Query().Get("database")
+		if database == "" || len(database) > 128 {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Database obrigatório.")
+			return
+		}
+		var decisions []report.ArchitectureDecision
+		var err error
+		if r.URL.Query().Get("history") == "true" {
+			decisions, err = backend.ArchitectureDecisionHistory(r.Context(), env, database)
+		} else {
+			decisions, err = backend.LatestArchitectureDecisions(r.Context(), env, database)
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao consultar decisões.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": decisions})
+	})
+	mux.HandleFunc("POST "+base+"/architecture-decisions", func(w http.ResponseWriter, r *http.Request) {
+		if !authorizeReport(w, r) {
+			return
+		}
+		backend, env, ok := reportScope(w, r, store)
+		if !ok {
+			return
+		}
+		if os.Getenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED") != "true" {
+			writeError(w, http.StatusNotFound, CodeNotFound, "Recurso indisponível.")
+			return
+		}
+		user := requestIdentity(r)
+		if user == nil || !roleAtLeast(user.Role, "auditor") {
+			writeError(w, http.StatusForbidden, CodeUnavailable, "Conta de auditor ou operador necessária.")
+			return
+		}
+		var body struct {
+			Database  string `json:"database"`
+			ObjectRef string `json:"object_ref"`
+			Subject   string `json:"subject"`
+			Value     string `json:"value"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body) != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Decisão inválida.")
+			return
+		}
+		decision, err := backend.RecordArchitectureDecision(r.Context(), env, body.Database, body.ObjectRef, body.Subject, body.Value, user.Username)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Decisão inválida.")
+			return
+		}
+		writeJSON(w, http.StatusCreated, decision)
+	})
 	mux.HandleFunc("POST "+base, func(w http.ResponseWriter, r *http.Request) {
 		if !authorizeReport(w, r) {
 			return
@@ -59,10 +127,11 @@ func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 		var body struct {
 			AuditRunID     string                   `json:"audit_run_id"`
 			ReportType     string                   `json:"report_type"`
+			Format         string                   `json:"format"`
 			Filters        repository.ReportFilters `json:"filters"`
 			IdempotencyKey string                   `json:"idempotency_key"`
 		}
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&body) != nil || !uuidPattern.MatchString(body.AuditRunID) || !validReportRequest(body.ReportType, body.Filters) || len(body.IdempotencyKey) > 128 {
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&body) != nil || !uuidPattern.MatchString(body.AuditRunID) || !validReportRequest(body.ReportType, body.Filters) || body.ReportType == "architecture" && body.Format != "markdown" || body.ReportType != "architecture" && body.Format != "" && body.Format != "pdf" || len(body.IdempotencyKey) > 128 {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Pedido de relatorio invalido.")
 			return
 		}
@@ -70,7 +139,7 @@ func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 		if user := requestIdentity(r); user != nil {
 			requestedBy = user.Username
 		}
-		job, err := backend.CreateReportJob(r.Context(), repository.ReportRequest{EnvironmentID: env, AuditRunID: body.AuditRunID, Type: body.ReportType, Filters: body.Filters, RequestedBy: requestedBy, IdempotencyKey: body.IdempotencyKey})
+		job, err := backend.CreateReportJob(r.Context(), repository.ReportRequest{EnvironmentID: env, AuditRunID: body.AuditRunID, Type: body.ReportType, Format: body.Format, Filters: body.Filters, RequestedBy: requestedBy, IdempotencyKey: body.IdempotencyKey})
 		if errors.Is(err, repository.ErrReportIneligible) {
 			writeError(w, http.StatusConflict, CodeValidation, "Execucao indisponivel para o ambiente.")
 			return
@@ -185,7 +254,7 @@ func registerPDFReportRoutes(mux *http.ServeMux, store InventoryStore) {
 			writeError(w, http.StatusNotFound, CodeNotFound, "Artefato indisponivel ou expirado.")
 			return
 		}
-		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Type", artifact.ContentType)
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", artifact.Filename))
 		w.Header().Set("Content-Length", fmt.Sprint(len(artifact.Content)))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -210,7 +279,10 @@ func reportScope(w http.ResponseWriter, r *http.Request, store InventoryStore) (
 }
 
 func validReportRequest(kind string, f repository.ReportFilters) bool {
-	if kind != "executive" && kind != "technical" && kind != "table" {
+	if kind != "executive" && kind != "technical" && kind != "table" && kind != "architecture" {
+		return false
+	}
+	if kind == "architecture" && (os.Getenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED") != "true" || f.Database == "" || f.Table != "" || f.Severity != "") {
 		return false
 	}
 	if f.Schema != "" && f.Database == "" || f.Table != "" && f.Schema == "" || kind == "table" && f.Table == "" {

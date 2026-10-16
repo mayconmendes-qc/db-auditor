@@ -1,4 +1,4 @@
--- Catalog-tracked view/matview and function dependencies; dynamic SQL is not inferred.
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT DISTINCT current_database(), source_ns.nspname, source.relname,
   CASE source.relkind WHEN 'm' THEN 'materialized_view' ELSE 'view' END,
   target_ns.nspname, target.relname,
@@ -27,4 +27,4 @@ JOIN pg_namespace target_ns ON target_ns.oid=target.relnamespace
 WHERE source_ns.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND target_ns.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND source_ns.nspname <> 'information_schema'
-  AND target_ns.nspname <> 'information_schema';
+  AND target_ns.nspname <> 'information_schema'

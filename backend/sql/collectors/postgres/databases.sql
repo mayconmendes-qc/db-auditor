@@ -1,5 +1,4 @@
--- postgres.databases — list databases with scope-friendly metadata.
--- size only when CONNECT is allowed (avoids 42501 on Tiger Cloud system DBs).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   d.datname AS database_name,
   pg_catalog.pg_get_userbyid(d.datdba) AS owner_name,
@@ -16,4 +15,4 @@ SELECT
   COALESCE(s.numbackends, 0) AS connection_count
 FROM pg_database d
 LEFT JOIN pg_stat_database s ON s.datname = d.datname
-ORDER BY d.datname;
+ORDER BY d.datname

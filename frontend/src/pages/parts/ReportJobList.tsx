@@ -13,6 +13,7 @@ const reportTypeLabels: Record<ReportJob["report_type"], string> = {
   executive: "Executivo",
   technical: "Técnico",
   table: "Tabela",
+  architecture: "Análise completa e modelagem",
 };
 
 export function ReportJobList({
@@ -32,7 +33,7 @@ export function ReportJobList({
       {jobs.length === 0 ? (
         <EmptyState
           title="Sem relatórios"
-          description="Selecione o ambiente e solicite o primeiro PDF."
+          description="Selecione o ambiente e solicite o primeiro relatório."
         />
       ) : null}
       {jobs.map((job) => (

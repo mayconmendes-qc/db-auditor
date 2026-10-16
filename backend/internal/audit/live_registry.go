@@ -107,7 +107,7 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 		if err != nil {
 			return nil, err
 		}
-		conn, err := pgx.Connect(ctx, dsn)
+		conn, err := postgres.ConnectReadOnly(ctx, dsn)
 		if err != nil {
 			return nil, fmt.Errorf("conectar ao ambiente auditado: %w", err)
 		}

@@ -55,6 +55,7 @@ export type ApiPath =
   | "/api/v1/environments/{id}/regressions"
   | "/api/v1/environments/{id}/regressions/{alert}/acknowledge"
   | "/api/v1/environments/{id}/reports"
+  | "/api/v1/environments/{id}/reports/architecture-decisions"
   | "/api/v1/environments/{id}/reports/{job}"
   | "/api/v1/environments/{id}/reports/{job}/cancel"
   | "/api/v1/environments/{id}/reports/{job}/download"

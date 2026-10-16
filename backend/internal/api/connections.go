@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/mayconmendes-qc/db-auditor/internal/collectors/postgres"
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
 )
 
@@ -50,7 +50,7 @@ func listConnectionStatus(store InventoryStore, targets map[string]string) http.
 			item.DSNConfigured = true
 			start := time.Now()
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-			conn, err := pgx.Connect(ctx, dsn)
+			conn, err := postgres.ConnectReadOnly(ctx, dsn)
 			if err != nil {
 				cancel()
 				item.Reachable = false
