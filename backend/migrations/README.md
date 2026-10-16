@@ -20,6 +20,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `16_identity.sql`: garante usuário, sessão e tentativas de login em volumes antigos, com ociosidade e prazo absoluto da sessão. `IF NOT EXISTS` não apaga sessões já gravadas.
 - `17_report_retention.sql`: guarda o prazo de retenção do PDF. Um artefato vencido deixa de ser baixado; execuções, achados e o job permanecem.
 - `18_totp_discard_retention.sql`: TOTP opcional, assinatura de descarte e a linha de política de retenção. Não apaga dados existentes.
+- `19_architecture_report.sql`: permite artefato Markdown e registra decisões de domínio versionadas, congeladas no pedido do relatório. Atua somente no banco interno.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

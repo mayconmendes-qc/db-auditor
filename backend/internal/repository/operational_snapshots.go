@@ -32,12 +32,12 @@ ON CONFLICT (audit_run_id,database_name,schema_name,table_name,column_name) DO N
 	for _, item := range workload {
 		_, err = tx.Exec(ctx, `INSERT INTO workload_snapshot (
 audit_run_id,environment_id,database_name,query_fingerprint,query_id,extension_version,query_kind,calls,total_exec_time_ms,
-mean_exec_time_ms,rows_total,shared_blocks_read,shared_blocks_hit,referenced_objects,stats_reset,evidence_quality,collected_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
+mean_exec_time_ms,rows_total,shared_blocks_read,shared_blocks_hit,temp_blks_read,temp_blks_written,block_size_bytes,referenced_objects,stats_reset,evidence_quality,collected_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now())
 ON CONFLICT (audit_run_id,database_name,query_fingerprint) DO NOTHING`,
 			auditRunID, environmentID, item.DatabaseName, item.QueryFingerprint, item.QueryID, item.ExtensionVersion, item.QueryKind, item.Calls,
 			item.TotalExecTimeMS, item.MeanExecTimeMS, item.RowsTotal, item.SharedBlocksRead,
-			item.SharedBlocksHit, item.ReferencedObjects, item.StatsReset, item.EvidenceQuality)
+			item.SharedBlocksHit, item.TempBlocksRead, item.TempBlocksWritten, item.BlockSizeBytes, item.ReferencedObjects, item.StatsReset, item.EvidenceQuality)
 		if err != nil {
 			return fmt.Errorf("insert workload_snapshot: %w", err)
 		}

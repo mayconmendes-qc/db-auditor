@@ -1,5 +1,4 @@
--- Schema inventory facts for the current database (read-only).
--- size_bytes is the sum of relation sizes in the schema (bytes).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -13,18 +12,19 @@ SELECT
     SELECT sum(pg_total_relation_size(cl.oid))
     FROM pg_class cl
     WHERE cl.relnamespace = n.oid
-      AND cl.relkind IN ('r', 'm', 'i', 'S', 't')
-  ), 0) AS size_bytes
+      AND cl.relkind IN ('r', 'p', 'f', 'm', 'i', 'S', 't')
+  ), 0) AS size_bytes,
+  COALESCE(n.nspacl::text, '') AS nspacl
 FROM pg_namespace n
 LEFT JOIN LATERAL (
   SELECT
-    count(*) FILTER (WHERE c.relkind = 'r') AS table_count,
+    count(*) FILTER (WHERE c.relkind IN ('r', 'p', 'f')) AS table_count,
     count(*) FILTER (WHERE c.relkind = 'v') AS view_count,
     count(*) FILTER (WHERE c.relkind = 'm') AS matview_count,
     count(*) FILTER (WHERE c.relkind = 'S') AS sequence_count
   FROM pg_class c
   WHERE c.relnamespace = n.oid
-    AND c.relkind IN ('r', 'v', 'm', 'S')
+    AND c.relkind IN ('r', 'p', 'f', 'v', 'm', 'S')
 ) c ON true
 LEFT JOIN LATERAL (
   SELECT count(*) AS function_count
@@ -32,4 +32,4 @@ LEFT JOIN LATERAL (
   WHERE p.pronamespace = n.oid
 ) f ON true
 WHERE n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
-ORDER BY n.nspname;
+ORDER BY n.nspname

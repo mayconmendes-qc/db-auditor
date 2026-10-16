@@ -34,7 +34,8 @@ SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'pg_stat_st
 
 const workloadSQL = `
 SELECT current_database(), queryid::text, query, calls, total_exec_time,
-       mean_exec_time, rows, shared_blks_read, shared_blks_hit
+       mean_exec_time, rows, shared_blks_read, shared_blks_hit,
+       temp_blks_read, temp_blks_written, current_setting('block_size')::integer
 FROM pg_stat_statements
 WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
 ORDER BY total_exec_time DESC
@@ -104,7 +105,6 @@ func CollectColumnStats(ctx context.Context, conn *pgx.Conn, scope config.Scope,
 }
 
 func CollectColumnStatsWithBudget(ctx context.Context, conn *pgx.Conn, scope config.Scope, schemas []string, limit int, maxPlanCost float64) ([]ColumnStatFacts, error) {
-	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 	if limit <= 0 || limit > 50000 {
 		limit = 5000
 	}
@@ -157,7 +157,6 @@ func CollectWorkload(ctx context.Context, conn *pgx.Conn, limit int) ([]Workload
 }
 
 func CollectWorkloadWithBudget(ctx context.Context, conn *pgx.Conn, limit int, maxPlanCost float64) ([]WorkloadFacts, bool, error) {
-	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 	var version string
 	if err := conn.QueryRow(ctx, workloadAvailableSQL).Scan(&version); err != nil {
 		return nil, false, fmt.Errorf("detect pg_stat_statements: %w", err)
@@ -186,7 +185,7 @@ func CollectWorkloadWithBudget(ctx context.Context, conn *pgx.Conn, limit int, m
 		var query, queryID *string
 		if err := rows.Scan(&fact.DatabaseName, &queryID, &query, &fact.Calls,
 			&fact.TotalExecTimeMS, &fact.MeanExecTimeMS, &fact.RowsTotal,
-			&fact.SharedBlocksRead, &fact.SharedBlocksHit); err != nil {
+			&fact.SharedBlocksRead, &fact.SharedBlocksHit, &fact.TempBlocksRead, &fact.TempBlocksWritten, &fact.BlockSizeBytes); err != nil {
 			return nil, true, fmt.Errorf("workload collector scan: %w", err)
 		}
 		if query == nil || queryID == nil || *query == "" {

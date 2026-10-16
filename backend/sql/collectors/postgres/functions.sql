@@ -1,5 +1,4 @@
--- postgres.functions — inventory of functions/procedures/aggregates.
--- pg_get_functiondef is not valid for aggregates (prokind = 'a').
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -32,4 +31,4 @@ JOIN pg_language l ON l.oid = p.prolang
 LEFT JOIN pg_stat_user_functions st ON st.funcid=p.oid
 WHERE n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname, p.proname, identity_arguments;
+ORDER BY n.nspname, p.proname, identity_arguments

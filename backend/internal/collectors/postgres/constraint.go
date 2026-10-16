@@ -28,6 +28,7 @@ func CollectConstraints(ctx context.Context, conn *pgx.Conn, scope config.Scope)
 			&f.ConstraintName,
 			&f.ConstraintType,
 			&f.ConstraintDefinition,
+			&f.SupportingIndex,
 			&f.IsValidated,
 			&f.IsDeferrable,
 			&f.IsDeferred,
