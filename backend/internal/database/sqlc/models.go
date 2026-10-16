@@ -51,6 +51,22 @@ type ArchitectureDecision struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type ArchitectureInsertionSnapshot struct {
+	ID              pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	AuditRunID      pgtype.UUID
+	DatabaseName    string
+	SchemaName      string
+	TableName       string
+	ColumnName      string
+	DecisionVersion int32
+	AppendOnly      bool
+	Status          string
+	Reason          string
+	LatestAt        pgtype.Timestamptz
+	CollectedAt     pgtype.Timestamptz
+}
+
 type AuditAnnotation struct {
 	ID            pgtype.UUID
 	EnvironmentID pgtype.UUID

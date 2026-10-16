@@ -37,4 +37,11 @@ func TestLiveCollectorProfilesDifferentiation(t *testing.T) {
 	if _, ok := cols[ProfileManual]; !ok {
 		t.Fatal("postgres.columns must be in manual")
 	}
+	insertion := liveCollectorProfiles("postgres.last_insertion")
+	if len(insertion) != 1 {
+		t.Fatalf("insertion probe must run only for manual audits: %v", insertion)
+	}
+	if _, ok := insertion[ProfileManual]; !ok {
+		t.Fatal("manual audit must include insertion probe")
+	}
 }
