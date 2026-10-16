@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/mayconmendes-qc/db-auditor/internal/config"
 )
 
@@ -28,7 +27,7 @@ type DiscoveryResult struct {
 func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, scope config.Scope) (DiscoveryResult, error) {
 	var result DiscoveryResult
 
-	conn, err := pgx.Connect(ctx, baseURL)
+	conn, err := ConnectReadOnly(ctx, baseURL)
 	if err != nil {
 		return result, fmt.Errorf("connect target: %w", err)
 	}
@@ -65,7 +64,7 @@ func DiscoverTopology(ctx context.Context, baseURL string, mode DiscoveryMode, s
 				})
 				continue
 			}
-			dbConn, err := pgx.Connect(ctx, dbURL)
+			dbConn, err := ConnectReadOnly(ctx, dbURL)
 			if err != nil {
 				result.Errors = append(result.Errors, PartialError{
 					Database: db.Name, Op: "connect", Message: err.Error(),

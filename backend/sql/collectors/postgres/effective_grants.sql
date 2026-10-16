@@ -1,4 +1,4 @@
--- Effective table privileges for login roles; metadata only, no credentials.
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT current_database(), n.nspname, c.relname, r.rolname,
   array_remove(ARRAY[
     CASE WHEN has_table_privilege(r.oid,c.oid,'SELECT') THEN 'SELECT' END,
@@ -12,7 +12,7 @@ SELECT current_database(), n.nspname, c.relname, r.rolname,
 FROM pg_class c
 JOIN pg_namespace n ON n.oid=c.relnamespace
 CROSS JOIN pg_roles r
-WHERE c.relkind IN ('r','p','f') AND r.rolcanlogin
+WHERE c.relkind IN ('r','p','f','v','m') AND r.rolcanlogin
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname,c.relname,r.rolname;
+ORDER BY n.nspname,c.relname,r.rolname

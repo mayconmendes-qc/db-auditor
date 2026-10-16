@@ -46,7 +46,6 @@ func CollectJobs(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]Job
 	if !ok {
 		return []JobFacts{}, nil
 	}
-	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 
 	rows, err := conn.Query(ctx, jobsSQL)
 	if err != nil {

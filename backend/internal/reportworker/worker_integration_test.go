@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -166,5 +167,61 @@ func TestReportJobLifecycleIntegration(t *testing.T) {
 	}
 	if got, err := store.GetReportArtifact(ctx, env, job.ID); err != nil || got != nil {
 		t.Fatalf("expired artifact: %#v %v", got, err)
+	}
+}
+
+func TestArchitectureReportIntegration(t *testing.T) {
+	dsn := os.Getenv("AUDITOR_TEST_DATABASE_URL")
+	if dsn == "" || os.Getenv("AUDITOR_TEST_DISPOSABLE") != "1" {
+		t.Skip("disposable integration database not explicitly enabled")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	store := repository.NewStore(pool)
+	var env, run string
+	err = pool.QueryRow(ctx, `INSERT INTO audit_environment(name,type,discovery_mode) VALUES(gen_random_uuid()::text,'self_hosted','single_database') RETURNING id::text`).Scan(&env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pool.QueryRow(ctx, `INSERT INTO audit_run(environment_id,profile,status,service_version,collector_version) VALUES($1::uuid,'manual','success','test','test') RETURNING id::text`, env).Scan(&run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO database_snapshot(audit_run_id,environment_id,database_name,size_bytes) VALUES($1::uuid,$2::uuid,'db',1000)`,
+		`INSERT INTO table_snapshot(audit_run_id,environment_id,database_name,schema_name,table_name) VALUES($1::uuid,$2::uuid,'db','public','orders')`,
+		`INSERT INTO analysis_run(audit_run_id,environment_id,status,analyzer_version,rule_manifest_hash) VALUES($1::uuid,$2::uuid,'success','test','manifest-test')`,
+	} {
+		if _, err = pool.Exec(ctx, query, run, env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decision, err := store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "semantics", "pedidos confirmados", "tester")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: env, AuditRunID: run, Type: "architecture", Format: "markdown", Filters: repository.ReportFilters{Database: "db"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Decisions) != 1 || job.Decisions[0].Version != decision.Version {
+		t.Fatal("decision snapshot missing")
+	}
+	if _, err = store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "semantics", "pedidos pendentes", "tester"); err != nil {
+		t.Fatal(err)
+	}
+	if err = (Worker{Store: store}).ProcessOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := store.GetReportArtifact(ctx, env, job.ID)
+	if err != nil || artifact == nil {
+		t.Fatalf("artifact: %v", err)
+	}
+	if artifact.ContentType != "text/markdown; charset=utf-8" || !strings.Contains(string(artifact.Content), "pedidos confirmados") || strings.Contains(string(artifact.Content), "pedidos pendentes") {
+		t.Fatal("artifact did not freeze decisions")
 	}
 }

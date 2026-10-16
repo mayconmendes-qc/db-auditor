@@ -42,6 +42,17 @@ func TestPDFReportAuthorizationFailsClosed(t *testing.T) {
 }
 
 func TestValidPDFReportRequest(t *testing.T) {
+	t.Setenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED", "true")
+	if !validReportRequest("architecture", repository.ReportFilters{Database: "db"}) {
+		t.Fatal("architecture database rejected")
+	}
+	if validReportRequest("architecture", repository.ReportFilters{}) {
+		t.Fatal("architecture accepted without database")
+	}
+	t.Setenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED", "")
+	if validReportRequest("architecture", repository.ReportFilters{Database: "db"}) {
+		t.Fatal("architecture enabled without flag")
+	}
 	if !validReportRequest("table", repository.ReportFilters{Database: "db", Schema: "public", Table: "orders"}) {
 		t.Fatal("valid table scope rejected")
 	}

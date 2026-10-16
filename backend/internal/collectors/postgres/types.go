@@ -128,6 +128,9 @@ type WorkloadFacts struct {
 	RowsTotal         int64      `json:"rows_total"`
 	SharedBlocksRead  int64      `json:"shared_blocks_read"`
 	SharedBlocksHit   int64      `json:"shared_blocks_hit"`
+	TempBlocksRead    int64      `json:"temp_blocks_read"`
+	TempBlocksWritten int64      `json:"temp_blocks_written"`
+	BlockSizeBytes    int32      `json:"block_size_bytes"`
 	ReferencedObjects []string   `json:"referenced_objects"`
 	StatsReset        *time.Time `json:"stats_reset,omitempty"`
 	EvidenceQuality   string     `json:"evidence_quality"`
@@ -164,6 +167,7 @@ type ConstraintFacts struct {
 	ConstraintName       string   `json:"constraint_name"`
 	ConstraintType       string   `json:"constraint_type"`
 	ConstraintDefinition string   `json:"constraint_definition"`
+	SupportingIndex      *string  `json:"supporting_index,omitempty"`
 	IsValidated          bool     `json:"is_validated"`
 	IsDeferrable         bool     `json:"is_deferrable"`
 	IsDeferred           bool     `json:"is_deferred"`

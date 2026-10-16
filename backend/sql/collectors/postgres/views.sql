@@ -1,4 +1,4 @@
--- View and materialized view inventory facts (read-only).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -23,4 +23,4 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind IN ('v', 'm')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname, c.relname;
+ORDER BY n.nspname, c.relname

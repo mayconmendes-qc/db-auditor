@@ -1,4 +1,4 @@
--- Column inventory facts for the current database (read-only).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -26,4 +26,4 @@ WHERE a.attnum > 0
   AND c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname, c.relname, a.attnum;
+ORDER BY n.nspname, c.relname, a.attnum

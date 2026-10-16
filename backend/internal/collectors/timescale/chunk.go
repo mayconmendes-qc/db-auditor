@@ -19,7 +19,6 @@ func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]C
 	if !ok {
 		return []ChunkFacts{}, nil
 	}
-	_, _ = conn.Exec(ctx, "SET statement_timeout = '120s'")
 
 	rows, err := conn.Query(ctx, chunksSQL)
 	if err != nil {

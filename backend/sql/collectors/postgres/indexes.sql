@@ -1,4 +1,4 @@
--- Index inventory facts for the current database (read-only).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -34,4 +34,4 @@ LEFT JOIN pg_stat_user_indexes st ON st.indexrelid = ix.indexrelid
 WHERE t.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname, t.relname, i.relname;
+ORDER BY n.nspname, t.relname, i.relname

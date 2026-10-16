@@ -1,4 +1,4 @@
--- Extension inventory facts for the current database (read-only).
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   e.extname AS extension_name,
@@ -7,4 +7,4 @@ SELECT
   e.extrelocatable AS is_relocatable
 FROM pg_extension e
 JOIN pg_namespace n ON n.oid = e.extnamespace
-ORDER BY e.extname;
+ORDER BY e.extname

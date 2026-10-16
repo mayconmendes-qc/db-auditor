@@ -65,6 +65,8 @@ export function reportFormReady(
   if (!env || !runId || !token) return false;
   if (filters.schema && !filters.database) return false;
   if (filters.table && !filters.schema) return false;
+  if (kind === "architecture")
+    return Boolean(filters.database && !filters.table);
   return (
     kind !== "table" ||
     Boolean(filters.database && filters.schema && filters.table)
@@ -79,6 +81,7 @@ export function ReportsPage() {
   const [runId, setRunId] = useState("");
   const [kind, setKind] = useState<ReportJob["report_type"]>("executive");
   const [database, setDatabase] = useState("");
+  const [databaseOptions, setDatabaseOptions] = useState<string[]>([]);
   const [schema, setSchema] = useState("");
   const [table, setTable] = useState("");
   const [severity, setSeverity] = useState("");
@@ -86,6 +89,20 @@ export function ReportsPage() {
     "none",
   );
   const [jobs, setJobs] = useState<ReportJob[]>([]);
+  const [preview, setPreview] = useState("");
+  const [decisionObject, setDecisionObject] = useState("");
+  const [decisionSubject, setDecisionSubject] = useState("semantics");
+  const [decisionValue, setDecisionValue] = useState("");
+  const [decisions, setDecisions] = useState<
+    Array<{
+      object_ref: string;
+      subject: string;
+      value: string;
+      version: number;
+      author: string;
+      created_at: string;
+    }>
+  >([]);
   const [coverageKind, setCoverageKind] = useState<
     "partial" | "gap" | "permission" | null
   >(null);
@@ -121,6 +138,25 @@ export function ReportsPage() {
       })
       .catch(() => setRuns([]));
   }, [env]);
+  useEffect(() => {
+    if (!env || !runId || kind !== "architecture") {
+      setDatabaseOptions([]);
+      return;
+    }
+    void api
+      .databases(env, runId)
+      .then((response) => {
+        const names = response.items.map((item) => item.database_name);
+        setDatabaseOptions(names);
+        setDatabase((current) =>
+          names.includes(current) ? current : (names[0] ?? ""),
+        );
+      })
+      .catch(() => {
+        setDatabaseOptions([]);
+        setDatabase("");
+      });
+  }, [env, runId, kind]);
 
   const refresh = useCallback(async () => {
     if (!env || (!token && !api.hasSession())) return;
@@ -151,8 +187,8 @@ export function ReportsPage() {
     const filters: ReportFilters = {
       database: database.trim() || undefined,
       schema: schema.trim() || undefined,
-      table: table.trim() || undefined,
-      severity: severity || undefined,
+      table: kind === "architecture" ? undefined : table.trim() || undefined,
+      severity: kind === "architecture" ? undefined : severity || undefined,
       redaction,
     };
     if (
@@ -188,7 +224,7 @@ export function ReportsPage() {
       if (action === "retry") await api.retryPDFReport(env, job.id);
       if (action === "download")
         downloadBlob(
-          `db-auditor-${job.report_type}-${job.id}.pdf`,
+          `db-auditor-${job.report_type}-${job.id}.${job.report_type === "architecture" ? "md" : "pdf"}`,
           await api.downloadPDFReport(env, job.id),
         );
       await refresh();
@@ -199,11 +235,54 @@ export function ReportsPage() {
     }
   };
 
+  const loadDecisions = async () => {
+    if (!env || !database.trim()) return;
+    try {
+      setDecisions(
+        (await api.architectureDecisions(env, database.trim())).items,
+      );
+      setError(null);
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Falha ao consultar decisões"));
+    }
+  };
+  const saveDecision = async () => {
+    if (
+      !env ||
+      !database.trim() ||
+      !decisionObject.trim() ||
+      !decisionValue.trim()
+    )
+      return;
+    setBusy(true);
+    try {
+      await api.saveArchitectureDecision(env, {
+        database: database.trim(),
+        object_ref: decisionObject.trim(),
+        subject: decisionSubject,
+        value: decisionValue.trim(),
+      });
+      setDecisionValue("");
+      await loadDecisions();
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Falha ao registrar decisão"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const showPreview = async (job: ReportJob) => {
+    try {
+      setPreview(await (await api.downloadPDFReport(env, job.id)).text());
+    } catch (cause: unknown) {
+      setError(formatError(cause, "Falha ao abrir prévia"));
+    }
+  };
+
   return (
     <>
       <PageHeader
         eyebrow="Relatórios"
-        title="Relatórios PDF"
+        title="Relatórios"
         description="Gere relatórios versionados a partir de uma execução específica. Acesso controlado pela conta local."
       />
       <div className="mt-8 space-y-5">
@@ -212,7 +291,7 @@ export function ReportsPage() {
           contentClassName="flex flex-col gap-3"
         >
           <p className="-mt-1.5 text-sm text-slate-400">
-            O processamento é assíncrono e o PDF expira após 30 dias.
+            O processamento é assíncrono e o arquivo expira após 30 dias.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Select
@@ -242,13 +321,26 @@ export function ReportsPage() {
             <Select
               label="Tipo"
               value={kind}
-              onChange={(event) =>
-                setKind(event.target.value as ReportJob["report_type"])
-              }
+              onChange={(event) => {
+                const next = event.target.value as ReportJob["report_type"];
+                setKind(next);
+                if (next === "architecture") {
+                  setTable("");
+                  setSeverity("");
+                }
+              }}
               options={[
                 { value: "executive", label: "Executivo" },
                 { value: "technical", label: "Técnico" },
                 { value: "table", label: "Tabela" },
+                ...(import.meta.env.VITE_ARCHITECTURE_REPORT_ENABLED === "true"
+                  ? [
+                      {
+                        value: "architecture",
+                        label: "Análise completa e modelagem",
+                      },
+                    ]
+                  : []),
               ]}
             />
             <Select
@@ -282,12 +374,27 @@ export function ReportsPage() {
                 },
               ]}
             />
-            <ReportTextField
-              label="Banco (opcional)"
-              aria-label="Banco"
-              value={database}
-              onChange={(event) => setDatabase(event.target.value)}
-            />
+            {kind === "architecture" ? (
+              <Select
+                label="Banco da execução"
+                value={database}
+                onChange={(event) => setDatabase(event.target.value)}
+                options={[
+                  { value: "", label: "Selecione" },
+                  ...databaseOptions.map((name) => ({
+                    value: name,
+                    label: name,
+                  })),
+                ]}
+              />
+            ) : (
+              <ReportTextField
+                label="Banco (opcional)"
+                aria-label="Banco"
+                value={database}
+                onChange={(event) => setDatabase(event.target.value)}
+              />
+            )}
             <ReportTextField
               label="Esquema (opcional)"
               aria-label="Esquema"
@@ -332,7 +439,7 @@ export function ReportsPage() {
               }
               onClick={() => void request()}
             >
-              Gerar PDF
+              {kind === "architecture" ? "Gerar Markdown" : "Gerar PDF"}
             </Button>
             <Button
               className="h-10 w-full"
@@ -344,6 +451,65 @@ export function ReportsPage() {
             </Button>
           </div>
         </Card>
+        {kind === "architecture" &&
+        import.meta.env.VITE_ARCHITECTURE_REPORT_ENABLED === "true" ? (
+          <Card title="Decisões de domínio" contentClassName="space-y-3">
+            <p className="text-sm text-slate-400">
+              Registre uma interpretação confirmada com autoria e histórico. O
+              pedido congela a versão atual; nenhuma decisão altera o ERD
+              observado.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ReportTextField
+                label="Objeto (database.schema.tabela)"
+                value={decisionObject}
+                onChange={(event) => setDecisionObject(event.target.value)}
+              />
+              <Select
+                label="Assunto"
+                value={decisionSubject}
+                onChange={(event) => setDecisionSubject(event.target.value)}
+                options={[
+                  { value: "semantics", label: "Semântica" },
+                  { value: "insertion", label: "Contrato de inserção" },
+                  { value: "unit", label: "Unidade" },
+                  { value: "retention", label: "Retenção" },
+                  { value: "consumer", label: "Consumidor" },
+                ]}
+              />
+              <ReportTextField
+                label="Decisão confirmada"
+                value={decisionValue}
+                onChange={(event) => setDecisionValue(event.target.value)}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                disabled={
+                  busy || !database || !decisionObject || !decisionValue
+                }
+                onClick={() => void saveDecision()}
+              >
+                Registrar decisão
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!database}
+                onClick={() => void loadDecisions()}
+              >
+                Ver decisões
+              </Button>
+            </div>
+            <ul className="text-sm text-slate-300">
+              {decisions.map((item) => (
+                <li key={`${item.object_ref}/${item.subject}/${item.version}`}>
+                  {item.object_ref} · {item.subject} v{item.version}:{" "}
+                  {item.value} · {item.author} · {item.created_at}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
         {error ? (
           <ErrorBanner message={error} onRetry={() => void refresh()} />
         ) : null}
@@ -353,6 +519,27 @@ export function ReportsPage() {
           act={act}
           reportJobActions={reportJobActions}
         />
+        {jobs
+          .filter(
+            (job) =>
+              job.report_type === "architecture" && job.status === "success",
+          )
+          .map((job) => (
+            <Button
+              key={job.id}
+              variant="secondary"
+              onClick={() => void showPreview(job)}
+            >
+              Prévia textual · {job.id.slice(0, 8)}
+            </Button>
+          ))}
+        {preview ? (
+          <Card title="Prévia Markdown">
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-slate-300">
+              {preview}
+            </pre>
+          </Card>
+        ) : null}
       </div>
     </>
   );

@@ -211,6 +211,7 @@ SELECT
   c.conname AS constraint_name,
   c.contype::text AS constraint_type,
   pg_catalog.pg_get_constraintdef(c.oid, true) AS constraint_definition,
+  supporting_index.relname AS supporting_index,
   c.convalidated AS is_validated,
   c.condeferrable AS is_deferrable,
   c.condeferred AS is_deferred,
@@ -253,6 +254,7 @@ JOIN pg_class rel ON rel.oid = c.conrelid
 JOIN pg_namespace n ON n.oid = rel.relnamespace
 LEFT JOIN pg_class frel ON frel.oid = c.confrelid
 LEFT JOIN pg_namespace fn ON fn.oid = frel.relnamespace
+LEFT JOIN pg_class supporting_index ON supporting_index.oid = c.conindid
 WHERE rel.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
