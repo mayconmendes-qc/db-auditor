@@ -459,6 +459,19 @@ export function ReportsPage() {
               pedido congela a versão atual; nenhuma decisão altera o ERD
               observado.
             </p>
+            {decisionSubject === "insertion" ? (
+              <p className="text-xs text-slate-400">
+                Contrato de inserção: informe JSON com column, timezone,
+                validated, filled_on_insert e append_only. Exemplo:{" "}
+                <code>
+                  {
+                    '{"column":"inserted_at","timezone":"UTC","validated":true,"filled_on_insert":true,"append_only":false}'
+                  }
+                </code>
+                . Com exclusões possíveis, a data só representa os registros
+                presentes.
+              </p>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <ReportTextField
                 label="Objeto (database.schema.tabela)"

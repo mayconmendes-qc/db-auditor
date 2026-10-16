@@ -67,6 +67,15 @@ func (s *Store) RecordArchitectureDecision(ctx context.Context, environmentID, d
 	if database == "" || !strings.HasPrefix(objectRef, database+".") || !validSubject || strings.TrimSpace(value) == "" || author == "" || len(database) > 128 || len(objectRef) > 384 || len(value) > 1000 {
 		return d, fmt.Errorf("invalid architecture decision")
 	}
+	if subject == "insertion" {
+		parts := strings.Split(objectRef, ".")
+		if len(parts) != 3 || parts[0] != database {
+			return d, fmt.Errorf("insertion decision requires database.schema.table")
+		}
+		if _, err := report.ParseInsertionContract(value); err != nil {
+			return d, err
+		}
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return d, err

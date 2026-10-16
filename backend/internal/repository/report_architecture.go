@@ -78,6 +78,41 @@ func (s *Store) LoadArchitectureDocument(ctx context.Context, job ReportJob) (re
 	if len(d.Tables) > 500 {
 		return d, fmt.Errorf("architecture scope exceeds 500 tables; select a schema")
 	}
+	insertionVersions := make(map[string]int)
+	for _, decision := range d.Decisions {
+		if decision.Subject == "insertion" {
+			insertionVersions[decision.ObjectID] = decision.Version
+		}
+	}
+	rows, err = s.pool.Query(ctx, `SELECT database_name||'.'||schema_name||'.'||table_name,column_name,latest_at,collected_at,status,reason,append_only,decision_version
+FROM architecture_insertion_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND ($4='' OR schema_name=$4)
+ORDER BY schema_name,table_name LIMIT 501`, job.EnvironmentID, job.AuditRunID, d.Database, job.Filters.Schema)
+	if err != nil {
+		return d, err
+	}
+	for rows.Next() {
+		var item report.InsertionEvidence
+		var version int
+		if err = rows.Scan(&item.ObjectID, &item.Column, &item.Latest, &item.CollectedAt, &item.Status, &item.Reason, &item.AppendOnly, &version); err != nil {
+			break
+		}
+		if insertionVersions[item.ObjectID] != version {
+			item.Status = "invalid_mapping"
+			item.Reason = "contrato de inserção editado após a coleta; nova execução necessária"
+			item.Latest = nil
+		}
+		d.Insertions = append(d.Insertions, item)
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		return d, err
+	}
+	if len(d.Insertions) > 500 {
+		return d, fmt.Errorf("architecture scope exceeds 500 insertion observations")
+	}
 	rows, err = s.pool.Query(ctx, `SELECT schema_name,table_name,column_name,data_type FROM column_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid AND database_name=$3 AND ($4='' OR schema_name=$4) ORDER BY schema_name,table_name,ordinal_position LIMIT 10001`, job.EnvironmentID, job.AuditRunID, d.Database, job.Filters.Schema)
 	if err != nil {
 		return d, err
@@ -292,6 +327,7 @@ func redactArchitecture(d *report.ArchitectureDocument) {
 	d.Extensions = nil
 	d.Schemas = nil
 	d.Decisions = nil
+	d.Insertions = nil
 	d.Details = nil
 	for i := range d.Metrics {
 		d.Metrics[i].Scope = "[oculto]"

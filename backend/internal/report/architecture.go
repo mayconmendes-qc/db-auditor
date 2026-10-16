@@ -243,6 +243,9 @@ func (d ArchitectureDocument) RenderMarkdown() ([]byte, error) {
 			reason = e.Status + ": " + e.Reason
 			if e.Latest != nil {
 				date = e.Latest.UTC().Format(time.RFC3339)
+				if e.Latest.After(d.RunStarted) {
+					reason += "; data posterior ao início da coleta, fora do corte da execução"
+				}
 				if !e.AppendOnly {
 					reason += "; data entre registros presentes; histórico indeterminado por exclusões possíveis"
 				}

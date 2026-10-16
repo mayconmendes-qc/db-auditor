@@ -200,15 +200,26 @@ func TestArchitectureReportIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err = pool.Exec(ctx, `UPDATE audit_run SET started_at='2026-10-16 12:00:00+00' WHERE id=$1::uuid`, run); err != nil {
+		t.Fatal(err)
+	}
 	decision, err := store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "semantics", "pedidos confirmados", "tester")
 	if err != nil {
+		t.Fatal(err)
+	}
+	insertion, err := store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "insertion", `{"column":"inserted_at","timezone":"UTC","validated":true,"filled_on_insert":true,"append_only":true}`, "tester")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(ctx, `INSERT INTO architecture_insertion_snapshot(environment_id,audit_run_id,database_name,schema_name,table_name,column_name,decision_version,append_only,status,reason,latest_at)
+VALUES ($1::uuid,$2::uuid,'db','public','orders','inserted_at',$3,true,'observed','MAX em coluna validada','2026-09-01 12:00:00+00')`, env, run, insertion.Version); err != nil {
 		t.Fatal(err)
 	}
 	job, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: env, AuditRunID: run, Type: "architecture", Format: "markdown", Filters: repository.ReportFilters{Database: "db"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(job.Decisions) != 1 || job.Decisions[0].Version != decision.Version {
+	if len(job.Decisions) != 2 || job.Decisions[0].Version != decision.Version {
 		t.Fatal("decision snapshot missing")
 	}
 	if _, err = store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "semantics", "pedidos pendentes", "tester"); err != nil {
@@ -221,7 +232,21 @@ func TestArchitectureReportIntegration(t *testing.T) {
 	if err != nil || artifact == nil {
 		t.Fatalf("artifact: %v", err)
 	}
-	if artifact.ContentType != "text/markdown; charset=utf-8" || !strings.Contains(string(artifact.Content), "pedidos confirmados") || strings.Contains(string(artifact.Content), "pedidos pendentes") {
+	if artifact.ContentType != "text/markdown; charset=utf-8" || !strings.Contains(string(artifact.Content), "pedidos confirmados") || strings.Contains(string(artifact.Content), "pedidos pendentes") || !strings.Contains(string(artifact.Content), "Banco: **recente**") {
 		t.Fatal("artifact did not freeze decisions")
+	}
+	if _, err = store.RecordArchitectureDecision(ctx, env, "db", "db.public.orders", "insertion", `{"column":"created_at","timezone":"UTC","validated":true,"filled_on_insert":true,"append_only":true}`, "tester"); err != nil {
+		t.Fatal(err)
+	}
+	newJob, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: env, AuditRunID: run, Type: "architecture", Format: "markdown", Filters: repository.ReportFilters{Database: "db"}})
+	if err != nil || newJob.ID == job.ID {
+		t.Fatalf("new decision did not create a new job: %#v %v", newJob, err)
+	}
+	if err = (Worker{Store: store}).ProcessOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	newArtifact, err := store.GetReportArtifact(ctx, env, newJob.ID)
+	if err != nil || newArtifact == nil || !strings.Contains(string(newArtifact.Content), "Banco: **indeterminado**") || !strings.Contains(string(newArtifact.Content), "contrato de inserção editado") {
+		t.Fatalf("stale insertion evidence was accepted: %v", err)
 	}
 }
