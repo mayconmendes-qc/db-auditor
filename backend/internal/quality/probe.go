@@ -77,6 +77,10 @@ func Run(ctx context.Context, dsn string, request Request) (Result, error) {
 		return result, fmt.Errorf("conexão inválida")
 	}
 	cfg.Database = request.Database
+	if cfg.RuntimeParams == nil {
+		cfg.RuntimeParams = map[string]string{}
+	}
+	cfg.RuntimeParams["default_transaction_read_only"] = "on"
 	conn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
 		return result, fmt.Errorf("falha na conexão: %s", config.SanitizeError(err))
@@ -98,8 +102,16 @@ func Run(ctx context.Context, dsn string, request Request) (Result, error) {
 	if _, err = tx.Exec(ctx, `SET LOCAL statement_timeout='5000ms'`); err != nil {
 		return result, fmt.Errorf("limite de tempo indisponível")
 	}
+	var readonly bool
+	if err = tx.QueryRow(ctx, `SELECT current_setting('transaction_read_only')='on'`).Scan(&readonly); err != nil || !readonly {
+		return result, fmt.Errorf("transação de qualidade não está somente leitura")
+	}
 	var privileged bool
-	if err = tx.QueryRow(ctx, `SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).Scan(&privileged); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rolbypassrls
+ OR has_database_privilege(current_user,current_database(),'CREATE')
+ OR EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema' AND has_schema_privilege(current_user,n.oid,'CREATE'))
+ OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname <> 'information_schema' AND c.relkind IN ('r','p','f') AND has_table_privilege(current_user,c.oid,'INSERT,UPDATE,DELETE,TRUNCATE'))
+ FROM pg_roles r WHERE r.rolname=current_user`).Scan(&privileged); err != nil {
 		return result, fmt.Errorf("não foi possível verificar o papel de leitura")
 	}
 	if privileged {

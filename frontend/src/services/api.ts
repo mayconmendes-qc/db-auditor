@@ -496,7 +496,12 @@ export const api = {
     reportRequest<ReportJob>(
       `/api/v1/environments/${environmentId}/reports`,
       "POST",
-      { audit_run_id: auditRunId, report_type: reportType, filters },
+      {
+        audit_run_id: auditRunId,
+        report_type: reportType,
+        format: reportType === "architecture" ? "markdown" : "pdf",
+        filters,
+      },
     ),
   cancelPDFReport: (environmentId: string, id: string) =>
     reportRequest<{ status: string }>(
@@ -528,9 +533,43 @@ export const api = {
       throw await toApiError(response, path);
     }
     return new Blob([await response.arrayBuffer()], {
-      type: "application/pdf",
+      type: response.headers.get("Content-Type") ?? "application/octet-stream",
     });
   },
+  architectureDecisions: (environmentId: string, database: string) =>
+    reportRequest<{
+      items: Array<{
+        object_ref: string;
+        subject: string;
+        value: string;
+        version: number;
+        author: string;
+        created_at: string;
+      }>;
+    }>(
+      `/api/v1/environments/${environmentId}/reports/architecture-decisions?database=${encodeURIComponent(database)}&history=true`,
+    ),
+  saveArchitectureDecision: (
+    environmentId: string,
+    input: {
+      database: string;
+      object_ref: string;
+      subject: string;
+      value: string;
+    },
+  ) =>
+    reportRequest<{
+      object_ref: string;
+      subject: string;
+      value: string;
+      version: number;
+      author: string;
+      created_at: string;
+    }>(
+      `/api/v1/environments/${environmentId}/reports/architecture-decisions`,
+      "POST",
+      input,
+    ),
   health: () => getJSON<HealthResponse>("/health"),
   ready: () => getJSON<HealthResponse>("/ready"),
   status: () => getJSON<StatusResponse>("/api/v1/status"),
@@ -585,9 +624,9 @@ export const api = {
     getJSON<PagedResponse<TrackedAction>>(
       `/api/v1/environments/${env}/actions?offset=${offset}&limit=${limit}`,
     ),
-  databases: (environmentId: string) =>
+  databases: (environmentId: string, auditRunId?: string) =>
     getJSON<ItemsResponse<DatabaseSnapshot>>(
-      `/api/v1/environments/${environmentId}/databases`,
+      `/api/v1/environments/${environmentId}/databases${auditRunId ? `?audit_run_id=${encodeURIComponent(auditRunId)}` : ""}`,
     ),
   schemas: (environmentId: string) =>
     getJSON<ItemsResponse<SchemaSnapshot>>(

@@ -196,13 +196,36 @@ func createEnvironmentLabel(store InventoryStore) http.HandlerFunc {
 }
 
 func listDatabases(store InventoryStore) http.HandlerFunc {
-	return envItems(store, func(ctx context.Context, id string) (any, error) {
-		items, err := store.ListDatabaseSnapshots(ctx, id)
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		run := r.URL.Query().Get("audit_run_id")
+		if !uuidPattern.MatchString(id) || run != "" && !uuidPattern.MatchString(run) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Escopo inválido.")
+			return
+		}
+		var items []repository.DatabaseSnapshot
+		var err error
+		if run == "" {
+			items, err = store.ListDatabaseSnapshots(r.Context(), id)
+		} else {
+			reader, ok := store.(interface {
+				ListDatabaseSnapshotsForRun(context.Context, string, string) ([]repository.DatabaseSnapshot, error)
+			})
+			if !ok {
+				writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Inventário indisponível.")
+				return
+			}
+			items, err = reader.ListDatabaseSnapshotsForRun(r.Context(), id, run)
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, CodeInternal, "Não foi possível listar os databases.")
+			return
+		}
 		if items == nil {
 			items = []repository.DatabaseSnapshot{}
 		}
-		return items, err
-	}, "Não foi possível listar os databases.")
+		writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	}
 }
 
 func listSchemas(store InventoryStore) http.HandlerFunc {

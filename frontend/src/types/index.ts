@@ -849,6 +849,7 @@ export interface ScopeAggregate {
 export interface EffectiveRule {
   rule_id: string;
   rule_version: string;
+  architecture_template_version?: string;
   category: string;
   enabled: boolean;
   confidence: number;
@@ -883,7 +884,8 @@ export interface ReportJob {
   id: string;
   environment_id: string;
   audit_run_id: string;
-  report_type: "executive" | "technical" | "table";
+  report_type: "executive" | "technical" | "table" | "architecture";
+  format?: "pdf" | "markdown";
   filters: ReportFilters;
   requested_by: string;
   rule_version: string;

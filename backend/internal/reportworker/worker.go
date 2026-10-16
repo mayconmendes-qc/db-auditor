@@ -64,6 +64,9 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	}
 	workCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+	if job.Type == "architecture" {
+		return w.processArchitecture(workCtx, job)
+	}
 	document, err := w.Store.LoadReportDocument(workCtx, *job)
 	if err != nil {
 		return w.fail(workCtx, job.ID, err)
@@ -103,6 +106,34 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 		Severity:      "info",
 	})
 	return nil
+}
+
+func (w Worker) processArchitecture(ctx context.Context, job *repository.ReportJob) error {
+	if job.TemplateVersion != report.ArchitectureVersion {
+		return w.fail(ctx, job.ID, fmt.Errorf("architecture template version unavailable: %s", job.TemplateVersion))
+	}
+	document, err := w.Store.LoadArchitectureDocument(ctx, *job)
+	if err != nil {
+		return w.fail(ctx, job.ID, err)
+	}
+	content, err := document.RenderMarkdown()
+	if err != nil {
+		return w.fail(ctx, job.ID, err)
+	}
+	current, err := w.Store.GetReportJob(ctx, job.EnvironmentID, job.ID)
+	if err != nil {
+		return err
+	}
+	if current == nil || current.Status == "cancelled" {
+		return nil
+	}
+	digest := sha256.Sum256(content)
+	artifact := repository.ReportArtifact{Content: content, SHA256: hex.EncodeToString(digest[:]), Filename: fmt.Sprintf("db-auditor-arquitetura-%s.md", job.ID), ContentType: "text/markdown; charset=utf-8"}
+	err = w.Store.FinishReportJob(ctx, job.ID, artifact)
+	if errors.Is(err, repository.ErrReportConflict) {
+		return nil
+	}
+	return err
 }
 
 func (w Worker) fail(ctx context.Context, id string, cause error) error {

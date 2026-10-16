@@ -42,7 +42,7 @@ func ForEachUserDatabase(
 		return nil, fmt.Errorf("database visitor is nil")
 	}
 
-	root, err := pgx.Connect(ctx, baseURL)
+	root, err := ConnectReadOnly(ctx, baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect target: %s", config.SanitizeError(err))
 	}
@@ -106,7 +106,7 @@ func ForEachUserDatabase(
 				})
 				return
 			}
-			dbConn, err := pgx.Connect(dbCtx, dbURL)
+			dbConn, err := ConnectReadOnly(dbCtx, dbURL)
 			if err != nil {
 				if hooks.Progress != nil {
 					hooks.Progress(db.Name, "failed", config.SanitizeError(err))

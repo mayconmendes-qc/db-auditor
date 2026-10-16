@@ -1,5 +1,4 @@
--- Table inventory facts for the current database (read-only).
--- Sizes are always bytes; stats come from pg_stat_user_tables when available.
+-- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
 SELECT
   current_database() AS database_name,
   n.nspname AS schema_name,
@@ -54,4 +53,4 @@ LEFT JOIN pg_tablespace ts ON ts.oid = c.reltablespace
 WHERE c.relkind IN ('r', 'p', 'f')
   AND n.nspname NOT LIKE 'pg\_%' ESCAPE '\'
   AND n.nspname <> 'information_schema'
-ORDER BY n.nspname, c.relname;
+ORDER BY n.nspname, c.relname
