@@ -126,11 +126,58 @@ func NewLiveRegistry(opts LiveRegistryOptions) *Registry {
 	registerPostgresCollectors(must, connectRoot, writer, scope, targets)
 	registerTimescaleCollectors(must, writer, scope, targets)
 	registerStatsCollectors(must, writer, scope, targets, opts.Policy)
+	must("postgres.last_insertion", func(ctx context.Context) (int64, error) {
+		saver, ok := writer.(interface {
+			InsertionMappings(context.Context, string, string) ([]postgres.InsertionMapping, error)
+			SaveInsertionProbes(context.Context, pgtype.UUID, pgtype.UUID, []postgres.InsertionProbe) error
+		})
+		if !ok {
+			return 0, nil
+		}
+		dsn, err := dsnFromContext(ctx, targets)
+		if err != nil {
+			return 0, err
+		}
+		envID, runID, err := runIDs(ctx)
+		if err != nil {
+			return 0, err
+		}
+		meta, _ := RunMetaFromContext(ctx)
+		var total int64
+		partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, database string) error {
+			mappings, err := saver.InsertionMappings(cctx, meta.EnvironmentID, database)
+			if err != nil || len(mappings) == 0 {
+				return err
+			}
+			selected := mappings[:0]
+			for _, mapping := range mappings {
+				if scope.AllowsSchema(mapping.Schema) {
+					selected = append(selected, mapping)
+				}
+			}
+			if len(selected) == 0 {
+				return nil
+			}
+			probes, err := postgres.CollectInsertionEvidence(cctx, conn, selected)
+			if err != nil {
+				return err
+			}
+			if err := saver.SaveInsertionProbes(cctx, envID, runID, probes); err != nil {
+				return err
+			}
+			total += int64(len(probes))
+			return nil
+		})
+		return finishMulti(total, partial, hard)
+	})
 
 	return r
 }
 
 func liveCollectorProfiles(name string) map[string]struct{} {
+	if name == "postgres.last_insertion" {
+		return map[string]struct{}{ProfileManual: {}}
+	}
 	profiles := map[string]struct{}{ProfileManual: {}, ProfileMonthly: {}}
 	weekly := map[string]struct{}{
 		"postgres.server": {}, "postgres.databases": {}, "postgres.schemas": {},
