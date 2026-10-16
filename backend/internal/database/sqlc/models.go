@@ -39,6 +39,18 @@ type AnalysisRun struct {
 	RuleManifestHash string
 }
 
+type ArchitectureDecision struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	ObjectRef     string
+	Subject       string
+	Value         string
+	Version       int32
+	Author        string
+	CreatedAt     pgtype.Timestamptz
+}
+
 type AuditAnnotation struct {
 	ID            pgtype.UUID
 	EnvironmentID pgtype.UUID
@@ -323,6 +335,7 @@ type ConstraintSnapshot struct {
 	FkUpdateAction       pgtype.Text
 	FkDeleteAction       pgtype.Text
 	FkMatchType          pgtype.Text
+	SupportingIndex      pgtype.Text
 }
 
 type ContinuousAggregateSnapshot struct {
@@ -751,21 +764,24 @@ type ReportArtifact struct {
 }
 
 type ReportJob struct {
-	ID             pgtype.UUID
-	EnvironmentID  pgtype.UUID
-	AuditRunID     pgtype.UUID
-	ReportType     string
-	Filters        []byte
-	RequestedBy    string
-	RuleVersion    string
-	Status         string
-	Attempts       int32
-	IdempotencyKey string
-	Error          pgtype.Text
-	CreatedAt      pgtype.Timestamptz
-	StartedAt      pgtype.Timestamptz
-	FinishedAt     pgtype.Timestamptz
-	ExpiresAt      pgtype.Timestamptz
+	ID                          pgtype.UUID
+	EnvironmentID               pgtype.UUID
+	AuditRunID                  pgtype.UUID
+	ReportType                  string
+	Filters                     []byte
+	RequestedBy                 string
+	RuleVersion                 string
+	Status                      string
+	Attempts                    int32
+	IdempotencyKey              string
+	Error                       pgtype.Text
+	CreatedAt                   pgtype.Timestamptz
+	StartedAt                   pgtype.Timestamptz
+	FinishedAt                  pgtype.Timestamptz
+	ExpiresAt                   pgtype.Timestamptz
+	ArchitectureDecisions       []byte
+	ReportFormat                string
+	ArchitectureTemplateVersion string
 }
 
 type RetentionPolicy struct {
@@ -990,4 +1006,7 @@ type WorkloadSnapshot struct {
 	ExtensionVersion  string
 	QueryKind         string
 	CollectedAt       pgtype.Timestamptz
+	TempBlksRead      pgtype.Int8
+	TempBlksWritten   pgtype.Int8
+	BlockSizeBytes    pgtype.Int4
 }
