@@ -110,6 +110,7 @@ export type ApiPath =
   | "/api/v1/finding-categories/{category}"
   | "/api/v1/findings"
   | "/api/v1/findings/analyze"
+  | "/api/v1/findings/priorities"
   | "/api/v1/findings/{id}"
   | "/api/v1/findings/{id}/action"
   | "/api/v1/findings/{id}/action/events"
@@ -120,6 +121,10 @@ export type ApiPath =
   | "/api/v1/mappings/{id}"
   | "/api/v1/reports/findings"
   | "/api/v1/reports/inventory"
+  | "/api/v1/retention-policy"
+  | "/api/v1/retention-policy/apply"
+  | "/api/v1/retention-policy/evidence"
+  | "/api/v1/retention-policy/plan"
   | "/api/v1/search"
   | "/api/v1/server-compare"
   | "/api/v1/status";
@@ -186,6 +191,7 @@ export interface Finding {
   evidence?: Record<string, unknown>;
   references?: string[];
   rule_parameters?: Record<string, unknown>;
+  impact_estimate?: ImpactEstimate;
 }
 
 export interface FindingChange {
@@ -241,6 +247,23 @@ export interface HypertableDetailSnapshot {
   base_table_observed: boolean;
 }
 
+export interface ImpactEstimate {
+  status: string;
+  metric?: string;
+  value?: number;
+  unit?: string;
+  denominator?: number;
+  denominator_unit?: string;
+  ratio?: number;
+  period_start?: string;
+  period_end?: string;
+  period: string;
+  level: string;
+  basis: string;
+  reason?: string;
+  label: string;
+}
+
 export interface IndexDetailSnapshot {
   id: string;
   environment_id: string;
@@ -267,6 +290,52 @@ export interface IndexDetailSnapshot {
   stats_reset?: string | null;
   usage_observed?: boolean | null;
   collected_at: string;
+}
+
+export interface PriorityItem {
+  priority: PriorityRanked;
+  finding: Finding;
+}
+
+export interface PriorityRanked {
+  finding_id: string;
+  rank: number;
+  score: number;
+  max_score: number;
+  severity: string;
+  impact_level: string;
+  impact_label: string;
+  effort: string;
+  confidence: number;
+  confidence_label: string;
+  risk: string;
+  reason: string;
+  formula: string;
+}
+
+export interface RetentionEvidence {
+  id: string;
+  kind: string;
+  environment_label: string;
+  artifact_sha256: string;
+  succeeded: boolean;
+  rto_seconds?: number;
+  integrity: Record<string, unknown>;
+  note: string;
+  recorded_by: string;
+  performed_at: string;
+  recorded_at: string;
+}
+
+export interface RetentionPolicy {
+  snapshot_retention_days: number;
+  report_job_retention_days: number;
+  owner_name: string;
+  encryption_at_rest: string;
+  archive_note: string;
+  approved_by: string;
+  approved_at?: string;
+  updated_at: string;
 }
 
 export interface ScopeScore {

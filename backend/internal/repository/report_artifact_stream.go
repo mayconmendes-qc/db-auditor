@@ -19,6 +19,8 @@ const maxReportArtifactBytes = 16 << 20
 type StreamedArtifact struct {
 	Bytes  int64
 	SHA256 string
+	// LimitNote records any truncation or limit applied while rendering.
+	LimitNote string
 }
 
 // ArtifactWriter writes the artifact body to w and returns its size and hash.
@@ -111,7 +113,7 @@ FROM report_artifact WHERE report_job_id=$1::uuid`, id, written.Bytes, written.S
 	if !matches {
 		return fmt.Errorf("report hash mismatch")
 	}
-	cmd, err := tx.Exec(ctx, `UPDATE report_job SET status='success',finished_at=now() WHERE id=$1::uuid AND status='running'`, id)
+	cmd, err := tx.Exec(ctx, `UPDATE report_job SET status='success',finished_at=now(),limit_note=left($2,1000) WHERE id=$1::uuid AND status='running'`, id, written.LimitNote)
 	if err != nil {
 		return err
 	}

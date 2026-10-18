@@ -20,6 +20,9 @@ type PDFResult struct {
 	Bytes  int64
 	Pages  int
 	SHA256 string
+	// LimitNote is Document.LimitNote of the rendered (redacted) document,
+	// computed without holding the whole document (AN-12).
+	LimitNote string
 }
 
 // RenderPDF writes a deterministic, paginated PDF 1.4 document with no
@@ -161,7 +164,7 @@ func WritePDFSections(ctx context.Context, w io.Writer, source SectionSource, re
 	if _, err := fmt.Fprintf(out, "trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(offsets), catalogID, xref); err != nil {
 		return PDFResult{}, err
 	}
-	return PDFResult{Bytes: out.n, Pages: pageCount, SHA256: hex.EncodeToString(digest.Sum(nil))}, nil
+	return PDFResult{Bytes: out.n, Pages: pageCount, SHA256: hex.EncodeToString(digest.Sum(nil)), LimitNote: limitNote(plan.overview, plan.findings)}, nil
 }
 
 // errPDFTooLarge keeps the user-facing reason when the byte ceiling is hit.
@@ -351,12 +354,18 @@ func wrapText(value string, width int) []string {
 	return out
 }
 
+// winAnsiExtra maps the punctuation WinAnsiEncoding places in 0x80-0x9F, so
+// report text is not silently replaced by "?".
+var winAnsiExtra = map[rune]byte{'€': 0x80, '‚': 0x82, '„': 0x84, '…': 0x85, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '™': 0x99}
+
 func escapePDFText(value string) string {
 	var out strings.Builder
 	for _, r := range value {
 		b := byte('?')
 		if r >= 32 && r <= 255 {
 			b = byte(r)
+		} else if mapped, ok := winAnsiExtra[r]; ok {
+			b = mapped
 		}
 		switch b {
 		case '\\', '(', ')':

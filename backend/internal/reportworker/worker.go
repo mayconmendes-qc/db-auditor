@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/osmendes/db-auditor/internal/config"
@@ -91,7 +92,8 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	if err != nil || job == nil {
 		return err
 	}
-	workCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	limit := MaxRenderDuration()
+	workCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	if job.Type == "architecture" {
 		return w.processArchitecture(workCtx, job)
@@ -110,13 +112,13 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	sections, err := w.Store.OpenReportSections(renderCtx, *job)
 	if err != nil {
 		sampler.Stop()
-		return w.fail(workCtx, job.ID, renderCause(renderCtx, err))
+		return w.fail(workCtx, job.ID, jobFailure(workCtx, renderCtx, limit, err))
 	}
 	defer sections.Close(workCtx)
 	// Validate the run, scope and filters before opening the artifact stream.
 	if _, err = sections.Overview(renderCtx); err != nil {
 		sampler.Stop()
-		return w.fail(workCtx, job.ID, renderCause(renderCtx, err))
+		return w.fail(workCtx, job.ID, jobFailure(workCtx, renderCtx, limit, err))
 	}
 	redaction := &report.Redaction{Metadata: os.Getenv("AUDITOR_REPORT_REDACT_METADATA"), Level: job.Filters.Redaction}
 	current, err := w.Store.GetReportJob(workCtx, job.EnvironmentID, job.ID)
@@ -129,12 +131,13 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 		return nil
 	}
 	// PF-07: render straight into the report_artifact COPY stream; the PDF is
-	// never held in memory as a whole.
+	// never held in memory as a whole. AN-12: the limit note, computed by the
+	// renderer from the overview and the findings count, is stored with it.
 	var rendered report.PDFResult
 	err = w.Store.FinishReportJobStream(renderCtx, job.ID, fmt.Sprintf("db-auditor-%s-%s.pdf", job.Type, job.ID), "application/pdf", func(out io.Writer) (repository.StreamedArtifact, error) {
 		result, err := report.WritePDFSections(renderCtx, out, sections, redaction)
 		rendered = result
-		return repository.StreamedArtifact{Bytes: result.Bytes, SHA256: result.SHA256}, err
+		return repository.StreamedArtifact{Bytes: result.Bytes, SHA256: result.SHA256, LimitNote: result.LimitNote}, err
 	})
 	peak := sampler.Stop()
 	if errors.Is(err, repository.ErrReportConflict) {
@@ -142,9 +145,10 @@ func (w Worker) ProcessOne(ctx context.Context) error {
 	}
 	if err != nil {
 		var writeErr *repository.ArtifactWriteError
-		if errors.As(err, &writeErr) || context.Cause(renderCtx) != nil && workCtx.Err() == nil {
-			slog.Warn("report pdf failed", "job_id", job.ID, "peak_heap_bytes", peak, "heap_budget_bytes", budget, "error", config.SanitizeError(renderCause(renderCtx, err)))
-			return w.fail(workCtx, job.ID, renderCause(renderCtx, err))
+		if errors.As(err, &writeErr) || context.Cause(renderCtx) != nil && workCtx.Err() == nil || renderTimedOut(workCtx) {
+			cause := jobFailure(workCtx, renderCtx, limit, err)
+			slog.Warn("report pdf failed", "job_id", job.ID, "peak_heap_bytes", peak, "heap_budget_bytes", budget, "error", config.SanitizeError(cause))
+			return w.fail(workCtx, job.ID, cause)
 		}
 		return err
 	}
@@ -185,6 +189,39 @@ func (w Worker) processArchitecture(ctx context.Context, job *repository.ReportJ
 		return nil
 	}
 	return err
+}
+
+// DefaultMaxRenderDuration bounds loading plus rendering of one report.
+const DefaultMaxRenderDuration = 2 * time.Minute
+
+// MaxRenderDuration reads AUDITOR_REPORT_MAX_SECONDS (10..900); outside that
+// range the default applies.
+func MaxRenderDuration() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("AUDITOR_REPORT_MAX_SECONDS")); raw != "" {
+		if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 10 && seconds <= 900 {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return DefaultMaxRenderDuration
+}
+
+// ErrRenderTimeout is the explicit failure recorded on the job when a report
+// exceeds its time budget. Memory is bounded by the heap budget sampler.
+var ErrRenderTimeout = errors.New("relatório excedeu o tempo limite de geração; reduza o escopo ou use filtros")
+
+// renderTimedOut reports whether the job's own time budget ran out (not a
+// shutdown of the parent context).
+func renderTimedOut(workCtx context.Context) bool {
+	return errors.Is(workCtx.Err(), context.DeadlineExceeded)
+}
+
+// jobFailure names the reason recorded on a failed job: an exhausted time
+// budget becomes ErrRenderTimeout, a memory budget its readable cause.
+func jobFailure(workCtx, renderCtx context.Context, limit time.Duration, err error) error {
+	if renderTimedOut(workCtx) {
+		return fmt.Errorf("%w (%s)", ErrRenderTimeout, limit)
+	}
+	return renderCause(renderCtx, err)
 }
 
 func (w Worker) fail(ctx context.Context, id string, cause error) error {

@@ -41,8 +41,8 @@ func readCgroupValue(v2, v1 string) (string, bool) {
 // container (CI: `docker run --memory --memory-swap`, see the "Report under a
 // container memory limit" step). It refuses to run without a real cgroup
 // limit and without swap disabled, renders the largest report the limits
-// allow plus one that hits the page limit with the largest finding section,
-// and proves both finish inside the container limit: the job succeeds or fails
+// allow, the largest finding section (detail limited, AN-12) and one with
+// every section at its ceiling that hits the page limit, and proves all finish inside the container limit: the job succeeds or fails
 // with its readable reason, the process is not OOM-killed, and the cgroup
 // memory peak stays below the limit.
 func TestLargeReportUnderContainerMemoryLimit(t *testing.T) {
@@ -84,9 +84,24 @@ func TestLargeReportUnderContainerMemoryLimit(t *testing.T) {
 		t.Fatalf("fixture is not near the page ceiling: %d pages", pages)
 	}
 	artifact = nil
-	// The largest finding section (2000 findings, truncated) exceeds the page
-	// ceiling: the job must fail with the readable reason, not be OOM-killed.
-	overEnv, overRun := seedReportRun(ctx, t, pool, 1, 10, 2001)
+	// The largest finding section (2000 findings, truncated): since AN-12 only
+	// the top MaxDetailedFindings are detailed, so it fits the page ceiling and
+	// the job records why it is not complete.
+	findingsEnv, findingsRun := seedReportRun(ctx, t, pool, 1, 10, 2001)
+	manyFindings, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: findingsEnv, AuditRunID: findingsRun, Type: "technical", IdempotencyKey: "container-findings"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = (Worker{Store: store}).ProcessOne(ctx); err != nil {
+		t.Fatalf("largest finding section failed inside the container: %v", err)
+	}
+	limited, err := store.GetReportJob(ctx, findingsEnv, manyFindings.ID)
+	if err != nil || limited.Status != "success" || !strings.Contains(limited.LimitNote, "detalhamento limitado") || !strings.Contains(limited.LimitNote, "listagens limitadas") {
+		t.Fatalf("largest finding section: %#v %v", limited, err)
+	}
+	// Every section at its ceiling exceeds 200 pages: the job must fail with
+	// the readable reason, not be OOM-killed.
+	overEnv, overRun := seedReportRun(ctx, t, pool, 501, 5001, 2001)
 	over, err := store.CreateReportJob(ctx, repository.ReportRequest{EnvironmentID: overEnv, AuditRunID: overRun, Type: "technical", IdempotencyKey: "container-over"})
 	if err != nil {
 		t.Fatal(err)
@@ -108,5 +123,5 @@ func TestLargeReportUnderContainerMemoryLimit(t *testing.T) {
 	if peak >= limit {
 		t.Fatalf("container memory peak %d reached the limit %d", peak, limit)
 	}
-	t.Logf("CONTAINER_MEMORY_RESULT limit_bytes=%d peak_bytes=%d large_report_bytes=%d large_report_pages=%d over_limit_job=failed_readable", limit, peak, *finished.SizeBytes, pages)
+	t.Logf("CONTAINER_MEMORY_RESULT limit_bytes=%d peak_bytes=%d large_report_bytes=%d large_report_pages=%d max_findings_job=success_limited over_limit_job=failed_readable", limit, peak, *finished.SizeBytes, pages)
 }

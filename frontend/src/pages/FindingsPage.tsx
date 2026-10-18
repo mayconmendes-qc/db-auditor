@@ -2,6 +2,7 @@ import { Sheet } from "../components/ui";
 import { labels } from "../lib/labels";
 import { FindingDetailCard } from "./parts/FindingDetailCard";
 import { FindingsBrowser } from "./parts/FindingsBrowser";
+import { FindingsPriorities } from "./parts/FindingsPriorities";
 import { RulesCatalogSheet } from "./parts/RulesCatalogSheet";
 import { useFindingsPage } from "./parts/useFindingsPage";
 
@@ -75,6 +76,10 @@ export function FindingsPage() {
   } = s;
   return (
     <>
+      <FindingsPriorities
+        environmentId={environmentId}
+        openFinding={openFinding}
+      />
       <FindingsBrowser
         exportRows={exportRows}
         exportJson={exportJson}

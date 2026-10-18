@@ -50,6 +50,7 @@ import type {
   ObjectMapping,
   PagedResponse,
   PolicySnapshot,
+  PrioritiesResponse,
   QualityRequest,
   QualityScan,
   RegressionAlert,
@@ -1583,6 +1584,17 @@ export const api = {
       signal,
     );
   },
+  findingPriorities: (
+    params?: { environment_id?: string; limit?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<PrioritiesResponse>(
+      `/api/v1/findings/priorities${qs({
+        environment_id: params?.environment_id || undefined,
+        limit: params?.limit,
+      })}`,
+      signal,
+    ),
   runFindings: (auditRunId: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<Finding>>(
       `/api/v1/findings?audit_run_id=${encodeURIComponent(auditRunId)}`,

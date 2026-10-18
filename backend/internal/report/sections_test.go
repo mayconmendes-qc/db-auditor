@@ -222,3 +222,32 @@ type failingSource struct {
 }
 
 func (f failingSource) Findings(context.Context) ([]Finding, error) { return nil, f.err }
+
+// AN-12: the limit note of a section-by-section render equals the note of the
+// whole redacted document.
+func TestWritePDFSectionsLimitNoteMatchesWholeDocument(t *testing.T) {
+	many := cloneDocument(sectionFixtures()["tecnico-completo"])
+	for i := 0; i < MaxDetailedFindings+5; i++ {
+		many.Findings = append(many.Findings, Finding{ID: fmt.Sprintf("extra-%03d", i), Type: "index.unused", Severity: "low", Database: "db", Schema: "public", Object: "o", Title: "t"})
+	}
+	many.Coverage = "partial"
+	many.Truncated = true
+	fixtures := sectionFixtures()
+	fixtures["detalhe-limitado"] = many
+	for name, document := range fixtures {
+		for _, level := range []string{"", "strict"} {
+			whole := cloneDocument(document)
+			whole.RedactSensitive(level)
+			result, err := WritePDFSections(context.Background(), io.Discard, MemorySource(cloneDocument(document)), &Redaction{Level: level})
+			if err != nil {
+				continue
+			}
+			if result.LimitNote != whole.LimitNote() {
+				t.Fatalf("%s/%s: limit note %q, whole document %q", name, level, result.LimitNote, whole.LimitNote())
+			}
+		}
+	}
+	if result, err := WritePDF(context.Background(), io.Discard, many); err != nil || !strings.Contains(result.LimitNote, "detalhamento limitado") || !strings.Contains(result.LimitNote, "cobertura parcial") {
+		t.Fatalf("limit note %q (%v)", result.LimitNote, err)
+	}
+}

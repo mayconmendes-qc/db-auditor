@@ -6,9 +6,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/osmendes/db-auditor/internal/actions"
 	"github.com/osmendes/db-auditor/internal/guidance"
+	"github.com/osmendes/db-auditor/internal/impact"
+	"github.com/osmendes/db-auditor/internal/priority"
 )
 
 // legacyRenderPDF is the pre-PF-07 in-memory renderer, kept verbatim as the
@@ -189,7 +192,9 @@ func legacyRenderPDF(document Document) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// legacyBuildLines is the pre-#65 whole-document line builder, kept verbatim
+// legacyBuildLines is the whole-document line builder (the #118 report
+// content: priority matrix, impact and gain, maintenance costs, growth gaps,
+// detail limit) as it was before the section-by-section split, kept verbatim
 // as the oracle of the section-by-section builder.
 func legacyBuildLines(d Document) []Line {
 	if d.TotalDatabases == 0 {
@@ -259,46 +264,62 @@ func legacyBuildLines(d Document) []Line {
 		}
 	}
 	if len(d.Growth) > 0 {
-		lines = append(lines, Line{"Evolução de armazenamento", "heading"}, Line{"Barras: tamanho total das tabelas na execução (bytes); período e coleta parcial estão identificados em cada linha.", "body"})
-		var maximum int64
-		for _, point := range d.Growth {
-			if point.SizeBytes > maximum {
-				maximum = point.SizeBytes
-			}
-		}
-		for _, point := range d.Growth {
-			at := point.At.UTC().Format("02/01/2006")
-			if point.At.IsZero() {
-				at = "data indisponível"
-			}
-			shortID := point.RunID
-			if len(shortID) > 8 {
-				shortID = shortID[:8]
-			}
-			label := at + " " + shortID
-			if point.Status == "partial_success" {
-				label += " (parcial)"
-			}
-			lines = append(lines, Line{fmt.Sprintf("%s|%d|%d", label, point.SizeBytes, maximum), "bar_bytes"}, Line{fmt.Sprintf("Execução %s: %d bytes em %d tabelas", point.RunID, point.SizeBytes, point.Tables), "body"})
-		}
-		if len(d.Growth) > 1 {
-			first, last := d.Growth[0], d.Growth[len(d.Growth)-1]
-			lines = append(lines, Line{fmt.Sprintf("Variação entre o primeiro e o último ponto: %+d bytes. Confirme que perfil e cobertura são comparáveis antes de atribuir a mudança a uma ação.", last.SizeBytes-first.SizeBytes), "body"})
-		}
+		lines = append(lines, growthLines(d.Growth)...)
 	}
+	ranked := rankFindings(d.Findings)
 	lines = append(lines, Line{"Riscos e prioridades", "heading"})
-	lines = append(lines, Line{"Matriz de decisão: impacto é a severidade observada; esforço é uma faixa preliminar para planejar a investigação. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"})
+	lines = append(lines, Line{"Matriz de decisão (" + priority.FormulaVersion + "): pontuação = peso da severidade × fator de impacto medido × confiança ÷ esforço. Impacto sem métrica não eleva a prioridade. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"})
 	if len(d.Findings) == 0 {
 		lines = append(lines, Line{"Nenhum achado observado neste escopo da execução.", "body"})
+	} else {
+		lines = append(lines, Line{Text: "Matriz impacto × esforço × confiança × risco", Style: "subheading"})
+		for i, r := range ranked {
+			if i >= matrixRows {
+				lines = append(lines, Line{fmt.Sprintf("Matriz limitada aos %d itens de maior pontuação; os demais aparecem no detalhamento abaixo.", matrixRows), "body"})
+				break
+			}
+			lines = append(lines, Line{fmt.Sprintf("#%d | achado %s | pontuação %.2f/%.1f | severidade %s | impacto %s | esforço %s | confiança %s (%.0f%%) | risco: %s", r.Rank, r.FindingID, r.Score, r.MaxScore, severityLabel(r.Severity), r.ImpactLevel, r.Effort, r.ConfidenceLabel, r.Confidence*100, r.Risk), "body"})
+		}
 	}
+	byID := make(map[string]Finding, len(d.Findings))
 	for _, f := range d.Findings {
+		byID[f.ID] = f
+	}
+	for index, r := range ranked {
+		f := byID[r.FindingID]
+		if index >= MaxDetailedFindings {
+			if index == MaxDetailedFindings {
+				lines = append(lines, Line{"Demais achados (resumo de uma linha)", "subheading"}, Line{fmt.Sprintf("Detalhamento limitado aos %d achados de maior pontuação para manter o PDF dentro de %d páginas; consulte os demais na interface.", MaxDetailedFindings, maxPDFPages), "body"})
+			}
+			lines = append(lines, Line{fmt.Sprintf("#%d %s | %s | %s.%s.%s | pontuação %.2f", r.Rank, f.ID, severityLabel(f.Severity), f.Database, f.Schema, f.Object, r.Score), "body"})
+			continue
+		}
 		friendly := guidance.For(f.Type)
 		plan := actions.For(f.Type)
+		estimate := f.Impact
+		if estimate.Status == "" {
+			estimate = impact.For(f.Type, nil, time.Time{}, time.Time{})
+		}
 		lines = append(lines, Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(severityLabel(f.Severity)), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"})
-		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço preliminar: %s", f.ID, severityLabel(f.Severity), effortLabel(plan.Category)), "body"})
-		lines = append(lines, Line{"Risco da mudança: " + plan.Risk, "body"}, Line{"Benefício esperado: " + plan.Benefit, "body"})
+		lines = append(lines, Line{fmt.Sprintf("ID do achado: %s | severidade: %s | esforço preliminar: %s", f.ID, severityLabel(f.Severity), effortLabel(plan)), "body"})
+		lines = append(lines, Line{"Impacto: " + estimate.Label, "body"}, Line{"Unidade: " + unitLabel(estimate) + " | Período de referência: " + estimate.Period, "body"})
+		lines = append(lines, Line{"Risco da mudança: " + plan.Risk, "body"})
+		gain := f.Gain
+		if gain.Hypothesis == "" {
+			gain = impact.BuildGain(friendly.Meaning, nil, estimate, nil)
+		}
+		lines = append(lines, Line{"Hipótese: " + gain.Hypothesis, "body"}, Line{"Ganho previsto: " + gain.Predicted, "body"}, Line{"Ganho medido: " + gain.Measured, "body"})
+		if cost := plan.Maintenance; cost != nil {
+			lines = append(lines, Line{"Custos de " + maintenanceKindLabel(cost.Kind) + " (" + cost.Capability + ")", "subheading"},
+				Line{"Pré-condições: " + cost.Preconditions, "body"}, Line{"Custo de leitura: " + cost.ReadCost, "body"}, Line{"Custo de escrita: " + cost.WriteCost, "body"},
+				Line{"Custo de armazenamento: " + cost.StorageCost, "body"}, Line{"Janela: " + cost.Window, "body"}, Line{"Risco: " + cost.Risk, "body"},
+				Line{"Validação posterior: " + cost.PostValidation, "body"})
+			if cost.BusinessApproval {
+				lines = append(lines, Line{"Exige aprovação de negócio antes de qualquer execução; o auditor não aplica a mudança.", "body"})
+			}
+		}
 		if strings.TrimSpace(f.Evidence) != "" {
-			lines = append(lines, Line{"Evidência técnica: " + f.Evidence, "body"})
+			lines = append(lines, Line{"Evidência técnica: " + truncateRunes(f.Evidence, maxEvidenceChars), "body"})
 		}
 		lines = append(lines, Line{"Próximo passo: " + friendly.Next, "body"}, Line{fmt.Sprintf("Confiança: %.0f%% | Regra: %s", f.Confidence*100, f.RuleVersion), "body"})
 		if d.Type == "technical" || d.Type == "table" {
@@ -332,12 +353,13 @@ func legacyBuildLines(d Document) []Line {
 			observation = "Foi observado"
 		}
 		lines = append(lines, Line{Text: fmt.Sprintf("%s %d %s neste recorte, incluindo %d %s e %d %s. Priorize a validação dos itens de maior severidade com a equipe responsável pelo banco.", observation, len(d.Findings), plural(len(d.Findings), "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), Style: "body"})
-		for index, f := range d.Findings {
+		for index, r := range ranked {
 			if index >= 5 {
 				break
 			}
+			f := byID[r.FindingID]
 			friendly := guidance.For(f.Type)
-			lines = append(lines, Line{Text: fmt.Sprintf("Prioridade %d (%s): %s em %s.%s.%s. Próximo passo: %s", index+1, severityLabel(f.Severity), friendly.Meaning, f.Database, f.Schema, f.Object, friendly.Next), Style: "body"})
+			lines = append(lines, Line{Text: fmt.Sprintf("Prioridade %d (achado %s, %s, pontuação %.2f): %s em %s.%s.%s. Próximo passo: %s", r.Rank, f.ID, severityLabel(f.Severity), r.Score, friendly.Meaning, f.Database, f.Schema, f.Object, friendly.Next), Style: "body"})
 		}
 	}
 	if d.Truncated || d.Coverage != "complete" {

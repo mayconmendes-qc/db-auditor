@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/osmendes/db-auditor/internal/actions"
 	"github.com/osmendes/db-auditor/internal/guidance"
+	"github.com/osmendes/db-auditor/internal/impact"
+	"github.com/osmendes/db-auditor/internal/priority"
 )
 
 // SectionSource loads the report data one section at a time (#65). Overview
@@ -54,7 +57,14 @@ type sectionPlan struct {
 	findings       int
 	critical, high int
 	severityCounts map[string]int
-	top            []Finding
+	// top holds the five highest-ranked findings with their rank, for the
+	// closing section.
+	top []rankedFinding
+}
+
+type rankedFinding struct {
+	rank    priority.Ranked
+	finding Finding
 }
 
 func planSections(ctx context.Context, source SectionSource, redaction *Redaction) (*sectionPlan, error) {
@@ -95,7 +105,7 @@ func planSections(ctx context.Context, source SectionSource, redaction *Redactio
 			plan.high++
 		}
 	}
-	plan.top = append([]Finding(nil), findings[:min(5, len(findings))]...)
+	plan.top = topRanked(findings, 5)
 	if redaction != nil {
 		overview.RedactMetadata(redaction.Metadata)
 		overview.redactOverview(redaction.Level, rawDatabases)
@@ -234,46 +244,12 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 		}
 	}
 	if len(d.Growth) > 0 {
-		if err := out(Line{"Evolução de armazenamento", "heading"}, Line{"Barras: tamanho total das tabelas na execução (bytes); período e coleta parcial estão identificados em cada linha.", "body"}); err != nil {
+		if err := out(growthLines(d.Growth)...); err != nil {
 			return err
 		}
-		var maximum int64
-		for _, point := range d.Growth {
-			if point.SizeBytes > maximum {
-				maximum = point.SizeBytes
-			}
-		}
-		for _, point := range d.Growth {
-			at := point.At.UTC().Format("02/01/2006")
-			if point.At.IsZero() {
-				at = "data indisponível"
-			}
-			shortID := point.RunID
-			if len(shortID) > 8 {
-				shortID = shortID[:8]
-			}
-			label := at + " " + shortID
-			if point.Status == "partial_success" {
-				label += " (parcial)"
-			}
-			if err := out(Line{fmt.Sprintf("%s|%d|%d", label, point.SizeBytes, maximum), "bar_bytes"}, Line{fmt.Sprintf("Execução %s: %d bytes em %d tabelas", point.RunID, point.SizeBytes, point.Tables), "body"}); err != nil {
-				return err
-			}
-		}
-		if len(d.Growth) > 1 {
-			first, last := d.Growth[0], d.Growth[len(d.Growth)-1]
-			if err := out(Line{fmt.Sprintf("Variação entre o primeiro e o último ponto: %+d bytes. Confirme que perfil e cobertura são comparáveis antes de atribuir a mudança a uma ação.", last.SizeBytes-first.SizeBytes), "body"}); err != nil {
-				return err
-			}
-		}
 	}
-	if err := out(Line{"Riscos e prioridades", "heading"}, Line{"Matriz de decisão: impacto é a severidade observada; esforço é uma faixa preliminar para planejar a investigação. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"}); err != nil {
+	if err := out(Line{"Riscos e prioridades", "heading"}, Line{"Matriz de decisão (" + priority.FormulaVersion + "): pontuação = peso da severidade × fator de impacto medido × confiança ÷ esforço. Impacto sem métrica não eleva a prioridade. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"}); err != nil {
 		return err
-	}
-	if p.findings == 0 {
-		if err := out(Line{"Nenhum achado observado neste escopo da execução.", "body"}); err != nil {
-			return err
-		}
 	}
 	if err := p.emitFindings(ctx, d, out); err != nil {
 		return err
@@ -301,9 +277,10 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 		if err := out(Line{Text: fmt.Sprintf("%s %d %s neste recorte, incluindo %d %s e %d %s. Priorize a validação dos itens de maior severidade com a equipe responsável pelo banco.", observation, p.findings, plural(p.findings, "achado", "achados"), critical, plural(critical, "crítico", "críticos"), high, plural(high, "alto", "altos")), Style: "body"}); err != nil {
 			return err
 		}
-		for index, f := range p.top {
+		for _, top := range p.top {
+			r, f := top.rank, top.finding
 			friendly := guidance.For(f.Type)
-			if err := out(Line{Text: fmt.Sprintf("Prioridade %d (%s): %s em %s.%s.%s. Próximo passo: %s", index+1, severityLabel(f.Severity), friendly.Meaning, f.Database, f.Schema, f.Object, friendly.Next), Style: "body"}); err != nil {
+			if err := out(Line{Text: fmt.Sprintf("Prioridade %d (achado %s, %s, pontuação %.2f): %s em %s.%s.%s. Próximo passo: %s", r.Rank, f.ID, severityLabel(f.Severity), r.Score, friendly.Meaning, f.Database, f.Schema, f.Object, friendly.Next), Style: "body"}); err != nil {
 				return err
 			}
 		}
@@ -316,6 +293,9 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 	return out(Line{Text: "Valide cada recomendação com métricas, plano de execução e teste em ambiente controlado. O auditor não aplica mudanças no banco auditado.", Style: "body"}, Line{"Metodologia e glossário", "heading"}, Line{"Somente dados e observações da execução informada foram usados.", "body"}, Line{"Achado: sinal de diagnóstico que exige validação humana.", "body"}, Line{"Baseline: execução aprovada para comparação temporal.", "body"}, Line{"Cobertura parcial impede conclusões sobre ausência de objetos e achados.", "body"})
 }
 
+// emitFindings loads the findings section and emits the priority matrix and
+// the per-finding detail in rank order (AN-02), the first MaxDetailedFindings
+// in full and the rest in one line each.
 func (p *sectionPlan) emitFindings(ctx context.Context, d Document, out func(...Line) error) error {
 	if err := sectionCause(ctx); err != nil {
 		return err
@@ -324,14 +304,76 @@ func (p *sectionPlan) emitFindings(ctx context.Context, d Document, out func(...
 	if err != nil {
 		return err
 	}
-	for _, f := range p.prepareFindings(findings) {
-		friendly := guidance.For(f.Type)
-		plan := actions.For(f.Type)
-		if err := out(Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(severityLabel(f.Severity)), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"}, Line{fmt.Sprintf("ID do achado: %s | impacto: %s | esforço preliminar: %s", f.ID, severityLabel(f.Severity), effortLabel(plan.Category)), "body"}, Line{"Risco da mudança: " + plan.Risk, "body"}, Line{"Benefício esperado: " + plan.Benefit, "body"}); err != nil {
+	findings = p.prepareFindings(findings)
+	ranked := rankFindings(findings)
+	if len(findings) == 0 {
+		if err := out(Line{"Nenhum achado observado neste escopo da execução.", "body"}); err != nil {
 			return err
 		}
+	} else {
+		if err := out(Line{Text: "Matriz impacto × esforço × confiança × risco", Style: "subheading"}); err != nil {
+			return err
+		}
+		for i, r := range ranked {
+			if i >= matrixRows {
+				if err := out(Line{fmt.Sprintf("Matriz limitada aos %d itens de maior pontuação; os demais aparecem no detalhamento abaixo.", matrixRows), "body"}); err != nil {
+					return err
+				}
+				break
+			}
+			if err := out(Line{fmt.Sprintf("#%d | achado %s | pontuação %.2f/%.1f | severidade %s | impacto %s | esforço %s | confiança %s (%.0f%%) | risco: %s", r.Rank, r.FindingID, r.Score, r.MaxScore, severityLabel(r.Severity), r.ImpactLevel, r.Effort, r.ConfidenceLabel, r.Confidence*100, r.Risk), "body"}); err != nil {
+				return err
+			}
+		}
+	}
+	byID := findingsByID(findings)
+	for index, r := range ranked {
+		f := byID[r.FindingID]
+		if index >= MaxDetailedFindings {
+			if index == MaxDetailedFindings {
+				if err := out(Line{"Demais achados (resumo de uma linha)", "subheading"}, Line{fmt.Sprintf("Detalhamento limitado aos %d achados de maior pontuação para manter o PDF dentro de %d páginas; consulte os demais na interface.", MaxDetailedFindings, maxPDFPages), "body"}); err != nil {
+					return err
+				}
+			}
+			if err := out(Line{fmt.Sprintf("#%d %s | %s | %s.%s.%s | pontuação %.2f", r.Rank, f.ID, severityLabel(f.Severity), f.Database, f.Schema, f.Object, r.Score), "body"}); err != nil {
+				return err
+			}
+			continue
+		}
+		friendly := guidance.For(f.Type)
+		plan := actions.For(f.Type)
+		estimate := f.Impact
+		if estimate.Status == "" {
+			estimate = impact.For(f.Type, nil, time.Time{}, time.Time{})
+		}
+		if err := out(Line{fmt.Sprintf("[%s] %s - %s.%s.%s", strings.ToUpper(severityLabel(f.Severity)), friendly.Meaning, f.Database, f.Schema, f.Object), "subheading"},
+			Line{fmt.Sprintf("ID do achado: %s | severidade: %s | esforço preliminar: %s", f.ID, severityLabel(f.Severity), effortLabel(plan)), "body"},
+			Line{"Impacto: " + estimate.Label, "body"}, Line{"Unidade: " + unitLabel(estimate) + " | Período de referência: " + estimate.Period, "body"},
+			Line{"Risco da mudança: " + plan.Risk, "body"}); err != nil {
+			return err
+		}
+		gain := f.Gain
+		if gain.Hypothesis == "" {
+			gain = impact.BuildGain(friendly.Meaning, nil, estimate, nil)
+		}
+		if err := out(Line{"Hipótese: " + gain.Hypothesis, "body"}, Line{"Ganho previsto: " + gain.Predicted, "body"}, Line{"Ganho medido: " + gain.Measured, "body"}); err != nil {
+			return err
+		}
+		if cost := plan.Maintenance; cost != nil {
+			if err := out(Line{"Custos de " + maintenanceKindLabel(cost.Kind) + " (" + cost.Capability + ")", "subheading"},
+				Line{"Pré-condições: " + cost.Preconditions, "body"}, Line{"Custo de leitura: " + cost.ReadCost, "body"}, Line{"Custo de escrita: " + cost.WriteCost, "body"},
+				Line{"Custo de armazenamento: " + cost.StorageCost, "body"}, Line{"Janela: " + cost.Window, "body"}, Line{"Risco: " + cost.Risk, "body"},
+				Line{"Validação posterior: " + cost.PostValidation, "body"}); err != nil {
+				return err
+			}
+			if cost.BusinessApproval {
+				if err := out(Line{"Exige aprovação de negócio antes de qualquer execução; o auditor não aplica a mudança.", "body"}); err != nil {
+					return err
+				}
+			}
+		}
 		if strings.TrimSpace(f.Evidence) != "" {
-			if err := out(Line{"Evidência técnica: " + f.Evidence, "body"}); err != nil {
+			if err := out(Line{"Evidência técnica: " + truncateRunes(f.Evidence, maxEvidenceChars), "body"}); err != nil {
 				return err
 			}
 		}
@@ -352,6 +394,30 @@ func (p *sectionPlan) emitFindings(ctx context.Context, d Document, out func(...
 		}
 	}
 	return nil
+}
+
+// findingsByID mirrors the whole-document builder: a later finding with a
+// repeated id replaces the earlier one.
+func findingsByID(findings []Finding) map[string]Finding {
+	byID := make(map[string]Finding, len(findings))
+	for _, f := range findings {
+		byID[f.ID] = f
+	}
+	return byID
+}
+
+// topRanked returns the first n findings in rank order with their rank.
+func topRanked(findings []Finding, n int) []rankedFinding {
+	ranked := rankFindings(findings)
+	byID := findingsByID(findings)
+	top := []rankedFinding{}
+	for index, r := range ranked {
+		if index >= n {
+			break
+		}
+		top = append(top, rankedFinding{rank: r, finding: byID[r.FindingID]})
+	}
+	return top
 }
 
 func (p *sectionPlan) emitInventory(ctx context.Context, out func(...Line) error) error {

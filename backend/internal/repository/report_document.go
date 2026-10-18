@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/osmendes/db-auditor/internal/impact"
 	"github.com/osmendes/db-auditor/internal/report"
 )
 
@@ -190,6 +192,11 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 	if d.Truncated {
 		d.CoverageNotes = append(d.CoverageNotes, reportTruncatedListsNotes)
 	}
+	// AN-12: the findings section holds min(listed, 2000) findings; beyond
+	// report.MaxDetailedFindings the PDF lists the rest in one line each.
+	if report.DetailLimitedCount(min(listedFindings, reportMaxFindings)) {
+		d.CoverageNotes = append(d.CoverageNotes, fmt.Sprintf("Detalhamento limitado aos %d achados de maior prioridade; os demais aparecem em uma linha.", report.MaxDetailedFindings))
+	}
 	for i := range d.CoverageNotes {
 		d.CoverageNotes[i] = strings.TrimSpace(d.CoverageNotes[i])
 	}
@@ -240,14 +247,35 @@ func (r *ReportSections) Tables(ctx context.Context) ([]report.Table, error) {
 // the rows in the same order.
 func (r *ReportSections) Findings(ctx context.Context) ([]report.Finding, error) {
 	job := r.job
-	rows, err := r.tx.Query(ctx, `SELECT f.id::text,left(f.finding_type,128),e.severity,left(e.category,128),left(e.database_name,256),left(e.schema_name,256),left(e.object_name,256),left(e.title,512),left(e.summary,1024),left(e.recommendation,1024),e.confidence,left(e.evidence::text,500),left(e.rule_version,128) FROM finding_event e JOIN finding f ON f.id=e.finding_id WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title,f.id LIMIT $6`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity, reportMaxFindings)
+	// AN-03/BA-21: each finding carries its impact estimate and the latest
+	// measured gain; evidence over 64 KiB is not parsed for the estimate.
+	rows, err := r.tx.Query(ctx, `SELECT f.id::text,left(f.finding_type,128),e.severity,left(e.category,128),left(e.database_name,256),left(e.schema_name,256),left(e.object_name,256),left(e.title,512),left(e.summary,1024),left(e.recommendation,1024),e.confidence,left(e.evidence::text,500),left(e.rule_version,128),
+CASE WHEN octet_length(e.evidence::text)<=65536 THEN e.evidence::text ELSE '{}' END,f.first_seen_at,COALESCE(r.started_at,f.last_seen_at),
+m.metric,m.before_value,m.after_value,COALESCE(m.comparable AND m.workload_comparable,false),COALESCE(m.comparison_note,''),COALESCE(m.after_run_id::text,'')
+FROM finding_event e JOIN finding f ON f.id=e.finding_id LEFT JOIN audit_run r ON r.id=e.audit_run_id
+LEFT JOIN LATERAL (SELECT metric,before_value,after_value,comparable,workload_comparable,comparison_note,after_run_id FROM finding_action_measurement x WHERE x.finding_id=f.id ORDER BY recorded_at DESC,id DESC LIMIT 1) m ON true
+WHERE e.audit_run_id=$1::uuid AND e.event_type='observed' AND ($2='' OR e.database_name=$2) AND ($3='' OR e.schema_name=$3) AND ($4='' OR e.object_name=$4) AND ($5='' OR e.severity=$5) ORDER BY e.severity,e.category,e.database_name,e.schema_name,e.object_name,e.title,f.id LIMIT $6`, job.AuditRunID, job.Filters.Database, job.Filters.Schema, job.Filters.Table, job.Filters.Severity, reportMaxFindings)
 	if err != nil {
 		return nil, err
 	}
 	findings, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (report.Finding, error) {
 		var item report.Finding
-		err := row.Scan(&item.ID, &item.Type, &item.Severity, &item.Category, &item.Database, &item.Schema, &item.Object, &item.Title, &item.Summary, &item.Recommendation, &item.Confidence, &item.Evidence, &item.RuleVersion)
-		return item, err
+		var evidence string
+		var firstSeen, observedAt time.Time
+		var metric *string
+		var measurement impact.Measurement
+		if err := row.Scan(&item.ID, &item.Type, &item.Severity, &item.Category, &item.Database, &item.Schema, &item.Object, &item.Title, &item.Summary, &item.Recommendation, &item.Confidence, &item.Evidence, &item.RuleVersion,
+			&evidence, &firstSeen, &observedAt, &metric, &measurement.Before, &measurement.After, &measurement.Comparable, &measurement.Note, &measurement.AfterRunID); err != nil {
+			return item, err
+		}
+		item.Impact = EstimateImpact(item.Type, []byte(evidence), firstSeen, observedAt)
+		var measured *impact.Measurement
+		if metric != nil {
+			measurement.Metric = *metric
+			measured = &measurement
+		}
+		item.Gain = BuildGainStatement(item.Type, []byte(evidence), item.Impact, measured)
+		return item, nil
 	})
 	if findings == nil && err == nil {
 		findings = []report.Finding{}

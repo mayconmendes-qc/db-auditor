@@ -2,8 +2,13 @@ package report
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/osmendes/db-auditor/internal/actions"
+	"github.com/osmendes/db-auditor/internal/impact"
+	"github.com/osmendes/db-auditor/internal/priority"
 )
 
 // Document is the renderer-independent, run-scoped report representation.
@@ -68,6 +73,11 @@ type Finding struct {
 	Confidence     float64
 	Evidence       string
 	RuleVersion    string
+	// Impact is the uniform estimate (value, unit, denominator, period).
+	// A zero value renders as "impacto não estimado".
+	Impact impact.Estimate
+	// Gain keeps hypothesis, predicted and measured gain apart (BA-21).
+	Gain impact.Gain
 }
 type Baseline struct {
 	RunID         string
@@ -120,8 +130,53 @@ func BuildLines(d Document) []Line {
 	return lines
 }
 
-func effortLabel(category string) string {
-	switch category {
+// MaxDetailedFindings bounds the per-finding detail; the rest are listed in one
+// line each. DetailLimited reports when that happened so the job records it.
+const MaxDetailedFindings = 100
+
+// LimitNote summarizes every limit applied to the document; empty when the
+// report is complete for its scope. The worker stores it on the job.
+func (d Document) LimitNote() string { return limitNote(d, len(d.Findings)) }
+
+// limitNote builds the note from the overview and the number of findings in
+// the report, so the section-by-section renderer can produce it without the
+// whole document.
+func limitNote(d Document, findings int) string {
+	notes := []string{}
+	if d.Truncated {
+		notes = append(notes, "listagens limitadas (500 bancos, 5000 tabelas, 2000 achados)")
+	}
+	if DetailLimitedCount(findings) {
+		notes = append(notes, fmt.Sprintf("detalhamento limitado aos %d achados de maior prioridade", MaxDetailedFindings))
+	}
+	if d.Coverage != "" && d.Coverage != "complete" {
+		notes = append(notes, "cobertura "+coverageLabel(d.Coverage))
+	}
+	return strings.Join(notes, "; ")
+}
+
+// DetailLimited reports whether BuildLines will summarize findings beyond
+// MaxDetailedFindings.
+func DetailLimited(d Document) bool { return DetailLimitedCount(len(d.Findings)) }
+
+// DetailLimitedCount is DetailLimited for a report with that many findings.
+func DetailLimitedCount(findings int) bool { return findings > MaxDetailedFindings }
+
+const (
+	matrixRows       = 20
+	maxEvidenceChars = 500
+)
+
+func effortLabel(plan actions.Plan) string {
+	switch plan.Effort {
+	case "alto":
+		return "alto (dependências e janela)"
+	case "médio":
+		return "médio (teste e retorno)"
+	case "baixo":
+		return "baixo para investigar; execução não estimada"
+	}
+	switch plan.Category {
 	case "structure", "maintenance":
 		return "alto (dependências e janela)"
 	case "query_and_index", "security":
@@ -129,6 +184,97 @@ func effortLabel(category string) string {
 	default:
 		return "baixo para investigar; execução não estimada"
 	}
+}
+
+func rankFindings(findings []Finding) []priority.Ranked {
+	inputs := make([]priority.Input, 0, len(findings))
+	for _, f := range findings {
+		inputs = append(inputs, priority.Input{FindingID: f.ID, RuleID: f.Type, Severity: f.Severity, Confidence: f.Confidence, Impact: f.Impact})
+	}
+	return priority.Top(inputs, 0)
+}
+
+func unitLabel(e impact.Estimate) string {
+	if !e.Estimated() || e.Unit == "" {
+		return "não informada"
+	}
+	if e.DenominatorUnit != "" && e.DenominatorUnit != e.Unit {
+		return e.Unit + " / " + e.DenominatorUnit
+	}
+	return e.Unit
+}
+
+func maintenanceKindLabel(kind string) string {
+	switch kind {
+	case "partitioning":
+		return "particionamento"
+	case "compression":
+		return "compressão"
+	case "retention":
+		return "retenção"
+	case "autovacuum":
+		return "autovacuum"
+	case "analyze":
+		return "ANALYZE/estatísticas"
+	case "reorder":
+		return "reordenação"
+	default:
+		return kind
+	}
+}
+
+func truncateRunes(value string, limit int) string {
+	r := []rune(value)
+	if len(r) <= limit {
+		return value
+	}
+	return string(r[:limit]) + "…"
+}
+
+// growthLines renders the storage chart with its text alternative. A partial
+// collection is a gap: it is never plotted (so never reads as zero) and never
+// enters the variation, which is computed only between complete points.
+func growthLines(points []GrowthPoint) []Line {
+	lines := []Line{{"Evolução de armazenamento", "heading"}, {"Barras: tamanho total das tabelas (unidade: bytes) por coleta completa. Coletas parciais aparecem como lacuna e não entram na variação.", "body"}}
+	var maximum int64
+	complete := []GrowthPoint{}
+	for _, point := range points {
+		if point.Status == "success" {
+			complete = append(complete, point)
+			if point.SizeBytes > maximum {
+				maximum = point.SizeBytes
+			}
+		}
+	}
+	for _, point := range points {
+		at := point.At.UTC().Format("02/01/2006")
+		if point.At.IsZero() {
+			at = "data indisponível"
+		}
+		shortID := point.RunID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		if point.Status != "success" {
+			lines = append(lines, Line{fmt.Sprintf("%s %s: lacuna (coleta parcial) — valor não plotado e fora da comparação.", at, shortID), "body"})
+			continue
+		}
+		lines = append(lines, Line{fmt.Sprintf("%s %s|%d|%d", at, shortID, point.SizeBytes, maximum), "bar_bytes"},
+			Line{fmt.Sprintf("Alternativa textual: execução %s em %s = %d bytes em %d tabelas (coleta completa).", point.RunID, at, point.SizeBytes, point.Tables), "body"})
+	}
+	if len(complete) > 1 {
+		first, last := complete[0], complete[len(complete)-1]
+		period := impact.PeriodLabel(first.At, last.At)
+		change := last.SizeBytes - first.SizeBytes
+		percent := "sem base para percentual"
+		if first.SizeBytes > 0 {
+			percent = fmt.Sprintf("%+.1f%%", float64(change)*100/float64(first.SizeBytes))
+		}
+		lines = append(lines, Line{fmt.Sprintf("Variação entre coletas completas: %+d bytes (%s) no período %s. Confirme que perfil e cobertura são comparáveis antes de atribuir a mudança a uma ação.", change, percent, period), "body"})
+	} else {
+		lines = append(lines, Line{"Variação não calculada: são necessárias ao menos duas coletas completas.", "body"})
+	}
+	return lines
 }
 
 func reportTypeLabel(kind string) string {
