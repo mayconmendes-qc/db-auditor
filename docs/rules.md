@@ -112,7 +112,9 @@ Uma regressão só é registrada quando:
    - `findings`: achados altos/críticos observados acima do total da
      referência;
    - `structure`: a mesma tabela removida ou alterada (tipo, chave primária,
-     número de colunas), ou o mesmo índice removido, nas duas coletas;
+     número de colunas), o mesmo índice removido, ou a mesma tabela criada
+     depois da referência sem chave primária (fora partições, tabelas
+     externas e chunks internos do TimescaleDB), nas duas coletas;
    - `workload`: a mesma consulta lenta ou pesada (`performance.slow_query`,
      `performance.workload_*`) nova em relação à referência nas duas coletas.
      Esses achados são de severidade baixa e não entram em `findings`.

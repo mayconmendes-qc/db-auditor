@@ -268,9 +268,23 @@ WHERE r.environment_id=$1::uuid AND r.id=$2::uuid AND r.status='success'`, env, 
 	}
 	persistent := regressionMetric{keys: PersistentKeys(previousStructure.keys, currentStructure.keys)}
 	persistent.count = len(persistent.keys)
+	// A table created after the baseline without a primary key is a
+	// structural regression too (#104, QA scenario 4); it follows the same
+	// identity-based persistence rule as removed tables and indexes.
+	addedNoPK := []string{}
+	for _, key := range persistent.keys {
+		if table, ok := strings.CutPrefix(key, "table_added_without_pk:"); ok {
+			addedNoPK = append(addedNoPK, table)
+		}
+	}
+	addedNoPKTotal := len(addedNoPK)
+	if len(addedNoPK) > maxRegressionKeys {
+		addedNoPK = addedNoPK[:maxRegressionKeys]
+	}
 	out["structure"], err = s.recordRegression(ctx, env, baseline, run, "structure", 0, persistent.count > 0, persistent,
-		map[string]any{"previous": previousStructure.count, "current": persistent.count, "metric": "removed_or_changed_tables_and_removed_indexes", "coverage": "complete",
+		map[string]any{"previous": previousStructure.count, "current": persistent.count, "metric": "removed_or_changed_tables_removed_indexes_or_new_tables_without_pk", "coverage": "complete",
 			"removed_tables": currentStructure.removedTables, "changed_tables": currentStructure.changedTables, "removed_indexes": currentStructure.removedIndexes,
+			"added_tables_without_pk": addedNoPK, "added_tables_without_pk_total": addedNoPKTotal,
 			"threshold": "same table or index regressed in previous AND current", "window_hours": started.Sub(priorStarted).Hours()})
 	return out, err
 }
@@ -281,6 +295,7 @@ type regressionMetric struct {
 	count                                        int
 	keys                                         []string
 	removedTables, changedTables, removedIndexes int
+	addedTablesWithoutPK                         int
 }
 
 // maxRegressionKeys bounds the identity stored with an alert.
@@ -305,7 +320,7 @@ func (s *Store) regressionMetric(ctx context.Context, category, baseline, run st
 		query = fmt.Sprintf(regressionFindingKeysSQL, "(f.finding_type='performance.slow_query' OR f.finding_type LIKE 'performance.workload\\_%')", "true")
 	case "structure":
 		query = `WITH base AS (SELECT database_name,schema_name,table_name,relkind,has_primary_key,column_count FROM table_snapshot WHERE audit_run_id=$1::uuid),
-cur AS (SELECT database_name,schema_name,table_name,relkind,has_primary_key,column_count FROM table_snapshot WHERE audit_run_id=$2::uuid),
+cur AS (SELECT database_name,schema_name,table_name,relkind,has_primary_key,column_count,is_partition FROM table_snapshot WHERE audit_run_id=$2::uuid),
 base_idx AS (SELECT database_name,schema_name,index_name FROM index_snapshot WHERE audit_run_id=$1::uuid),
 cur_idx AS (SELECT database_name,schema_name,index_name FROM index_snapshot WHERE audit_run_id=$2::uuid)
 SELECT 'table_removed:'||b.database_name||'.'||b.schema_name||'.'||b.table_name FROM base b LEFT JOIN cur c USING(database_name,schema_name,table_name) WHERE c.table_name IS NULL
@@ -315,6 +330,11 @@ SELECT 'table_changed:'||b.database_name||'.'||b.schema_name||'.'||b.table_name 
 UNION ALL
 SELECT 'index_removed:'||b.database_name||'.'||b.schema_name||'.'||b.index_name FROM base_idx b LEFT JOIN cur_idx c USING(database_name,schema_name,index_name)
  WHERE c.index_name IS NULL AND EXISTS (SELECT 1 FROM cur WHERE cur.database_name=b.database_name)
+UNION ALL
+SELECT 'table_added_without_pk:'||c.database_name||'.'||c.schema_name||'.'||c.table_name FROM cur c LEFT JOIN base b USING(database_name,schema_name,table_name)
+ WHERE b.table_name IS NULL AND NOT c.has_primary_key AND NOT c.is_partition AND c.relkind IN ('r','p')
+ AND c.schema_name NOT LIKE '\_timescaledb\_%' ESCAPE '\'
+ AND EXISTS (SELECT 1 FROM base WHERE base.database_name=c.database_name)
 ORDER BY 1`
 	default:
 		return m, fmt.Errorf("unknown regression category %q", category)
@@ -336,6 +356,8 @@ ORDER BY 1`
 			m.changedTables++
 		case strings.HasPrefix(key, "index_removed:"):
 			m.removedIndexes++
+		case strings.HasPrefix(key, "table_added_without_pk:"):
+			m.addedTablesWithoutPK++
 		}
 		m.keys = append(m.keys, key)
 	}
