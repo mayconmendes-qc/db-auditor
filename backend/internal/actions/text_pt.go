@@ -39,6 +39,7 @@ var ruleText = map[string]struct{ Meaning, Next string }{
 	"integrity.fk_type_mismatch":          {"Colunas relacionadas usam tipos que merecem revisão.", "Confirme conversões e semântica com quem conhece os dados."},
 	"integrity.orphan_sequence":           {"Uma sequência pode não ter vínculo claro com uma coluna.", "Verifique chamadas da aplicação e valores padrão antes de alterá-la."},
 	"integrity.sequence_default_mismatch": {"O valor padrão de uma coluna pode apontar para outra sequência.", "Confira dependências e uso da aplicação antes de corrigir o vínculo."},
+	"quality.contract_violation":          {"Uma checagem do contrato de qualidade foi violada.", "Revise limiares, amostra e dados; o auditor só registra contagens."},
 	"index.prefix_overlap":                {"Um índice pode estar coberto pelo início de outro.", "Compare filtros, colunas incluídas, unicidade, uso e planos."},
 	"index.invalid":                       {"Este índice está marcado como inválido.", "Investigue a causa e planeje reconstrução segura, se necessária."},
 	"index.write_burden":                  {"Muitos índices podem aumentar o custo de escrita.", "Meça latência de escrita e uso dos índices antes de mudar o conjunto."},

@@ -59,6 +59,11 @@ type Metrics struct {
 	// Plan 08 — target restore drills
 	targetRestoreDrillAge sync.Map // environment -> *atomic.Uint64 (seconds)
 	targetRestoreRTO      sync.Map // environment -> *atomic.Uint64 (seconds)
+
+	// Plan 03 — quality contracts
+	qualityContractChecks     sync.Map // result -> *atomic.Uint64
+	qualityContractDurationNs sync.Map // result -> *atomic.Uint64 (sum)
+	qualityContractDurationN  sync.Map // result -> *atomic.Uint64 (count)
 }
 
 
@@ -237,6 +242,19 @@ func (m *Metrics) SetTargetRestoreRTO(environment string, seconds uint64) {
 	}
 	v, _ := m.targetRestoreRTO.LoadOrStore(environment, &atomic.Uint64{})
 	v.(*atomic.Uint64).Store(seconds)
+}
+
+// ObserveQualityContractCheck records one contract check by result and duration (RNF-05).
+func (m *Metrics) ObserveQualityContractCheck(result string, d time.Duration) {
+	if result == "" {
+		result = "unknown"
+	}
+	m.incMap(&m.qualityContractChecks, result)
+	if d < 0 {
+		d = 0
+	}
+	m.addMap(&m.qualityContractDurationNs, result, uint64(d.Nanoseconds()))
+	m.incMap(&m.qualityContractDurationN, result)
 }
 
 func normalizePath(path string) string {
@@ -472,6 +490,29 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		for _, env := range rtoKeys {
 			v, _ := m.targetRestoreRTO.Load(env)
 			fmt.Fprintf(&b, "auditor_target_restore_rto_seconds{environment=%q} %d\n", env, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_quality_contract_checks_total Quality contract checks by result.\n")
+		b.WriteString("# TYPE auditor_quality_contract_checks_total counter\n")
+		qcKeys := make([]string, 0)
+		m.qualityContractChecks.Range(func(k, _ any) bool { qcKeys = append(qcKeys, k.(string)); return true })
+		sort.Strings(qcKeys)
+		for _, k := range qcKeys {
+			v, _ := m.qualityContractChecks.Load(k)
+			fmt.Fprintf(&b, "auditor_quality_contract_checks_total{result=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_quality_contract_check_duration_seconds_sum Sum of quality contract check durations.\n")
+		b.WriteString("# TYPE auditor_quality_contract_check_duration_seconds_sum counter\n")
+		b.WriteString("# HELP auditor_quality_contract_check_duration_seconds_count Count of quality contract check durations.\n")
+		b.WriteString("# TYPE auditor_quality_contract_check_duration_seconds_count counter\n")
+		qcDurKeys := make([]string, 0)
+		m.qualityContractDurationN.Range(func(k, _ any) bool { qcDurKeys = append(qcDurKeys, k.(string)); return true })
+		sort.Strings(qcDurKeys)
+		for _, k := range qcDurKeys {
+			ns, _ := m.qualityContractDurationNs.Load(k)
+			n, _ := m.qualityContractDurationN.Load(k)
+			fmt.Fprintf(&b, "auditor_quality_contract_check_duration_seconds_sum{result=%q} %f\n", k, float64(ns.(*atomic.Uint64).Load())/1e9)
+			fmt.Fprintf(&b, "auditor_quality_contract_check_duration_seconds_count{result=%q} %d\n", k, n.(*atomic.Uint64).Load())
 		}
 
 		_, _ = w.Write([]byte(b.String()))

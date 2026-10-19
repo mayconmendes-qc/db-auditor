@@ -297,6 +297,13 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 			slog.Warn("schema timeline after run failed", "environment_id", environmentID, "audit_run_id", auditRunID, "error", config.SanitizeError(err))
 		}
 	}
+	if dqRuns, ok := r.store.(interface {
+		MaybeRunQualityContractsAfterRun(context.Context, string, string) error
+	}); ok {
+		if err := dqRuns.MaybeRunQualityContractsAfterRun(finalCtx, environmentID, auditRunID); err != nil {
+			slog.Warn("quality contracts after run failed", "environment_id", environmentID, "audit_run_id", auditRunID, "error", config.SanitizeError(err))
+		}
+	}
 	if status == RunStatusFailed || status == RunStatusPartialSuccess {
 		notifyRun(finalCtx, r.store, environmentID, auditRunID, status)
 	}

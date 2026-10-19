@@ -97,6 +97,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerSchemaDriftRoutes(mux, store)
 	registerCapabilityRoutes(mux, store)
 	registerQualityRoutes(mux, store, opts.Targets)
+	registerQualityContractRoutes(mux, store, opts.Targets)
 	registerActionMeasurementRoutes(mux, store)
 	registerScopeScoreRoutes(mux, store)
 	registerPDFReportRoutes(mux, store)

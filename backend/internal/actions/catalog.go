@@ -209,6 +209,7 @@ var entries = []entry{
 	{"integrity.fk_type_mismatch", "structure", "alto", "", "atttypid das colunas da FK e das colunas referenciadas.", notEstimated("planos que mostrem conversão implícita"), "", qFKTypes, nil},
 	{"integrity.orphan_sequence", "structure", "baixo", "", "pg_depend sem deptype 'a' para a sequência.", "não estimado: uma sequência isolada ocupa poucos bytes.", "", qSequenceDepend, nil},
 	{"integrity.sequence_default_mismatch", "structure", "médio", "", "pg_attrdef da coluna comparado a pg_depend da sequência.", notEstimated("risco de colisão medido por last_value das duas sequências"), "", qColumnDefault, nil},
+	{"quality.contract_violation", "structure", "médio", "", "Resultado do quality_contract_check_result (contagens e proporção; sem valores de linha).", "não estimado: a severidade depende do tipo de checagem (unicidade/frescor/nulos críticos elevam).", "", qColumns, nil},
 	{"sequence.near_limit", "structure", "alto", "", "last_value e max_value de pg_sequences na coleta.", notEstimated("taxa de consumo entre duas coletas completas"), "", qSequence, nil},
 	{"index.invalid", "structure", "médio", "", "pg_index.indisvalid = false na coleta (CREATE INDEX CONCURRENTLY interrompido ou falha).", notEstimated("bytes do índice inválido"), "", qIndexValidity, nil},
 	{"model.naming_inconsistent", "structure", "baixo", "", "Nome do objeto comparado à convenção da regra (padrão snake_case).", "não estimado: convenção de nomes não tem métrica de custo.", "", qNaming, nil},
