@@ -63,5 +63,13 @@ func (s *Service) AnalyzeRun(ctx context.Context, environmentID, auditRunID stri
 	if err != nil {
 		return produced, 0, fmt.Errorf("save findings atomically: %w", err)
 	}
+	if persister, ok := s.loader.(interface {
+		PersistCostEstimatesForRun(context.Context, string, string) error
+	}); ok {
+		if cerr := persister.PersistCostEstimatesForRun(ctx, environmentID, auditRunID); cerr != nil {
+			// Cost series is best-effort; findings already saved.
+			_ = cerr
+		}
+	}
 	return produced, saved, nil
 }

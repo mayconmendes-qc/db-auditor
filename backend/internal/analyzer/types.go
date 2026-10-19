@@ -114,6 +114,49 @@ type SnapshotFacts struct {
 	// Spec 04 — schema timeline facts (reprocess / analyzer path).
 	SchemaChanges []SchemaChangeFact
 	IsProduction  bool
+	// Spec 02 — cost lens optional inputs; analyzers tolerate nil/empty.
+	CostPrice       *CostPriceFact
+	ColumnStats     []ColumnStatFact
+	QueryCostWindow *QueryCostWindowFact
+}
+
+// CostPriceFact is the current price table version for monetary impact.
+type CostPriceFact struct {
+	Version         int
+	Currency        string
+	StorageGBMonth  float64
+	IOPerMillion    *float64
+	IOPerGBRead     *float64
+	ComputeVCPUHour *float64
+	InstanceMonth   *float64
+	EffectiveFrom   time.Time
+}
+
+// ColumnStatFact carries pg_stats width estimates for bloat (no raw values).
+type ColumnStatFact struct {
+	Database     string
+	Schema       string
+	TableName    string
+	ColumnName   string
+	AverageWidth int
+	NullFraction float64
+}
+
+// QueryCostWindowFact is a digest-comparable window for cost.query_expensive.
+type QueryCostWindowFact struct {
+	OK          bool
+	Reason      string
+	TotalTimeMS float64
+	Deltas      []QueryCostDeltaFact
+}
+
+// QueryCostDeltaFact is one fingerprint delta for cost analysis.
+type QueryCostDeltaFact struct {
+	Fingerprint     string
+	DatabaseName    string
+	DeltaCalls      int64
+	DeltaTotalMS    float64
+	DeltaBlocksRead int64
 }
 
 

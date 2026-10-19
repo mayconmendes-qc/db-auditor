@@ -55,6 +55,9 @@ const QueryDigestPage = lazy(() =>
     default: m.QueryDigestPage,
   })),
 );
+const CostPage = lazy(() =>
+  import("./pages/CostPage").then((m) => ({ default: m.CostPage })),
+);
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
 );
@@ -99,6 +102,7 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     Comparar: <ServerComparePage />,
     Findings: <FindingsPage />,
     Digest: <QueryDigestPage />,
+    Custo: <CostPage />,
     "Análises de migration": <MigrationAnalysesPage />,
     Status: <StatusPage />,
     Contas: <AccountsPage />,

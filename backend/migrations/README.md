@@ -64,3 +64,8 @@ Os ambientes iniciais não ficam numa migration. A API, logo depois de aplicar a
 | `00000000-0000-0000-0000-000000000002` | Demo Datacenter |
 
 Host, porta, database, usuário e senha ficam em `AUDITOR_TARGET_N_*` no `.env`. O nome da empresa na tela é `AUDITOR_COMPANY_NAME`. Um volume existente não perde ambientes antigos. A API atualiza o nome quando o id é o mesmo.
+
+- `29_environment_api_token.sql`: tokens de API por ambiente (sha256, escopos fechados, validade obrigatória, revogação). Nunca guarda o segredo em claro (ADR-0001 D1).
+- `30_migration_analysis.sql`: histórico de análises de migration por ambiente (cabeçalho + itens sem SQL/literais).
+- `31_cost_price_table.sql`: tabela de preços versionada por ambiente (`cost_price_version`), moeda BRL/USD travada após a primeira versão (ADR-0001 D3).
+- `32_cost_estimate_series.sql`: totais de custo estimado por coleta completa (`cost_estimate_snapshot`) para a série de 90 dias.

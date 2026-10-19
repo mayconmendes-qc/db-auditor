@@ -629,3 +629,12 @@ anotação de deploy). O valor secreto aparece **uma única vez** — copie para
 A seção **Análises de migration** lista resultados enviados pela CLI (`auditor migration-risk --submit`).
 Cada linha mostra repositório, PR, maior severidade e data. O detalhe repete a tabela de riscos
 sem SQL nem literais. Qualquer papel com concessão ao ambiente pode ler.
+
+## Custo estimado
+
+Na seção **Custo** (Análise) o auditor mostra o ranking de desperdícios
+(armazenamento, índice sem uso, bloat estimado e consultas) em valores
+**estimado/mês**, com base na tabela de preços do ambiente. A edição da tabela
+de preços fica em **Ambientes** (papel operator). A moeda (BRL ou USD) trava
+depois da primeira versão.
+

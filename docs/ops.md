@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `30_migration_analysis.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
+O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `32_cost_estimate_series.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
 
 Antes de atualizar uma instalação persistente, faça backup do snapshot store e confira a restauração. A migração `12_view_detail.sql` acrescenta campos sem apagar visões existentes. Depois do deploy, execute uma nova coleta de PostgreSQL para preencher colunas e opções de segurança: execuções antigas mostram esses campos como não coletados. Para voltar à versão anterior, pare a API nova e restaure o backup ou use a versão anterior do aplicativo; não remova as novas colunas manualmente.
 
@@ -391,4 +391,18 @@ Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (A
 - Um token pertence a um único ambiente; uso cruzado → 403 (registrado em `auditor_operation_log` com o id do token, nunca o segredo).
 - `AUDITOR_REPORT_API_TOKEN` **não** autentica rotas de CLI/contexto/análises.
 
+
+## Troca de moeda da tabela de preços (cost-lens)
+
+A moeda de um ambiente fica **travada** depois da primeira versão de `cost_price_version` (ADR-0001 D3). Não há câmbio automático.
+
+Procedimento manual (corta a série):
+
+1. Confirme o impacto com o operador responsável.
+2. No banco de controle, apague a série e as versões do ambiente:
+
+   `DELETE FROM cost_estimate_snapshot WHERE environment_id = '<uuid>';`
+   `DELETE FROM cost_price_version WHERE environment_id = '<uuid>';`
+
+3. Recrie a primeira versão pela API (`PUT .../cost/prices`) com a nova moeda.
 

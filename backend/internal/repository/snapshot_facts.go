@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/osmendes/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/digest"
 )
 
 // LoadSnapshotFacts loads every analyzer input from one explicitly selected run.
@@ -242,7 +243,51 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 	if err = s.loadMaintenanceContext(ctx, environmentID, auditRunID, &f); err != nil {
 		return f, err
 	}
+	if price, err := s.CurrentCostPrice(ctx, environmentID); err == nil && price != nil {
+		f.CostPrice = &analyzer.CostPriceFact{
+			Version: price.Version, Currency: price.Currency, StorageGBMonth: price.StorageGBMonth,
+			IOPerMillion: price.IOPerMillion, IOPerGBRead: price.IOPerGBRead,
+			ComputeVCPUHour: price.ComputeVCPUHour, InstanceMonth: price.InstanceMonth,
+			EffectiveFrom: price.EffectiveFrom,
+		}
+	}
+	if rows, err := s.pool.Query(ctx, `
+SELECT database_name, schema_name, table_name, column_name, average_width, null_fraction
+FROM column_stat_snapshot
+WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c analyzer.ColumnStatFact
+			if scanErr := rows.Scan(&c.Database, &c.Schema, &c.TableName, &c.ColumnName, &c.AverageWidth, &c.NullFraction); scanErr != nil {
+				break
+			}
+			f.ColumnStats = append(f.ColumnStats, c)
+		}
+	}
+	if win, err := s.loadQueryCostWindowFact(ctx, environmentID); err == nil {
+		f.QueryCostWindow = win
+	}
 	return f, nil
+}
+
+// loadQueryCostWindowFact reuses digest window math for cost.query_expensive (L3).
+func (s *Store) loadQueryCostWindowFact(ctx context.Context, environmentID string) (*analyzer.QueryCostWindowFact, error) {
+	points, workload, err := s.loadDigestWindowInputs(ctx, environmentID, 14)
+	if err != nil {
+		return &analyzer.QueryCostWindowFact{OK: false, Reason: err.Error()}, nil
+	}
+	res := digest.ResolveWindow(points, workload, 14*24*time.Hour)
+	out := &analyzer.QueryCostWindowFact{OK: res.OK, Reason: res.Reason, TotalTimeMS: res.TotalTimeMS}
+	if !res.OK {
+		return out, nil
+	}
+	for _, d := range res.Deltas {
+		out.Deltas = append(out.Deltas, analyzer.QueryCostDeltaFact{
+			Fingerprint: d.Fingerprint, DatabaseName: d.DatabaseName,
+			DeltaCalls: d.DeltaCalls, DeltaTotalMS: d.DeltaTotalMS, DeltaBlocksRead: d.DeltaBlocksRead,
+		})
+	}
+	return out, nil
 }
 
 func (s *Store) loadMaintenanceContext(ctx context.Context, environmentID, auditRunID string, f *analyzer.SnapshotFacts) error {

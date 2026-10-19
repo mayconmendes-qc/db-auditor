@@ -16,6 +16,7 @@ describe("navigationSections", () => {
       "Comparar",
       "Findings",
       "Digest",
+      "Custo",
       "Análises de migration",
       "Contas",
       "Acompanhamento",

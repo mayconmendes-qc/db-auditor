@@ -20,6 +20,7 @@ import { DashboardAnalytics } from "./parts/DashboardAnalytics";
 import { DashboardConnections } from "./parts/DashboardConnections";
 import { DashboardKpis } from "./parts/DashboardKpis";
 import { DashboardPriorities } from "./parts/DashboardPriorities";
+import { DashboardCost } from "./parts/DashboardCost";
 
 export function DashboardPage() {
   const {
@@ -212,6 +213,7 @@ export function DashboardPage() {
             setSection={setSection}
             openFinding={openFinding}
           />
+          <DashboardCost environmentId={environmentId} />
           <DashboardConnections
             connections={connections}
             setSection={setSection}

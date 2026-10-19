@@ -42,6 +42,9 @@ func (d *Document) redactOverview(level string, databases int) {
 		d.Growth = nil
 		d.Baseline = nil
 		d.Regressions = nil
+		if d.CostSummary != nil {
+			d.CostSummary.Items = nil
+		}
 	}
 }
 

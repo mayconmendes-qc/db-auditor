@@ -13,6 +13,7 @@ import { formatBytes } from "../lib/format";
 import { labels } from "../lib/labels";
 import { nextSort } from "../lib/sort";
 import { api } from "../services/api";
+import { CostPricesCard } from "./parts/CostPricesCard";
 import { EnvAPITokenCard } from "./parts/EnvAPITokenCard";
 import {
   type EnvironmentsPageProps,
@@ -308,6 +309,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                 </div>
               </div>
             </div>
+            {selectedId ? (
+              <CostPricesCard environmentId={selectedId} />
+            ) : null}
             {api.hasRole("operator") && selectedId ? (
               <EnvAPITokenCard environmentId={selectedId} />
             ) : null}

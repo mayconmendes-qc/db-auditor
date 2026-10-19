@@ -223,7 +223,27 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 	for i := range d.CoverageNotes {
 		d.CoverageNotes[i] = strings.TrimSpace(d.CoverageNotes[i])
 	}
+	d.CostSummary = r.loadCostSummary(ctx, job.EnvironmentID, job.AuditRunID)
 	return d, nil
+}
+
+func (r *ReportSections) loadCostSummary(ctx context.Context, env, runID string) *report.CostSummary {
+	var cur string
+	var storage, unused, bloat, query float64
+	var priced bool
+	var reason string
+	err := r.tx.QueryRow(ctx, `
+SELECT currency, storage_month, unused_index_month, bloat_month, query_month, priced, reason
+FROM cost_estimate_snapshot
+WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, env, runID).Scan(
+		&cur, &storage, &unused, &bloat, &query, &priced, &reason)
+	if err != nil {
+		return &report.CostSummary{Reason: "não estimado — preço não configurado"}
+	}
+	return &report.CostSummary{
+		Priced: priced, Currency: cur, Reason: reason,
+		StorageMonth: storage, UnusedIndexMonth: unused, BloatMonth: bloat, QueryMonth: query,
+	}
 }
 
 // Databases loads the database list (at most 500 rows).

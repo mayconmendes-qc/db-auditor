@@ -257,3 +257,13 @@ a saída é Markdown/JSON e, opcionalmente, `migration_analysis` / `migration_an
 
 Supressão inline: `-- db-auditor:ignore MR-XX motivo: <texto>` (justificativa obrigatória).
 Guia de uso: [migration-risk.md](migration-risk.md).
+
+## Custo estimado (`cost.*`)
+
+- Valores monetários usam a tabela de preços versionada do ambiente (BRL ou USD).
+- `cost.bloat_recoverable` usa método estatístico sobre `column_stat_snapshot`
+  (largura média e null_fraction). É **estimativa**, não medição física, e não
+  substitui `maintenance.dead_tuple_pressure`.
+- Sem preço configurado, o impacto fica "não estimado — preço não configurado";
+  bytes e tempo continuam visíveis.
+

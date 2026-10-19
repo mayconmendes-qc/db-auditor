@@ -33,6 +33,7 @@ type Document struct {
 	Tables          []Table
 	Findings        []Finding
 	Growth          []GrowthPoint
+	CostSummary     *CostSummary
 	Score           *int
 	ScoreConfidence float64
 	ScoreCategories []ScoreCategory
@@ -100,6 +101,28 @@ type GrowthPoint struct {
 	SizeBytes int64
 	Tables    int
 }
+
+// CostSummary aggregates estimated monthly costs by type (RF-08).
+type CostSummary struct {
+	Priced           bool
+	Currency         string
+	Reason           string
+	StorageMonth     float64
+	UnusedIndexMonth float64
+	BloatMonth       float64
+	QueryMonth       float64
+	// Items are omitted under strict redaction (CA-06).
+	Items []CostItem
+}
+
+// CostItem is one ranked waste line for the technical PDF.
+type CostItem struct {
+	Type      string
+	ObjectKey string
+	Label     string
+	Amount    *float64
+}
+
 type ScoreCategory struct {
 	Category string
 	Score    int

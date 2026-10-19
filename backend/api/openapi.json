@@ -583,6 +583,147 @@
         }
       }
     },
+    "/api/v1/environments/{id}/cost/inventory": {
+      "get": {
+        "description": "Mapa object_key → custo de armazenamento estimado para coluna do inventário.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/cost/prices": {
+      "get": {
+        "description": "Versão vigente e histórico da tabela de preços (viewer).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "description": "Cria nova versão imutável da tabela de preços (operator). Moeda travada após a primeira versão.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "400": {
+            "description": "validação"
+          },
+          "403": {
+            "description": "proibido"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/cost/ranking": {
+      "get": {
+        "description": "Top 10 desperdícios estimados/mês (storage, unused_index, bloat, query).",
+        "parameters": [
+          {
+            "name": "run",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "database",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "schema",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "storage",
+                "unused_index",
+                "bloat",
+                "query"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/cost/ranking/export": {
+      "get": {
+        "description": "CSV do ranking; termina com # export_complete; sem texto SQL.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "csv"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/cost/series": {
+      "get": {
+        "description": "Série de custo estimado por coleta completa (máx. 90 dias, lacunas para parciais).",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/cost/templates": {
+      "get": {
+        "description": "Modelos iniciais editáveis (RDS PostgreSQL, Cloud SQL, self-hosted).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/databases": {
       "get": {
         "summary": "List databases from a run",

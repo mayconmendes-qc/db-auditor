@@ -31,6 +31,7 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Comparar: "compare",
   Findings: "findings",
   Digest: "digest",
+  Custo: "cost",
   "Análises de migration": "migration-analyses",
   Contas: "accounts",
   Acompanhamento: "monitoring",

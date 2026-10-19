@@ -85,6 +85,12 @@ import type {
   ViewDetailSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
+  CostPricesResponse,
+  CostPriceTemplate,
+  CostPriceVersion,
+  CostRankingItem,
+  CostRankingResponse,
+  CostSeriesPoint,
 } from "../types";
 import {
   apiContractVersion,
@@ -1870,4 +1876,81 @@ export const api = {
     grants?: unknown[];
     functions?: unknown[];
   }) => postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
+
+  costPrices: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<CostPricesResponse>(
+      `/api/v1/environments/${environmentId}/cost/prices`,
+      signal,
+    ),
+  updateCostPrices: (
+    environmentId: string,
+    body: {
+      currency: string;
+      storage_gb_month: number;
+      io_per_million?: number;
+      io_per_gb_read?: number;
+      compute_vcpu_hour?: number;
+      instance_month?: number;
+      model_origin?: string;
+      effective_from: string;
+    },
+  ) =>
+    putJSON<CostPriceVersion>(
+      `/api/v1/environments/${environmentId}/cost/prices`,
+      body,
+    ),
+  costTemplates: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: CostPriceTemplate[] }>(
+      `/api/v1/environments/${environmentId}/cost/templates`,
+      signal,
+    ),
+  costRanking: (
+    environmentId: string,
+    params?: {
+      run?: string;
+      database?: string;
+      schema?: string;
+      type?: string;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.run) q.set("run", params.run);
+    if (params?.database) q.set("database", params.database);
+    if (params?.schema) q.set("schema", params.schema);
+    if (params?.type) q.set("type", params.type);
+    const qs = q.toString();
+    return getJSON<CostRankingResponse>(
+      `/api/v1/environments/${environmentId}/cost/ranking${qs ? `?${qs}` : ""}`,
+      signal,
+    );
+  },
+  costSeries: (
+    environmentId: string,
+    params?: { from?: string; to?: string },
+    signal?: AbortSignal,
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const qs = q.toString();
+    return getJSON<{ items: CostSeriesPoint[] }>(
+      `/api/v1/environments/${environmentId}/cost/series${qs ? `?${qs}` : ""}`,
+      signal,
+    );
+  },
+  costRankingExport: async (environmentId: string) => {
+    const res = await fetch(
+      `${API_BASE}/api/v1/environments/${environmentId}/cost/ranking/export?format=csv`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw await toApiError(res, "/cost/ranking/export");
+    return res.text();
+  },
+  costInventory: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: Record<string, CostRankingItem> }>(
+      `/api/v1/environments/${environmentId}/cost/inventory`,
+      signal,
+    ),
+
 };

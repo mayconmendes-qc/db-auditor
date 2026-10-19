@@ -1325,3 +1325,93 @@ export interface MigrationAnalysisItem {
   suppressed: boolean;
   justification?: string;
 }
+
+export interface CostPriceVersion {
+  id: string;
+  environment_id: string;
+  version: number;
+  currency: string;
+  storage_gb_month: number;
+  io_per_million?: number | null;
+  io_per_gb_read?: number | null;
+  compute_vcpu_hour?: number | null;
+  instance_month?: number | null;
+  model_origin: string;
+  effective_from: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface CostPricesResponse {
+  current?: CostPriceVersion | null;
+  history: CostPriceVersion[];
+  currency?: string;
+  currency_locked: boolean;
+}
+
+export interface CostPriceTemplate {
+  id: string;
+  name: string;
+  currency: string;
+  storage_gb_month: number;
+  io_per_million: number;
+  io_per_gb_read: number;
+  compute_vcpu_hour: number;
+  instance_month: number;
+  model_origin: string;
+  notes: string;
+}
+
+export interface CostRankingItem {
+  type: string;
+  object_key: string;
+  database?: string;
+  schema?: string;
+  object?: string;
+  size_bytes?: number;
+  month_amount?: number | null;
+  currency?: string;
+  priced: boolean;
+  reason?: string;
+  formula?: string;
+  confidence: string;
+  price_version?: number;
+  price_effective?: string;
+  finding_id?: string;
+  finding_type?: string;
+  next_step?: string;
+  label: string;
+  fingerprint?: string;
+  share_of_time?: number;
+  delta_calls?: number;
+}
+
+export interface CostRankingResponse {
+  items: CostRankingItem[];
+  reason?: string;
+  priced: boolean;
+  currency?: string;
+  price_version?: number;
+  audit_run_id?: string;
+  completeness?: string;
+  totals?: {
+    storage_month: number;
+    unused_index_month: number;
+    bloat_month: number;
+    query_month: number;
+  };
+}
+
+export interface CostSeriesPoint {
+  audit_run_id: string;
+  at: string;
+  completeness: string;
+  currency?: string;
+  storage_month: number;
+  unused_index_month: number;
+  bloat_month: number;
+  query_month: number;
+  priced: boolean;
+  confidence?: string;
+  reason?: string;
+}

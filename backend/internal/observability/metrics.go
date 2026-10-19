@@ -37,7 +37,12 @@ type Metrics struct {
 	// Plan 04 — schema drift
 	schemaChangeEvents    sync.Map // kind -> *atomic.Uint64
 	alertDeliveriesFailed sync.Map // kind -> *atomic.Uint64
+
+	// Plan 02 — cost-lens
+	costCalculationsPriced   atomic.Uint64
+	costCalculationsUnpriced atomic.Uint64
 }
+
 
 // DefaultMetrics is the process-wide registry.
 var DefaultMetrics = NewMetrics()
@@ -133,6 +138,15 @@ func (m *Metrics) IncAlertDeliveryFailed(kind string) {
 		kind = "unknown"
 	}
 	m.incMap(&m.alertDeliveriesFailed, kind)
+}
+
+// IncCostCalculation increments auditor_cost_calculations_total{priced}.
+func (m *Metrics) IncCostCalculation(priced bool) {
+	if priced {
+		m.costCalculationsPriced.Add(1)
+	} else {
+		m.costCalculationsUnpriced.Add(1)
+	}
 }
 
 func normalizePath(path string) string {
@@ -295,6 +309,11 @@ func (m *Metrics) Handler() http.HandlerFunc {
 			v, _ := m.alertDeliveriesFailed.Load(k)
 			fmt.Fprintf(&b, "auditor_alert_deliveries_failed_total{kind=%q} %d\n", k, v.(*atomic.Uint64).Load())
 		}
+
+		b.WriteString("# HELP auditor_cost_calculations_total Cost ranking calculations with or without a price table.\n")
+		b.WriteString("# TYPE auditor_cost_calculations_total counter\n")
+		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "true", m.costCalculationsPriced.Load())
+		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "false", m.costCalculationsUnpriced.Load())
 
 		_, _ = w.Write([]byte(b.String()))
 	}

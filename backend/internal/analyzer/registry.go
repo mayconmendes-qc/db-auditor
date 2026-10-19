@@ -39,5 +39,6 @@ func DefaultRegistry() *Registry {
 	r.Register(SchemaDriftAnalyzer{})
 	r.Register(P2Analyzer{})
 	r.Register(MaintenanceTrendAnalyzer{})
+	r.Register(CostAnalyzer{})
 	return r
 }
