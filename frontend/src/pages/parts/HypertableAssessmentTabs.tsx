@@ -5,6 +5,8 @@ import {
 import { DetailGrid, DetailSection } from "../../components/ui/Sheet";
 import { formatBytes } from "../../lib/format";
 import { inventoryPermalink } from "../../lib/inventoryTarget";
+import { api } from "../../services/api";
+import { HypertableSimulation } from "./HypertableSimulation";
 import {
   date,
   type HypertableAssessmentState,
@@ -43,41 +45,53 @@ export function HypertableAssessmentTabs({
   return (
     <InventoryDetailTabs tab={tab} onTabChange={setTab}>
       {tab === "overview" && (
-        <DetailSection title="Tabela temporal selecionada">
-          <DetailGrid
-            items={[
-              { label: "Banco", value: database },
-              { label: "Esquema", value: schema },
-              { label: "Nome", value: name },
-              {
-                label: "Responsável",
-                value: hypertable.owner_name ?? "Não coletado",
-              },
-              {
-                label: "Dimensões",
-                value: hypertable.num_dimensions.toLocaleString("pt-BR"),
-              },
-              {
-                label: "Chunks",
-                value: hypertable.num_chunks.toLocaleString("pt-BR"),
-              },
-              {
-                label: "Compressão ou columnstore",
-                value: hypertable.compression_enabled
-                  ? "Habilitada"
-                  : "Não habilitada",
-              },
-              {
-                label: "Distribuída",
-                value: hypertable.is_distributed ? "Sim" : "Não",
-              },
-              { label: "Coletado em", value: date(hypertable.collected_at) },
-            ]}
-          />
-          <p className="text-sm text-slate-300">
-            Os números representam o estado observado na execução selecionada.
-          </p>
-        </DetailSection>
+        <>
+          <DetailSection title="Tabela temporal selecionada">
+            <DetailGrid
+              items={[
+                { label: "Banco", value: database },
+                { label: "Esquema", value: schema },
+                { label: "Nome", value: name },
+                {
+                  label: "Responsável",
+                  value: hypertable.owner_name ?? "Não coletado",
+                },
+                {
+                  label: "Dimensões",
+                  value: hypertable.num_dimensions.toLocaleString("pt-BR"),
+                },
+                {
+                  label: "Chunks",
+                  value: hypertable.num_chunks.toLocaleString("pt-BR"),
+                },
+                {
+                  label: "Compressão ou columnstore",
+                  value: hypertable.compression_enabled
+                    ? "Habilitada"
+                    : "Não habilitada",
+                },
+                {
+                  label: "Distribuída",
+                  value: hypertable.is_distributed ? "Sim" : "Não",
+                },
+                { label: "Coletado em", value: date(hypertable.collected_at) },
+              ]}
+            />
+            <p className="text-sm text-slate-300">
+              Os números representam o estado observado na execução selecionada.
+            </p>
+          </DetailSection>
+          <DetailSection title="Simulação">
+            <HypertableSimulation
+              environment={environment}
+              run={run}
+              database={database}
+              schema={schema}
+              name={name}
+              canSave={api.hasRole("auditor")}
+            />
+          </DetailSection>
+        </>
       )}
       {tab === "structure" && (
         <>

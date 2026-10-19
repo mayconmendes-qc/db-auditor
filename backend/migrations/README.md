@@ -32,6 +32,10 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `28_migration_registry.sql`: configuração `environment_migration_registry` e snapshot `migration_registry_snapshot` para correlação com ferramentas de migration (ADR-0001 D5).
 - `29_environment_api_token.sql`: tokens de API por ambiente (sha256, escopos fechados, validade obrigatória, revogação). Nunca guarda o segredo em claro (ADR-0001 D1).
 - `30_migration_analysis.sql`: histórico de análises de migration por ambiente (cabeçalho + itens sem SQL/literais).
+- `33_grant_origin_column_privilege.sql`: origem do privilégio efetivo (`grant_origin_snapshot`) e privilégios por coluna (`column_grant_snapshot`). Snapshots antigos ficam sem origem até a próxima coleta; `grant_snapshot` permanece inalterado.
+- `34_access_review.sql`: campanhas de revisão de acessos, matriz congelada, responsáveis (conta do auditor + contato opcional) e decisões append-only; amplia `report_job.report_type` com `access_review`.
+- `37_retention_scenarios.sql`: cenários salvos de retenção/compressão Timescale (spec 09, ADR-0001 D9/D11).
+- `38_chunk_scan_counters.sql`: contadores de varredura/escrita por chunk em `chunk_snapshot` (RF-07; nulos = não coletado).
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

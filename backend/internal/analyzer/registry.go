@@ -40,5 +40,7 @@ func DefaultRegistry() *Registry {
 	r.Register(P2Analyzer{})
 	r.Register(MaintenanceTrendAnalyzer{})
 	r.Register(CostAnalyzer{})
+	r.Register(TimescaleRetentionAnalyzer{})
+	r.Register(AccessReviewAnalyzer{})
 	return r
 }

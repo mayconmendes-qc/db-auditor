@@ -1,5 +1,12 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
+  AccessReviewCampaign,
+  AccessReviewDecision,
+  AccessReviewDecisionInput,
+  AccessReviewDiff,
+  AccessReviewItem,
+  AccessReviewOwner,
+  AccessReviewOwnerInput,
   ActionEvent,
   ActionMeasurement,
   AnalysisRun,
@@ -21,6 +28,12 @@ import type {
   CompareResult,
   ConnectionStatus,
   ConstraintSnapshot,
+  CostPricesResponse,
+  CostPriceTemplate,
+  CostPriceVersion,
+  CostRankingItem,
+  CostRankingResponse,
+  CostSeriesPoint,
   DashboardKPIs,
   DatabaseSnapshot,
   DependencySnapshot,
@@ -42,6 +55,7 @@ import type {
   HypertableHistoryPoint,
   HypertableJobDetail,
   HypertablePolicyDetail,
+  HypertableSimulationResponse,
   HypertableSnapshot,
   IndexHistoryPoint,
   IndexSnapshot,
@@ -67,6 +81,7 @@ import type {
   RelationshipGraph,
   ReportFilters,
   ReportJob,
+  RetentionScenario,
   RLSPolicySnapshot,
   SchemaDiffResult,
   SchemaSnapshot,
@@ -82,15 +97,10 @@ import type {
   TableSnapshot,
   TrackedAction,
   TriggerSnapshot,
+  UnscannedChunksResponse,
   ViewDetailSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
-  CostPricesResponse,
-  CostPriceTemplate,
-  CostPriceVersion,
-  CostRankingItem,
-  CostRankingResponse,
-  CostSeriesPoint,
 } from "../types";
 import {
   apiContractVersion,
@@ -927,6 +937,56 @@ export const api = {
     getJSON<PagedResponse<Finding>>(
       `${hypertableScopePath(env, run, database, schema, name)}/findings${qs({ limit, offset })}`,
       signal,
+    ),
+  hypertableSimulation: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    params?: {
+      retention_days?: number;
+      compress_after_days?: number;
+      scenario?: string;
+    },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<HypertableSimulationResponse>(
+      `${hypertableScopePath(env, run, database, schema, name)}/simulation${qs(params)}`,
+      signal,
+    ),
+  hypertableUnscannedChunks: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<UnscannedChunksResponse>(
+      `${hypertableScopePath(env, run, database, schema, name)}/unscanned-chunks`,
+      signal,
+    ),
+  timescaleScenarios: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<RetentionScenario>>(
+      `/api/v1/environments/${environmentId}/timescale-scenarios`,
+      signal,
+    ),
+  saveTimescaleScenario: (
+    environmentId: string,
+    body: {
+      database_name: string;
+      schema_name: string;
+      hypertable_name: string;
+      label?: string;
+      retention_days: number;
+      compress_after_days: number;
+      audit_run_id: string;
+    },
+  ) =>
+    postJSON<RetentionScenario>(
+      `/api/v1/environments/${environmentId}/timescale-scenarios`,
+      body,
     ),
   dimensions: (environmentId: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<DimensionSnapshot>>(
@@ -1952,5 +2012,113 @@ export const api = {
       `/api/v1/environments/${environmentId}/cost/inventory`,
       signal,
     ),
-
+  accessReviewOwners: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: AccessReviewOwner[] }>(
+      `/api/v1/environments/${environmentId}/access-review-owners`,
+      signal,
+    ),
+  replaceAccessReviewOwners: (
+    environmentId: string,
+    items: AccessReviewOwnerInput[],
+  ) =>
+    putJSON<{ items: AccessReviewOwner[] }>(
+      `/api/v1/environments/${environmentId}/access-review-owners`,
+      { items },
+    ),
+  accessReviews: (
+    environmentId: string,
+    params?: { limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<PagedResponse<AccessReviewCampaign>>(
+      `/api/v1/environments/${environmentId}/access-reviews${qs(params)}`,
+      signal,
+    ),
+  accessReview: (
+    environmentId: string,
+    campaignId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}`,
+      signal,
+    ),
+  createAccessReview: (
+    environmentId: string,
+    body: {
+      name: string;
+      reference_run_id: string;
+      due_at: string;
+      scope?: unknown;
+    },
+  ) =>
+    postJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews`,
+      body,
+    ),
+  accessReviewMatrix: (
+    environmentId: string,
+    campaignId: string,
+    params?: {
+      account?: string;
+      object?: string;
+      privilege?: string;
+      origin?: string;
+      highlight?: string;
+      pending?: boolean;
+      owner?: string;
+      mine?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const q: Record<string, string | number | boolean | undefined> = {
+      account: params?.account,
+      object: params?.object,
+      privilege: params?.privilege,
+      origin: params?.origin,
+      highlight: params?.highlight,
+      owner: params?.owner,
+      limit: params?.limit,
+      offset: params?.offset,
+    };
+    if (params?.pending != null) q.pending = params.pending;
+    if (params?.mine) q.mine = true;
+    return getJSON<PagedResponse<AccessReviewItem>>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/matrix${qs(q)}`,
+      signal,
+    );
+  },
+  postAccessReviewDecisions: (
+    environmentId: string,
+    campaignId: string,
+    decisions: AccessReviewDecisionInput[],
+  ) =>
+    postJSON<{ items: AccessReviewDecision[] }>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/decisions`,
+      { decisions },
+    ),
+  closeAccessReview: (environmentId: string, campaignId: string) =>
+    postJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/close`,
+      {},
+    ),
+  accessReviewDiff: (
+    environmentId: string,
+    campaignId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<AccessReviewDiff>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/diff`,
+      signal,
+    ),
+  accessReviewExportCSV: async (environmentId: string, campaignId: string) => {
+    const res = await fetch(
+      `${API_BASE}/api/v1/environments/${environmentId}/access-reviews/${campaignId}/export/download?format=csv`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw await toApiError(res, "/access-reviews/export");
+    return res.text();
+  },
 };

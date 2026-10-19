@@ -1,4 +1,5 @@
 -- Chunk inventory facts for the current database (read-only).
+-- Scan/write counters via pg_stat_all_tables (spec 09 RF-07); null when unavailable.
 SELECT
   current_database() AS database_name,
   c.hypertable_schema AS schema_name,
@@ -13,6 +14,18 @@ SELECT
   COALESCE(c.chunk_tablespace, '') AS chunk_tablespace,
   COALESCE(pg_total_relation_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS total_size_bytes,
   COALESCE(pg_relation_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS data_size_bytes,
-  COALESCE(pg_indexes_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS index_size_bytes
+  COALESCE(pg_indexes_size(format('%I.%I', c.chunk_schema, c.chunk_name)::regclass), 0) AS index_size_bytes,
+  COALESCE((to_jsonb(c)->>'before_compression_total_bytes')::bigint, 0) AS before_compression_bytes,
+  COALESCE((to_jsonb(c)->>'after_compression_total_bytes')::bigint, 0) AS after_compression_bytes,
+  st.seq_scan,
+  st.idx_scan,
+  st.n_tup_ins,
+  st.n_tup_upd,
+  st.n_tup_del,
+  d.stats_reset
 FROM timescaledb_information.chunks c
+LEFT JOIN pg_catalog.pg_stat_all_tables st
+  ON st.schemaname = c.chunk_schema AND st.relname = c.chunk_name
+LEFT JOIN pg_catalog.pg_stat_database d
+  ON d.datname = current_database()
 ORDER BY c.hypertable_schema, c.hypertable_name, c.chunk_name;

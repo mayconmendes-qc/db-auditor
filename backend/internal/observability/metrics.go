@@ -41,6 +41,14 @@ type Metrics struct {
 	// Plan 02 — cost-lens
 	costCalculationsPriced   atomic.Uint64
 	costCalculationsUnpriced atomic.Uint64
+
+	// Plan 09 — timescale retention advisor
+	retentionSimulations         atomic.Uint64
+	retentionSimulationsLowRatio atomic.Uint64
+
+	// Plan 07 — access review
+	accessReviewCampaigns sync.Map // status -> *atomic.Uint64
+	accessReviewPending   atomic.Int64
 }
 
 
@@ -147,6 +155,32 @@ func (m *Metrics) IncCostCalculation(priced bool) {
 	} else {
 		m.costCalculationsUnpriced.Add(1)
 	}
+}
+
+// IncRetentionSimulation increments auditor_retention_simulations_total (RNF-05).
+func (m *Metrics) IncRetentionSimulation(lowConfidenceRatio bool) {
+	m.retentionSimulations.Add(1)
+	if lowConfidenceRatio {
+		m.retentionSimulationsLowRatio.Add(1)
+	}
+}
+
+// IncAccessReviewCampaign increments auditor_access_review_campaigns_total{status}.
+func (m *Metrics) IncAccessReviewCampaign(status string) {
+	if status == "" {
+		status = "unknown"
+	}
+	m.incMap(&m.accessReviewCampaigns, status)
+}
+
+// AddAccessReviewPendingDelta adjusts the pending-lines gauge (can be negative).
+func (m *Metrics) AddAccessReviewPendingDelta(delta int) {
+	m.accessReviewPending.Add(int64(delta))
+}
+
+// SetAccessReviewPending sets the pending-lines gauge from a store recount.
+func (m *Metrics) SetAccessReviewPending(n int) {
+	m.accessReviewPending.Store(int64(n))
 }
 
 func normalizePath(path string) string {
@@ -314,6 +348,29 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# TYPE auditor_cost_calculations_total counter\n")
 		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "true", m.costCalculationsPriced.Load())
 		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "false", m.costCalculationsUnpriced.Load())
+
+		b.WriteString("# HELP auditor_retention_simulations_total Timescale retention/compression simulations.\n")
+		b.WriteString("# TYPE auditor_retention_simulations_total counter\n")
+		fmt.Fprintf(&b, "auditor_retention_simulations_total %d\n", m.retentionSimulations.Load())
+		b.WriteString("# HELP auditor_retention_simulations_low_ratio_total Simulations using the default compression ratio (low confidence).\n")
+		b.WriteString("# TYPE auditor_retention_simulations_low_ratio_total counter\n")
+		fmt.Fprintf(&b, "auditor_retention_simulations_low_ratio_total %d\n", m.retentionSimulationsLowRatio.Load())
+
+		b.WriteString("# HELP auditor_access_review_campaigns_total Access-review campaigns by status.\n")
+		b.WriteString("# TYPE auditor_access_review_campaigns_total counter\n")
+		arkeys := make([]string, 0)
+		m.accessReviewCampaigns.Range(func(k, _ any) bool {
+			arkeys = append(arkeys, k.(string))
+			return true
+		})
+		sort.Strings(arkeys)
+		for _, k := range arkeys {
+			v, _ := m.accessReviewCampaigns.Load(k)
+			fmt.Fprintf(&b, "auditor_access_review_campaigns_total{status=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_access_review_pending_lines Pending access-review matrix lines.\n")
+		b.WriteString("# TYPE auditor_access_review_pending_lines gauge\n")
+		fmt.Fprintf(&b, "auditor_access_review_pending_lines %d\n", m.accessReviewPending.Load())
 
 		_, _ = w.Write([]byte(b.String()))
 	}

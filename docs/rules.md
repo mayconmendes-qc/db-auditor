@@ -184,6 +184,13 @@ exclusão, `DROP` ou alteração automática. A interface e o PDF separam
 **hipótese**, **ganho previsto** e **ganho medido**; o ganho medido só aparece
 com uma medição comparável registrada após nova coleta completa.
 
+A simulação de retenção e compressão Timescale (spec 09) calcula economia sobre
+metadados de `chunk_snapshot` e cenários salvos; ela **não** cria políticas.
+Chunks “possivelmente sem consulta” usam contadores de varredura como proxy e
+sempre aparecem rotulados **aproximado** (ADR-0001 D9). O achado
+`timescale.retention_cagg_conflict` de um cenário é criado **no salvamento**,
+vinculado à última coleta completa.
+
 ## Roles poderosas e versão do PostgreSQL (#126, #134)
 
 `security.powerful_role` aponta contas com LOGIN que têm SUPERUSER, BYPASSRLS,
@@ -208,6 +215,26 @@ fica média). O limiar é `>= 160000` em `membershipModes`; a CI roda o teste
 ponta a ponta `TestPowerfulAccountRoleEndToEndIntegration` em PostgreSQL 14,
 15, 16, 17 e 18, então mover o limiar ou ignorar a versão na severidade falha
 em pelo menos uma versão (veja [ops.md](ops.md#matriz-de-versões-do-postgresql-na-ci-134)).
+
+### Origem do privilégio efetivo (spec 07)
+
+Além de `grant_snapshot` (privilégio efetivo já resolvido pelo servidor), a
+coleta `postgres.grant_origins` grava **de onde** cada privilégio veio:
+
+| `origin_kind` | Rótulo (UI/CSV) | Significado |
+| --- | --- | --- |
+| `direct` | direto | ACL do objeto (ou dono) concede à própria conta com LOGIN |
+| `role` | via *role* | conta alcança uma role que tem o privilégio na ACL; `via_chain` lista a role |
+| `public` | PUBLIC | privilégio concedido a `PUBLIC` |
+| `predefined` | predefinida | via `pg_read_all_data` (SELECT) ou `pg_write_all_data` (INSERT/UPDATE/DELETE) |
+
+A resolução de membership reutiliza os mesmos modos de `membershipModes`
+(`MEMBER` em 14/15; `SET` / `USAGE` / `MEMBER WITH ADMIN OPTION` em 16+). Em
+16+, `inherit_path` e `set_path` registram se o caminho usou herança e/ou SET
+ROLE. Privilégios por coluna (`column_grant_snapshot`, ACL em
+`pg_attribute.attacl`) entram como linhas próprias. Falha de leitura de
+catálogo em um banco gera cobertura parcial, não falha dura da coleta. O passo
+CI "Role privilege detection E2E" inclui `TestGrantOriginViaGroupRoleIntegration`.
 
 ## Relatórios PDF (BA-11)
 

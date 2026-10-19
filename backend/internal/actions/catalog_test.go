@@ -80,7 +80,8 @@ func TestEveryCatalogRuleHasFiveFieldsAndASafeQuery(t *testing.T) {
 		if highest != len(q.Params) {
 			t.Fatalf("rule %s documents %d params but uses $%d", def.ID, len(q.Params), highest)
 		}
-		timescale := strings.HasPrefix(def.ID, "chunk.") || strings.HasPrefix(def.ID, "cagg.") || strings.HasPrefix(def.ID, "policy.") || strings.HasPrefix(def.ID, "job.")
+		timescale := strings.HasPrefix(def.ID, "chunk.") || strings.HasPrefix(def.ID, "cagg.") || strings.HasPrefix(def.ID, "policy.") || strings.HasPrefix(def.ID, "job.") ||
+			(strings.HasPrefix(def.ID, "timescale.") && def.ID != "timescale.chunk_dead_tuples")
 		if timescale != (q.Engine == "timescaledb") {
 			t.Fatalf("rule %s engine %s does not match its capability", def.ID, q.Engine)
 		}
@@ -94,6 +95,8 @@ func TestIndexVacuumAndSecurityRulesHaveConfirmationQueries(t *testing.T) {
 	for _, rule := range []string{"index.invalid", "index.unused", "index.overlap", "index.prefix_overlap", "index.write_burden", "index.candidate",
 		"vacuum.high_dead_tuples", "maintenance.dead_tuple_pressure", "maintenance.stale_analyze", "timescale.chunk_dead_tuples",
 		"security.excessive_privilege", "security.powerful_role", "security.security_definer", "security.definer_search_path", "security.rls_disabled_hypothesis", "security.public_schema_create",
+		"access_review.revocation_not_applied", "access_review.powerful_without_approve", "access_review.inactive_with_write",
+		"access_review.public_outside_public", "access_review.new_privilege_undecided", "access_review.campaign_overdue_pending",
 		"integrity.constraint_unvalidated", "integrity.fk_without_index", "integrity.orphan_sequence", "inactivity.possibly_inactive"} {
 		q := For(rule).Query
 		if q == nil || !strings.Contains(q.SQL, "$1") {

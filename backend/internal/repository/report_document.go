@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -224,6 +225,21 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 		d.CoverageNotes[i] = strings.TrimSpace(d.CoverageNotes[i])
 	}
 	d.CostSummary = r.loadCostSummary(ctx, job.EnvironmentID, job.AuditRunID)
+	d.RetentionSimulation = r.loadRetentionSimulation(ctx, job.EnvironmentID, job.AuditRunID)
+	if job.Type == "access_review" || job.Filters.CampaignID != "" {
+		campaignID := job.Filters.CampaignID
+		if campaignID == "" {
+			// Fall back to the newest non-closed campaign for the environment.
+			if camps, _, err := r.store.ListAccessReviewCampaigns(ctx, job.EnvironmentID, 1, 0); err == nil && len(camps) > 0 {
+				campaignID = camps[0].ID
+			}
+		}
+		if campaignID != "" {
+			if sum, err := r.store.BuildAccessReviewSummary(ctx, job.EnvironmentID, campaignID); err == nil {
+				d.AccessReview = sum
+			}
+		}
+	}
 	return d, nil
 }
 
@@ -244,6 +260,50 @@ WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, env, runID).Scan(
 		Priced: priced, Currency: cur, Reason: reason,
 		StorageMonth: storage, UnusedIndexMonth: unused, BloatMonth: bloat, QueryMonth: query,
 	}
+}
+
+func (r *ReportSections) loadRetentionSimulation(ctx context.Context, env, runID string) *report.RetentionSimulationSummary {
+	var htCount int
+	_ = r.tx.QueryRow(ctx, `SELECT count(*) FROM hypertable_snapshot WHERE audit_run_id=$1::uuid`, runID).Scan(&htCount)
+	if htCount == 0 {
+		return &report.RetentionSimulationSummary{Applicable: false, Reason: "não aplicável"}
+	}
+	rows, err := r.tx.Query(ctx, `
+SELECT COALESCE(schema_name || '.' || hypertable_name, hypertable_name),
+  label, gb_saved::float8, currency, money_saved, risks, ratio_confidence_low, partial
+FROM retention_scenario
+WHERE environment_id=$1::uuid
+  AND (audit_run_id IS NULL OR audit_run_id=$2::uuid)
+ORDER BY saved_at DESC
+LIMIT 100`, env, runID)
+	if err != nil {
+		return &report.RetentionSimulationSummary{Applicable: true}
+	}
+	defer rows.Close()
+	out := &report.RetentionSimulationSummary{Applicable: true}
+	for rows.Next() {
+		var item report.RetentionSimulationItem
+		var money *float64
+		var risks []byte
+		var lowConf, partial bool
+		if err := rows.Scan(&item.Hypertable, &item.Label, &item.GBSaved, &item.Currency, &money, &risks, &lowConf, &partial); err != nil {
+			continue
+		}
+		item.MoneySaved = money
+		item.Confidence = "alta"
+		if lowConf {
+			item.Confidence = "baixa"
+		}
+		item.Risks = []string{}
+		if len(risks) > 0 {
+			_ = json.Unmarshal(risks, &item.Risks)
+		}
+		if partial {
+			out.Partial = true
+		}
+		out.Items = append(out.Items, item)
+	}
+	return out
 }
 
 // Databases loads the database list (at most 500 rows).

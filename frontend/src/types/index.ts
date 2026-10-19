@@ -13,6 +13,7 @@ export type NavigationSection =
   | "Digest"
   | "Custo"
   | "Análises de migration"
+  | "Revisão de acessos"
   | "Contas"
   | "Acompanhamento"
   | "Ações assistidas"
@@ -398,6 +399,102 @@ export interface NotificationDestinationInput {
   target: string;
   format: "generic" | "slack";
   active: boolean;
+}
+
+export interface AccessReviewOwner {
+  id: string;
+  environment_id: string;
+  target_role: string;
+  owner_user_id: string;
+  owner_username: string;
+  owner_role: string;
+  contact_name?: string;
+  contact_email?: string;
+  updated_at: string;
+}
+
+export interface AccessReviewOwnerInput {
+  target_role: string;
+  owner_user_id: string;
+  contact_name?: string;
+  contact_email?: string;
+}
+
+export interface AccessReviewCampaign {
+  id: string;
+  environment_id: string;
+  name: string;
+  scope?: unknown;
+  reference_run_id: string;
+  due_at: string;
+  status: "open" | "in_review" | "closed" | "overdue" | string;
+  created_by: string;
+  created_at: string;
+  closed_at?: string;
+  closed_by?: string;
+  total_items: number;
+  decided_items: number;
+  pending_items: number;
+  decided_percent: number;
+}
+
+export interface AccessReviewItem {
+  id: string;
+  campaign_id: string;
+  database_name: string;
+  account_name: string;
+  object_type: string;
+  object_name: string;
+  column_name?: string;
+  privilege: string;
+  origin_kind: string;
+  via_chain: string[];
+  origin_label: string;
+  highlights: string[];
+  owner_user_id?: string | null;
+  owner_username?: string;
+  decision?: string | null;
+  justification?: string;
+  decided_by?: string;
+  decided_at?: string | null;
+  pending: boolean;
+}
+
+export interface AccessReviewDecisionInput {
+  item_id: string;
+  decision: "approve" | "revoke" | "keep";
+  revoke_due_at?: string;
+  justification?: string;
+  supersedes_id?: string;
+}
+
+export interface AccessReviewDecision {
+  id: string;
+  campaign_id: string;
+  item_id: string;
+  decision: string;
+  revoke_due_at?: string | null;
+  justification: string;
+  decided_by: string;
+  decided_at: string;
+  supersedes_id?: string | null;
+  finding_action_id?: string | null;
+}
+
+export interface AccessReviewDiff {
+  previous_campaign_id?: string;
+  new_privileges: AccessReviewItem[];
+  removed_privileges: AccessReviewItem[];
+  changed_decisions: Array<{
+    item_key: string;
+    account_name: string;
+    object_name: string;
+    privilege: string;
+    previous_decision?: string | null;
+    current_decision?: string | null;
+  }>;
+  new_accounts: string[];
+  removed_accounts: string[];
 }
 
 export interface JobHealthItem {
@@ -1047,13 +1144,19 @@ export interface ReportFilters {
   table?: string;
   severity?: string;
   redaction?: "none" | "identifiers" | "strict";
+  campaign_id?: string;
 }
 
 export interface ReportJob {
   id: string;
   environment_id: string;
   audit_run_id: string;
-  report_type: "executive" | "technical" | "table" | "architecture";
+  report_type:
+    | "executive"
+    | "technical"
+    | "table"
+    | "architecture"
+    | "access_review";
   format?: "pdf" | "markdown";
   filters: ReportFilters;
   requested_by: string;
@@ -1414,4 +1517,73 @@ export interface CostSeriesPoint {
   priced: boolean;
   confidence?: string;
   reason?: string;
+}
+
+export interface SimulationAgeBucket {
+  label: string;
+  count: number;
+  bytes: number;
+}
+
+export interface SimulationScenario {
+  label: string;
+  retention_days: number;
+  compress_after_days: number;
+  bytes_after: number;
+  bytes_saved: number;
+  gb_saved: number;
+  money_saved?: number | null;
+  risks: string[];
+  projection_30_gb: number;
+  projection_90_gb: number;
+  projection_180_gb: number;
+}
+
+export interface HypertableSimulationResponse {
+  applicable: boolean;
+  reason?: string;
+  partial: boolean;
+  retention_applicable: boolean;
+  observed_ratio: number;
+  ratio_confidence_low: boolean;
+  current_bytes: number;
+  compressed_pct: number;
+  age_buckets: SimulationAgeBucket[];
+  scenarios: SimulationScenario[];
+  risks: string[];
+  currency?: string;
+  price_version_id?: string;
+  price_effective_from?: string;
+  gain: {
+    hypothesis: string;
+    predicted: string;
+    measured: string;
+  };
+}
+
+export interface UnscannedChunksResponse {
+  applicable: boolean;
+  reason?: string;
+  comparable?: boolean;
+  approximate: boolean;
+  label: string;
+  items: string[];
+  not_collected?: string[];
+}
+
+export interface RetentionScenario {
+  id: string;
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  hypertable_name: string;
+  label: string;
+  retention_days: number;
+  compress_after_days: number;
+  gb_saved: number;
+  currency?: string;
+  money_saved?: number | null;
+  risks: string[];
+  saved_by: string;
+  saved_at: string;
 }

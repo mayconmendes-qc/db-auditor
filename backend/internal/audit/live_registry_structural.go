@@ -23,6 +23,10 @@ type accountRolePersister interface {
 	SaveAccountRoles(ctx context.Context, environmentID, auditRunID pgtype.UUID, roles []postgres.AccountRoleFacts) error
 }
 
+type grantOriginPersister interface {
+	SaveGrantOrigins(ctx context.Context, environmentID, auditRunID pgtype.UUID, origins []postgres.GrantOriginFacts, columns []postgres.ColumnGrantFacts) error
+}
+
 // AttachStructuralCollectors registers sequences/triggers/RLS policy collectors (Sprint 14).
 func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 	if r == nil {
@@ -216,6 +220,41 @@ func AttachStructuralCollectors(r *Registry, opts LiveRegistryOptions) {
 				}
 			}
 			return finishMulti(int64(len(all)), partial, nil)
+		},
+	})
+	_ = r.Register(CollectorSpec{
+		Name: "postgres.grant_origins", Version: "1.0.0", MaxRows: postgres.MaxGrantOrigins,
+		ReadOnly: true, Profiles: map[string]struct{}{ProfileManual: {}, ProfileMonthly: {}},
+		Run: func(ctx context.Context) (int64, error) {
+			dsn, err := dsnFromContext(ctx, targets)
+			if err != nil {
+				return 0, err
+			}
+			var allOrigins []postgres.GrantOriginFacts
+			var allColumns []postgres.ColumnGrantFacts
+			partial, hard := postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, _ string) error {
+				origins, columns, err := postgres.CollectGrantOrigins(cctx, conn, scope)
+				if err != nil {
+					return err
+				}
+				allOrigins = append(allOrigins, origins...)
+				allColumns = append(allColumns, columns...)
+				return nil
+			})
+			if hard != nil {
+				return 0, hard
+			}
+			n := int64(len(allOrigins) + len(allColumns))
+			if writer, ok := opts.Writer.(grantOriginPersister); ok && n > 0 {
+				envID, runID, err := runIDs(ctx)
+				if err != nil {
+					return 0, err
+				}
+				if err := writer.SaveGrantOrigins(ctx, envID, runID, allOrigins, allColumns); err != nil {
+					return 0, fmt.Errorf("persistir origem de privilégios: %w", err)
+				}
+			}
+			return finishMulti(n, partial, nil)
 		},
 	})
 }

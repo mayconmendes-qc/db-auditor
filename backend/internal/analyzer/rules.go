@@ -56,6 +56,11 @@ var ruleIDs = []string{
 	"replication.lag_high", "replication.archive_stalled", "timescale.chunk_dead_tuples",
 	"drift.out_of_pipeline", "drift.environment_divergence",
 	"cost.unused_index_waste", "cost.bloat_recoverable", "cost.query_expensive",
+	"timescale.retention_missing", "timescale.compression_missing",
+	"timescale.retention_cagg_conflict", "timescale.compression_ratio_low",
+	"access_review.revocation_not_applied", "access_review.powerful_without_approve",
+	"access_review.inactive_with_write", "access_review.public_outside_public",
+	"access_review.new_privilege_undecided", "access_review.campaign_overdue_pending",
 }
 
 // Catalog is the versioned, golden-tested source of rule metadata.

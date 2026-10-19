@@ -1584,6 +1584,24 @@
         }
       }
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/simulation": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/unscanned-chunks": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail": {
       "get": {
         "description": "Estrutura e métricas do índice na execução selecionada, sem SQL bruto.",
@@ -2032,6 +2050,37 @@
       }
     },
     "/api/v1/environments/{id}/tables/workload": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/timescale-scenarios": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "201": {
+            "description": "created"
+          },
+          "403": {
+            "description": "forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/timescale-scenarios/export": {
       "get": {
         "responses": {
           "200": {

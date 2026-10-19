@@ -48,6 +48,12 @@ func CollectChunks(ctx context.Context, conn *pgx.Conn, scope config.Scope) ([]C
 			&f.IndexSizeBytes,
 			&f.BeforeCompressionBytes,
 			&f.AfterCompressionBytes,
+			&f.SeqScan,
+			&f.IdxScan,
+			&f.NTupIns,
+			&f.NTupUpd,
+			&f.NTupDel,
+			&f.StatsReset,
 		); err != nil {
 			return nil, fmt.Errorf("chunk collector scan: %w", err)
 		}

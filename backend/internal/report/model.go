@@ -44,6 +44,56 @@ type Document struct {
 	Regressions     []Regression
 	Truncated       bool
 	RedactionLevel  string
+	// Spec 09 — retention/compression simulation summary for the technical PDF.
+	RetentionSimulation *RetentionSimulationSummary
+	// Spec 07 — access review evidence PDF.
+	AccessReview *AccessReviewSummary
+}
+
+// AccessReviewSummary feeds the access_review PDF (RF-09).
+type AccessReviewSummary struct {
+	CampaignID     string
+	CampaignName   string
+	Status         string
+	DueAt          string
+	TotalItems     int
+	DecidedItems   int
+	PendingItems   int
+	DecidedPercent float64
+	Owners         []AccessReviewOwnerLine
+	PendingSamples []AccessReviewPendingLine
+}
+
+type AccessReviewOwnerLine struct {
+	TargetRole string
+	OwnerName  string
+	Contact    string // omitted under identifiers redaction
+}
+
+type AccessReviewPendingLine struct {
+	Account   string
+	Object    string
+	Privilege string
+	Origin    string
+}
+
+// RetentionSimulationSummary feeds the technical PDF section (RF-09).
+type RetentionSimulationSummary struct {
+	Applicable bool
+	Reason     string // e.g. "não aplicável"
+	Partial    bool
+	Items      []RetentionSimulationItem
+}
+
+// RetentionSimulationItem is one hypertable × scenario line in the PDF.
+type RetentionSimulationItem struct {
+	Hypertable string
+	Label      string
+	GBSaved    float64
+	Currency   string
+	MoneySaved *float64
+	Risks      []string
+	Confidence string
 }
 
 type Database struct {
@@ -327,6 +377,8 @@ func reportTypeLabel(kind string) string {
 		return "técnico"
 	case "table":
 		return "de tabela"
+	case "access_review":
+		return "de revisão de acessos"
 	default:
 		return kind
 	}

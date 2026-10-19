@@ -118,6 +118,8 @@ type SnapshotFacts struct {
 	CostPrice       *CostPriceFact
 	ColumnStats     []ColumnStatFact
 	QueryCostWindow *QueryCostWindowFact
+	// Spec 07 — access review campaigns (optional; empty when none).
+	AccessReviewCampaigns []AccessReviewCampaignFact
 }
 
 // CostPriceFact is the current price table version for monetary impact.
@@ -251,14 +253,19 @@ type IndexFact struct {
 
 // HypertableFact summarizes chunk topology.
 type HypertableFact struct {
-	Database                 string `json:"database"`
-	Schema                   string `json:"schema"`
-	Name                     string `json:"name"`
-	NumChunks                int    `json:"num_chunks"`
-	SizeBytes                int64  `json:"size_bytes"`
-	ChunkInterval            string `json:"chunk_interval,omitempty"`
-	UncompressedClosedChunks int    `json:"uncompressed_closed_chunks,omitempty"`
-	ReadsOutsideTime         bool   `json:"reads_outside_time,omitempty"`
+	Database                 string  `json:"database"`
+	Schema                   string  `json:"schema"`
+	Name                     string  `json:"name"`
+	NumChunks                int     `json:"num_chunks"`
+	SizeBytes                int64   `json:"size_bytes"`
+	ChunkInterval            string  `json:"chunk_interval,omitempty"`
+	UncompressedClosedChunks int     `json:"uncompressed_closed_chunks,omitempty"`
+	ReadsOutsideTime         bool    `json:"reads_outside_time,omitempty"`
+	CompressionEnabled       bool    `json:"compression_enabled,omitempty"`
+	ChunksOlderThanDays      int     `json:"chunks_older_than_days,omitempty"` // max age in days of any chunk
+	UncompressedOldBytes     int64   `json:"uncompressed_old_bytes,omitempty"` // uncompressed chunks older than 30d
+	CompressedChunkCount     int     `json:"compressed_chunk_count,omitempty"`
+	ObservedCompressionRatio float64 `json:"observed_compression_ratio,omitempty"`
 }
 
 // ChunkVacuumFact is a capped sample of one chunk, not the whole hypertable.
@@ -303,6 +310,9 @@ type CAGGFact struct {
 	Lag                       string `json:"lag,omitempty"`
 	Hierarchical              bool   `json:"hierarchical,omitempty"`
 	Realtime                  bool   `json:"realtime,omitempty"`
+	SourceSchema              string `json:"source_schema,omitempty"`
+	SourceName                string `json:"source_name,omitempty"`
+	RefreshWindowDays         int    `json:"refresh_window_days,omitempty"`
 }
 
 // PolicyFact describes a Timescale retention/compression/refresh policy.

@@ -109,6 +109,7 @@ func planSections(ctx context.Context, source SectionSource, redaction *Redactio
 	if redaction != nil {
 		overview.RedactMetadata(redaction.Metadata)
 		overview.redactOverview(redaction.Level, rawDatabases)
+		overview.redactAccessReview(redaction.Level)
 	}
 	if overview.TotalDatabases == 0 {
 		overview.TotalDatabases = plan.databases
@@ -250,6 +251,14 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 	}
 	if err := emitCostSection(d, out); err != nil {
 		return err
+	}
+	if err := emitRetentionSimulation(d, out); err != nil {
+		return err
+	}
+	if d.Type == "access_review" || d.AccessReview != nil {
+		if err := out(accessReviewLines(d)...); err != nil {
+			return err
+		}
 	}
 	if err := out(Line{"Riscos e prioridades", "heading"}, Line{"Matriz de decisão (" + priority.FormulaVersion + "): pontuação = peso da severidade × fator de impacto medido × confiança ÷ esforço. Impacto sem métrica não eleva a prioridade. Confirme dependências, equipe e janela antes de executar uma mudança.", "body"}); err != nil {
 		return err

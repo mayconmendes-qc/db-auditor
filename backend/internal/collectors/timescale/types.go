@@ -78,6 +78,12 @@ type ChunkFacts struct {
 	IndexSizeBytes         int64      `json:"index_size_bytes"`
 	BeforeCompressionBytes int64      `json:"before_compression_bytes,omitempty"`
 	AfterCompressionBytes  int64      `json:"after_compression_bytes,omitempty"`
+	SeqScan                *int64     `json:"seq_scan,omitempty"`
+	IdxScan                *int64     `json:"idx_scan,omitempty"`
+	NTupIns                *int64     `json:"n_tup_ins,omitempty"`
+	NTupUpd                *int64     `json:"n_tup_upd,omitempty"`
+	NTupDel                *int64     `json:"n_tup_del,omitempty"`
+	StatsReset             *time.Time `json:"stats_reset,omitempty"`
 }
 
 // InventoryResult bundles Timescale facts for one database collection pass.

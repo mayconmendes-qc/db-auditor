@@ -116,6 +116,8 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerMigrationContextRoutes(mux, store)
 	registerMigrationAnalysisRoutes(mux, store)
 	registerCostLensRoutes(mux, store)
+	registerTimescaleSimulationRoutes(mux, store)
+	registerAccessReviewRoutes(mux, store)
 	if opts.Auth != nil {
 		registerAuthRoutes(mux, opts.Auth)
 		return observability.Middleware(protectPublic(authMiddleware(mux, opts.Auth)))
