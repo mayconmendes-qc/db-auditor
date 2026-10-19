@@ -19,6 +19,8 @@ func Run(args []string) int {
 	switch args[0] {
 	case "migration-risk":
 		return runMigrationRisk(args[1:])
+	case "log-anomaly":
+		return runLogAnomaly(args[1:])
 	case "recover-operator":
 		// Handled by cmd/auditor before Run is called.
 		fmt.Fprintln(os.Stderr, "recover-operator deve ser despachado pelo binário principal")
@@ -34,7 +36,7 @@ func Run(args []string) int {
 // (as opposed to starting the HTTP API with no args).
 func IsCLICommand(arg string) bool {
 	switch arg {
-	case "help", "-h", "--help", "migration-risk", "recover-operator":
+	case "help", "-h", "--help", "migration-risk", "log-anomaly", "recover-operator":
 		return true
 	default:
 		return false

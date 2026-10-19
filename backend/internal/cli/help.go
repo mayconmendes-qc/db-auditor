@@ -11,6 +11,7 @@ import (
 var KnownCommands = []string{
 	"help",
 	"migration-risk",
+	"log-anomaly",
 	"recover-operator",
 }
 
@@ -21,6 +22,7 @@ func WriteHelp(w io.Writer) {
 Comandos:
   help                 Mostra esta ajuda
   migration-risk       Analisa risco de migrations PostgreSQL (MR-01…MR-11)
+  log-anomaly          Anomalias em logs JSON (postgres-jsonlog / genérico)
   recover-operator     Redefine a senha de um operador (interativo)
 
 Sem argumentos o binário sobe a API HTTP do auditor.

@@ -10,7 +10,7 @@ func TestHelpListsCommands(t *testing.T) {
 	var buf bytes.Buffer
 	WriteHelp(&buf)
 	out := buf.String()
-	for _, cmd := range []string{"migration-risk", "recover-operator", "help"} {
+	for _, cmd := range []string{"migration-risk", "log-anomaly", "recover-operator", "help"} {
 		if !strings.Contains(out, cmd) {
 			t.Fatalf("help missing %q:\n%s", cmd, out)
 		}
