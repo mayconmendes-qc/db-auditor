@@ -21,6 +21,7 @@ func (d *Document) RedactSensitive(level string) {
 		}
 	}
 	d.redactAccessReview(level)
+	d.redactPersonalData(level)
 }
 
 func (d *Document) redactAccessReview(level string) {
@@ -36,6 +37,13 @@ func (d *Document) redactAccessReview(level string) {
 		d.AccessReview.PendingSamples[i].Account = redactionMask
 		d.AccessReview.PendingSamples[i].Object = redactionMask
 	}
+}
+
+func (d *Document) redactPersonalData(level string) {
+	if d.PersonalData == nil || !redactsSensitive(level) {
+		return
+	}
+	d.PersonalData.DetailColumns = nil
 }
 
 func redactsSensitive(level string) bool { return level == "identifiers" || level == "strict" }

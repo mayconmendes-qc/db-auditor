@@ -296,6 +296,16 @@ Guia de uso: [migration-risk.md](migration-risk.md).
 
 
 
+## Contratos de qualidade (`quality.contract_violation`)
+
+Contratos versionados (spec 03). Só contagens são persistidas. Sem categoria nova em `regression_alert` (ADR-0001 D13).
+
+| ID | Severidade padrão | Notas |
+|---|---|---|
+| `quality.contract_violation` | média (alta p/ unicidade, frescor ou nulos críticos; baixa p/ volume) | Dedup por contrato + checagem + versão |
+
+Esquema YAML e CLI: [dq-contracts.md](dq-contracts.md).
+
 ## Dados pessoais (`pii.*`)
 
 Mapa LGPD (spec 05). Nenhum valor amostrado é persistido.

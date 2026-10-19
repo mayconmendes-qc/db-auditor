@@ -82,6 +82,8 @@ Algumas ações mostram um indicador numérico preliminar: tamanho de um índice
 
 Um operador precisa habilitar o recurso e configurar uma conta de leitura sem privilégios de escrita. Em **Ações assistidas**, informe banco, esquema, tabela, limite de até 1.000 linhas e as colunas que deseja examinar. Você pode verificar nulos inesperados, chaves candidatas repetidas, datas fora de um intervalo, distribuição concentrada e referências órfãs em relações simples.
 
+Na mesma tela, a seção **Qualidade — contratos** permite gerar uma proposta a partir do schema coletado, aprovar versões (auditor), executar sob demanda e ver tendência. O contrato padrão amostra até 10.000 linhas (opt-in até 100.000). Detalhes: [dq-contracts.md](dq-contracts.md).
+
 O resultado guarda **contagens**, não valores de linhas. Em tabelas grandes, o PostgreSQL seleciona páginas para a amostra; em tabelas menores, a leitura limitada pode seguir a ordem física. A margem de erro amostral é **desconhecida** e aparece no diagnóstico; as contagens descrevem somente as linhas lidas. Confirme qualquer hipótese na população de dados antes de uma mudança.
 
 O plano sugerido descreve confirmação, dependências, backup, janela, validação e recuperação. Para dados fora de uma política de retenção, obtenha aprovação da área de negócio, teste a cópia para arquivo e a restauração antes de considerar exclusão externa. Para marcar a ação de qualidade como **validada**, repita a mesma verificação após a mudança, com método, limite e número de linhas comparáveis. O auditor vincula o ID do novo diagnóstico à decisão. Um texto livre sozinho não valida a ação; compare as contagens e explique o resultado. Mesmo duas amostras comparáveis podem ter lido páginas diferentes.
@@ -691,3 +693,10 @@ opcional aparece só na planilha e no PDF (dado pessoal).
 - Revogar cria ação assistida; o auditor não executa REVOKE no banco.
 - Viewer lê a matriz; não vê controles de decisão.
 
+
+
+### Dados pessoais
+
+<!-- topic: pii | abrir: Dados pessoais -->
+
+Mapa LGPD por coluna (categoria, confiança, método, contas com leitura, RLS). A etapa "validar conteúdo" só fica disponível quando a operação habilita a flag de processo e o operator liga o ambiente. Nenhum valor de CPF/e-mail aparece na tela nem no CSV. Em MongoDB a aba indica "não aplicável a este mecanismo".

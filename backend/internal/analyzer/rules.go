@@ -61,6 +61,7 @@ var ruleIDs = []string{
 	"access_review.revocation_not_applied", "access_review.powerful_without_approve",
 	"access_review.inactive_with_write", "access_review.public_outside_public",
 	"access_review.new_privilege_undecided", "access_review.campaign_overdue_pending",
+	"pii.column_detected", "pii.broad_read_access", "pii.no_rls_hypothesis",
 	"backup.restore_failed", "backup.restore_divergence", "backup.rto_exceeded", "backup.drill_overdue",
 }
 

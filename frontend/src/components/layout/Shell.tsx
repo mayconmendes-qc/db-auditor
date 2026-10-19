@@ -25,6 +25,7 @@ export const navigationSections: NavigationSection[] = [
   "Custo",
   "Análises de migration",
   "Revisão de acessos",
+  "Dados pessoais",
   "Contas",
   "Acompanhamento",
   "Ações assistidas",
@@ -54,6 +55,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
       "Custo",
       "Análises de migration",
       "Revisão de acessos",
+      "Dados pessoais",
     ],
   },
   {

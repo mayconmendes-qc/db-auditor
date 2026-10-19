@@ -5,8 +5,6 @@ package quality
 import (
 	"context"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 	"time"
 
@@ -157,18 +155,12 @@ func run(ctx context.Context, dsn string, request Request, connect connectFunc) 
 			return result, fmt.Errorf("coluna de data fora do escopo")
 		}
 	}
-	table := pgx.Identifier{request.Schema, request.Table}.Sanitize()
 	var estimatedRows int64
 	if err = tx.QueryRow(ctx, `SELECT GREATEST(c.reltuples::bigint,0) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=$2`, request.Schema, request.Table).Scan(&estimatedRows); err != nil {
 		return result, fmt.Errorf("não foi possível estimar o tamanho da tabela")
 	}
-	sampleSource := table
-	result.SampleMethod = "limite_sem_aleatoriedade"
-	if estimatedRows > int64(request.Limit*2) {
-		percent := math.Min(100, math.Max(0.1, float64(request.Limit*4)/float64(estimatedRows)*100))
-		sampleSource += ` TABLESAMPLE SYSTEM (` + strconv.FormatFloat(percent, 'f', 3, 64) + `) REPEATABLE (1)`
-		result.SampleMethod = "paginas_aleatorias_sistema"
-	}
+	var sampleSource string
+	sampleSource, result.SampleMethod = SampleSourceSQL(request.Schema, request.Table, estimatedRows, request.Limit)
 	if err = tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1 FROM `+sampleSource+` LIMIT $1) sample`, request.Limit).Scan(&result.SampledRows); err != nil {
 		return result, fmt.Errorf("falha ao contar amostra: %s", config.SanitizeError(err))
 	}

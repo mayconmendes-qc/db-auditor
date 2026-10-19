@@ -228,6 +228,7 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 	d.RetentionSimulation = r.loadRetentionSimulation(ctx, job.EnvironmentID, job.AuditRunID)
 	d.RestoreVerified = r.loadRestoreVerified(ctx, job.EnvironmentID)
 	d.QualityContracts = r.loadQualityContracts(ctx, job.EnvironmentID)
+	d.PersonalData = r.loadPersonalData(ctx, job.EnvironmentID)
 	if job.Type == "access_review" || job.Filters.CampaignID != "" {
 		campaignID := job.Filters.CampaignID
 		if campaignID == "" {
@@ -370,6 +371,29 @@ func (r *ReportSections) loadQualityContracts(ctx context.Context, env string) *
 			CheckKey: cr.CheckKey, Result: cr.Result, Severity: cr.Severity,
 			SampleSize: cr.SampleSize, Observed: observed, Reason: cr.Reason,
 		})
+	}
+	return out
+}
+
+
+func (r *ReportSections) loadPersonalData(ctx context.Context, env string) *report.PersonalDataSummary {
+	totals, total, err := r.store.PIICategoryTotals(ctx, env)
+	if err != nil || total == 0 {
+		return nil
+	}
+	out := &report.PersonalDataSummary{TotalColumns: total, JSONNote: "Apenas categorias, confiança e contagens; nenhum valor amostrado."}
+	for cat, n := range totals {
+		out.ByCategory = append(out.ByCategory, report.PersonalDataCategoryCount{Category: cat, Count: n})
+	}
+	items, _, err := r.store.ListPIIMap(ctx, env, PIIMapFilter{Limit: 200})
+	if err == nil {
+		for _, it := range items {
+			out.DetailColumns = append(out.DetailColumns, report.PersonalDataColumnLine{
+				Qualified: it.Qualified,
+				Category: it.Category, Confidence: it.Confidence, Method: it.Method,
+				ReadCount: it.ReadAccounts, HasRLS: it.HasRLS,
+			})
+		}
 	}
 	return out
 }

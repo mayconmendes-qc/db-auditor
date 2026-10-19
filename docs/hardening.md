@@ -78,3 +78,11 @@ O principal `env-token` é distinto da sessão de usuário. Autentica só rotas 
 (método + caminho + escopo), sempre no ambiente do token. Deny-by-default: auth/*, environments
 global, downloads e rotas de operator ficam fora. Rate limit por id do token. Logs usam
 `env-token:<id>` — nunca o Bearer em claro. Relatórios continuam só com `AUDITOR_REPORT_API_TOKEN`.
+
+
+## Garantias LGPD do mapa de dados pessoais
+
+- Valores amostrados na etapa 2 vivem só em memória durante a validação e são descartados (RNF-02).
+- Não vão para log, store, evidência, PDF, CSV, erro nem métrica — nem mascarados nem com hash.
+- Persistem apenas contagens, proporções, categoria, confiança e método.
+- Conta só leitura, transação `READ ONLY`, timeout por coluna; flag própria `AUDITOR_PII_CONTENT_SCAN_ENABLED` + opt-in por ambiente (ADR-0001 D4).

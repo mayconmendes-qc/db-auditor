@@ -22,9 +22,13 @@ type Capability struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
-var known = []string{"catalog", "constraints", "indexes", "workload", "security", "timescale", "data_quality"}
+var known = []string{"catalog", "constraints", "indexes", "workload", "security", "timescale", "data_quality", "pii_content_scan"}
 
 func Matrix(engine string, timescaleObserved bool, qualityEnabled bool) []Capability {
+	return MatrixWithPII(engine, timescaleObserved, qualityEnabled, false)
+}
+
+func MatrixWithPII(engine string, timescaleObserved bool, qualityEnabled bool, piiContentEnabled bool) []Capability {
 	if engine == "" {
 		engine = "postgresql"
 	}
@@ -37,6 +41,8 @@ func Matrix(engine string, timescaleObserved bool, qualityEnabled bool) []Capabi
 			available = postgres && timescaleObserved
 		case "data_quality":
 			available = postgres && qualityEnabled
+		case "pii_content_scan":
+			available = postgres && piiContentEnabled
 		}
 		item := Capability{Name: name, Applicable: available}
 		if !available {

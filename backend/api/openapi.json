@@ -2845,6 +2845,301 @@
           }
         }
       }
+    },
+    "/api/v1/environments/{id}/pii-scans": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      },
+      "post": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Etapa 2 desabilitada"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-scans/{scan}": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-map": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-map/export/download": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-classifications/{column}": {
+      "patch": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-dictionary": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      },
+      "put": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/pii-settings": {
+      "get": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Conflito"
+          }
+        }
+      },
+      "put": {
+        "description": "PII scanner (spec 05).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts": {
+      "get": {
+        "description": "Lista contratos de qualidade por tabela com última execução.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      },
+      "post": {
+        "description": "Cria contrato com versão 1 proposed (auditor).",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "400": {
+            "description": "YAML/documento inválido"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/proposals": {
+      "post": {
+        "description": "Gera proposta a partir do snapshot completo (auditor).",
+        "responses": {
+          "201": {
+            "description": "proposto"
+          },
+          "409": {
+            "description": "Sem coleta completa"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/import": {
+      "post": {
+        "description": "Importa YAML como versão proposed (auditor).",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "400": {
+            "description": "YAML inválido"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/runs": {
+      "post": {
+        "description": "Execução ad hoc CLI (token quality-contract:run) ou auditor.",
+        "responses": {
+          "201": {
+            "description": "relatório"
+          },
+          "409": {
+            "description": "Recurso desabilitado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/versions": {
+      "post": {
+        "description": "Nova versão imutável proposed.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/versions/{version}/approve": {
+      "post": {
+        "description": "Aprova versão (auditor; viewer 403).",
+        "responses": {
+          "200": {
+            "description": "aprovado"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/versions/{version}/yaml": {
+      "get": {
+        "description": "Exporta YAML da versão.",
+        "responses": {
+          "200": {
+            "description": "yaml"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/runs": {
+      "get": {
+        "description": "Lista execuções do contrato.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "description": "Executa versão aprovada (auditor ou token).",
+        "responses": {
+          "201": {
+            "description": "relatório"
+          },
+          "409": {
+            "description": "Recurso desabilitado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/runs/{run}": {
+      "get": {
+        "description": "Detalhe da execução.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/runs/{run}/markdown": {
+      "get": {
+        "description": "Markdown da execução.",
+        "responses": {
+          "200": {
+            "description": "markdown"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-contracts/{contract}/trend": {
+      "get": {
+        "description": "Tendência por checagem (até 90 dias).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
     }
   },
   "components": {
