@@ -5,31 +5,16 @@ import {
   Card,
   EmptyState,
   ErrorBanner,
-  Skeleton,
   Table,
 } from "../components/ui";
 import { useApp } from "../context/AppContext";
 import { formatError } from "../lib/errors";
 import { api } from "../services/api";
-
-type MapRow = {
-  id: string;
-  qualified: string;
-  category: string;
-  confidence: string;
-  method: string;
-  valid_percent: number;
-  sample_size: number;
-  read_accounts: number;
-  has_rls: boolean;
-  access_level: string;
-  review_decision?: string;
-  coverage_note?: string;
-};
+import type { PiiMapItem } from "../types";
 
 export function PersonalDataPage() {
   const { environmentId } = useApp();
-  const [rows, setRows] = useState<MapRow[]>([]);
+  const [rows, setRows] = useState<PiiMapItem[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,11 +74,15 @@ export function PersonalDataPage() {
     }
   };
 
-  const review = async (qualified: string, decision: "confirmed" | "discarded") => {
+  const review = async (
+    qualified: string,
+    decision: "confirmed" | "discarded",
+  ) => {
     if (!environmentId || !canAudit) return;
     let justification = "";
     if (decision === "discarded") {
-      justification = window.prompt("Justificativa do descarte (obrigatória):") || "";
+      justification =
+        window.prompt("Justificativa do descarte (obrigatória):") || "";
       if (!justification.trim()) return;
     }
     try {
@@ -117,7 +106,12 @@ export function PersonalDataPage() {
   };
 
   if (!environmentId) {
-    return <EmptyState title="Selecione um ambiente" description="Escolha um ambiente no seletor superior." />;
+    return (
+      <EmptyState
+        title="Selecione um ambiente"
+        description="Escolha um ambiente no seletor superior."
+      />
+    );
   }
 
   if (!applicable) {
@@ -126,9 +120,7 @@ export function PersonalDataPage() {
         <p className="text-xs font-bold tracking-[0.12em] text-emerald-300">
           DADOS PESSOAIS
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-50">
-          Mapa LGPD
-        </h1>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-50">Mapa LGPD</h1>
         <Card className="mt-6">
           <p role="status">{reason || "não aplicável a este mecanismo"}</p>
         </Card>
@@ -164,8 +156,21 @@ export function PersonalDataPage() {
             onChange={(e) => setCategory(e.target.value)}
           >
             <option value="">Todas</option>
-            {["cpf","cnpj","email","telefone","cep","pix","nome","nascimento","endereco","rg"].map((c) => (
-              <option key={c} value={c}>{c}</option>
+            {[
+              "cpf",
+              "cnpj",
+              "email",
+              "telefone",
+              "cep",
+              "pix",
+              "nome",
+              "nascimento",
+              "endereco",
+              "rg",
+            ].map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
         </label>
@@ -196,10 +201,18 @@ export function PersonalDataPage() {
                 <span className="text-amber-300">(etapa 2 desligada)</span>
               ) : null}
             </label>
-            <Button type="button" onClick={() => void startScan()} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => void startScan()}
+              disabled={busy}
+            >
               Iniciar varredura
             </Button>
-            <Button type="button" variant="secondary" onClick={() => void exportCsv()}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void exportCsv()}
+            >
               Exportar CSV
             </Button>
           </>
@@ -209,7 +222,10 @@ export function PersonalDataPage() {
       <Card className="mt-4">
         {busy && rows.length === 0 ? <p role="status">Carregando…</p> : null}
         {!busy && rows.length === 0 ? (
-          <EmptyState title="Nenhuma coluna classificada" description="Execute uma varredura (etapa 1) após uma coleta completa." />
+          <EmptyState
+            title="Nenhuma coluna classificada"
+            description="Execute uma varredura (etapa 1) após uma coleta completa."
+          />
         ) : null}
         {rows.length > 0 ? (
           <Table
@@ -229,24 +245,44 @@ export function PersonalDataPage() {
                 <td className="font-mono text-xs">{r.qualified}</td>
                 <td>{r.category}</td>
                 <td>
-                  <Badge tone={r.confidence === "alta" ? "danger" : r.confidence === "media" ? "warning" : "neutral"}>
+                  <Badge
+                    tone={
+                      r.confidence === "alta"
+                        ? "danger"
+                        : r.confidence === "media"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
                     {r.confidence}
                   </Badge>
                 </td>
                 <td>{r.method}</td>
                 <td>{r.valid_percent?.toFixed?.(1) ?? r.valid_percent}</td>
                 <td>
-                  {r.read_accounts} ({r.access_level === "nivel_tabela" ? "nível tabela" : "coluna"})
+                  {r.read_accounts} (
+                  {r.access_level === "nivel_tabela"
+                    ? "nível tabela"
+                    : "coluna"}
+                  )
                 </td>
                 <td>{r.has_rls ? "sim" : "não"}</td>
                 <td>
                   {r.review_decision || "—"}
                   {canAudit ? (
                     <span className="ml-2 inline-flex gap-1">
-                      <Button type="button" variant="secondary" onClick={() => void review(r.qualified, "confirmed")}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void review(r.qualified, "confirmed")}
+                      >
                         Confirmar
                       </Button>
-                      <Button type="button" variant="secondary" onClick={() => void review(r.qualified, "discarded")}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void review(r.qualified, "discarded")}
+                      >
                         Descartar
                       </Button>
                     </span>

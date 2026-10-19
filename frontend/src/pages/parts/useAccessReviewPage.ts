@@ -78,7 +78,7 @@ export function useAccessReviewPage() {
         signal,
       );
       setItems(res.items);
-      setTotal(res.total);
+      setTotal(res.page.total);
     },
     [
       filterAccount,

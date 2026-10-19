@@ -163,7 +163,9 @@ export function QualityContractsPanel({
                       Executar
                     </Button>
                   ) : null}
-                  <Button onClick={() => void loadTrend(c.id)}>Tendência</Button>
+                  <Button onClick={() => void loadTrend(c.id)}>
+                    Tendência
+                  </Button>
                 </div>
               </div>
             );
@@ -190,7 +192,9 @@ export function QualityContractsPanel({
               <li key={`${t.run_id}-${t.check_key}-${t.started_at}`}>
                 {new Date(t.started_at).toLocaleString("pt-BR")} · {t.check_key}{" "}
                 · {t.result}
-                {t.observed_pct != null ? ` · ${t.observed_pct.toFixed(2)}%` : ""}
+                {t.observed_pct != null
+                  ? ` · ${t.observed_pct.toFixed(2)}%`
+                  : ""}
                 {t.gap ? " · lacuna" : ""}
               </li>
             ))}

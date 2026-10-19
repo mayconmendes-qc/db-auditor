@@ -12,7 +12,11 @@ function formatRTO(seconds?: number | null): string {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
-export function RestoreDrillsCard({ environmentId }: { environmentId: string }) {
+export function RestoreDrillsCard({
+  environmentId,
+}: {
+  environmentId: string;
+}) {
   const canEdit = api.hasRole("operator");
   const [items, setItems] = useState<RestoreDrill[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -37,7 +41,9 @@ export function RestoreDrillsCard({ environmentId }: { environmentId: string }) 
         setMaxAge(String(pol.max_age_days));
       })
       .catch((err: unknown) =>
-        setError(formatError(err, "Não foi possível carregar ensaios de restauração")),
+        setError(
+          formatError(err, "Não foi possível carregar ensaios de restauração"),
+        ),
       );
   };
 
@@ -54,10 +60,11 @@ export function RestoreDrillsCard({ environmentId }: { environmentId: string }) 
         Restauração verificada
       </h3>
       <p className="text-sm text-slate-400">
-        Ensaios CLI <code className="text-slate-300">auditor restore-verify</code>{" "}
-        do backup do banco auditado (pg_dump). Evidência{" "}
-        <code className="text-slate-300">target_restore_drill</code>, separada da
-        restauração do snapshot store.
+        Ensaios CLI{" "}
+        <code className="text-slate-300">auditor restore-verify</code> do backup
+        do banco auditado (pg_dump). Evidência{" "}
+        <code className="text-slate-300">target_restore_drill</code>, separada
+        da restauração do snapshot store.
       </p>
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
       {!items || !policy ? (
@@ -121,7 +128,9 @@ export function RestoreDrillsCard({ environmentId }: { environmentId: string }) 
                             <span className="text-rose-300">falha</span>
                           )}
                         </td>
-                        <td className="px-2 py-1">{formatRTO(d.rto_seconds)}</td>
+                        <td className="px-2 py-1">
+                          {formatRTO(d.rto_seconds)}
+                        </td>
                         <td className="px-2 py-1">
                           {divs > 0 ? (
                             <a

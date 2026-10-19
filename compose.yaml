@@ -91,7 +91,10 @@ services:
     image: golang:1.27-alpine
     working_dir: /src
     volumes:
+      # Repo-root paths used by ops/config tests (../../../deploy, ../../../compose.yaml).
       - ./backend:/src
+      - ./deploy:/deploy:ro
+      - ./compose.yaml:/compose.yaml:ro
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     networks: [auditor]

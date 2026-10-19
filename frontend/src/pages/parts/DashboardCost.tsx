@@ -83,7 +83,10 @@ export function DashboardCost({
           variant="secondary"
           onClick={() => {
             if (!environmentId) return;
-            void api.costRankingExport(environmentId).then((blob) => {
+            void api.costRankingExport(environmentId).then((text) => {
+              const blob = new Blob([text], {
+                type: "text/csv;charset=utf-8",
+              });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;

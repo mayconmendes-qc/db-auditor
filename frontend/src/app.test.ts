@@ -19,6 +19,7 @@ describe("navigationSections", () => {
       "Custo",
       "Análises de migration",
       "Revisão de acessos",
+      "Dados pessoais",
       "Contas",
       "Acompanhamento",
       "Ações assistidas",

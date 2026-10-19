@@ -1702,3 +1702,17 @@ export interface RestoreDrillPolicy {
   updated_at: string;
 }
 
+export interface PiiMapItem {
+  id: string;
+  qualified: string;
+  category: string;
+  confidence: string;
+  method: string;
+  valid_percent: number;
+  sample_size: number;
+  read_accounts: number;
+  has_rls: boolean;
+  access_level: string;
+  review_decision?: string;
+  coverage_note?: string;
+}

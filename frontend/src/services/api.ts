@@ -71,6 +71,7 @@ import type {
   NotificationDestinationInput,
   ObjectMapping,
   PagedResponse,
+  PiiMapItem,
   PolicySnapshot,
   PrioritiesResponse,
   QualityContract,
@@ -742,31 +743,48 @@ export const api = {
       signal,
     ),
   piiScans: (env: string, signal?: AbortSignal) =>
-    getJSON<{ items: unknown[]; applicable?: boolean; reason?: string; content_scan_enabled?: boolean }>(
-      `/api/v1/environments/${env}/pii-scans`,
-      signal,
-    ),
+    getJSON<{
+      items: unknown[];
+      applicable?: boolean;
+      reason?: string;
+      content_scan_enabled?: boolean;
+    }>(`/api/v1/environments/${env}/pii-scans`, signal),
   startPiiScan: (env: string, body: { stages: number[] }) =>
     postJSON(`/api/v1/environments/${env}/pii-scans`, body),
   piiMap: (
     env: string,
-    params?: { category?: string; confidence?: string; limit?: number; offset?: number },
+    params?: {
+      category?: string;
+      confidence?: string;
+      limit?: number;
+      offset?: number;
+    },
     signal?: AbortSignal,
   ) =>
-    getJSON<{ items: any[]; total: number; limit: number; offset: number; applicable?: boolean; reason?: string }>(
-      `/api/v1/environments/${env}/pii-map${qs(params)}`,
-      signal,
-    ),
+    getJSON<{
+      items: PiiMapItem[];
+      total: number;
+      limit: number;
+      offset: number;
+      applicable?: boolean;
+      reason?: string;
+    }>(`/api/v1/environments/${env}/pii-map${qs(params)}`, signal),
   reviewPiiClassification: (
     env: string,
     column: string,
     body: { decision: string; justification: string },
   ) =>
-    patchJSON(`/api/v1/environments/${env}/pii-classifications/${encodeURIComponent(column)}`, body),
+    patchJSON(
+      `/api/v1/environments/${env}/pii-classifications/${encodeURIComponent(column)}`,
+      body,
+    ),
   exportPiiMapCsv: async (env: string) => {
-    const res = await fetch(`/api/v1/environments/${env}/pii-map/export/download?format=csv`, {
-      credentials: "include",
-    });
+    const res = await fetch(
+      `/api/v1/environments/${env}/pii-map/export/download?format=csv`,
+      {
+        credentials: "include",
+      },
+    );
     if (!res.ok) throw new Error(`export ${res.status}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -776,7 +794,7 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
-    qualityScans: (env: string, signal?: AbortSignal) =>
+  qualityScans: (env: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<QualityScan> & { enabled: boolean }>(
       `/api/v1/environments/${env}/quality-scans`,
       signal,

@@ -17,8 +17,8 @@ import { AssistedActionList } from "./parts/AssistedActionList";
 import { AssistedMeasurementCard } from "./parts/AssistedMeasurementCard";
 import { AssistedScanResults } from "./parts/AssistedScanResults";
 import { AssistedSetupCards } from "./parts/AssistedSetupCards";
-import { QualityContractsPanel } from "./parts/QualityContractsPanel";
 import { words } from "./parts/assistedActionLabels";
+import { QualityContractsPanel } from "./parts/QualityContractsPanel";
 
 export function AssistedActionsPage() {
   const { environmentId, environments, setEnvironmentId, openFinding } =

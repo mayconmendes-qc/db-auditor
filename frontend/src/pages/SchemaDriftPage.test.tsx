@@ -25,9 +25,9 @@ const auditRuns = vi.fn(async () => ({ items: [] }));
 
 vi.mock("../services/api", () => ({
   api: {
-    schemaDiff: (...args: unknown[]) => schemaDiff(...args),
-    compare: (...args: unknown[]) => compare(...args),
-    auditRuns: (...args: unknown[]) => auditRuns(...args),
+    schemaDiff,
+    compare,
+    auditRuns,
     hasRole: () => false,
   },
 }));

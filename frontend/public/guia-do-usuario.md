@@ -700,3 +700,11 @@ opcional aparece só na planilha e no PDF (dado pessoal).
 <!-- topic: pii | abrir: Dados pessoais -->
 
 Mapa LGPD por coluna (categoria, confiança, método, contas com leitura, RLS). A etapa "validar conteúdo" só fica disponível quando a operação habilita a flag de processo e o operator liga o ambiente. Nenhum valor de CPF/e-mail aparece na tela nem no CSV. Em MongoDB a aba indica "não aplicável a este mecanismo".
+
+## Restauração verificada
+
+Na página de Ambientes, a área **Restauração verificada** mostra o histórico dos
+ensaios CLI `auditor restore-verify` do backup do banco auditado (RTO × alvo,
+divergências e política). Viewer consulta; operator configura RTO-alvo e prazo.
+Detalhes operacionais: [backup-verifier.md](backup-verifier.md).
+
