@@ -415,6 +415,13 @@ func authorizeEnvToken(r *http.Request, tok *repository.EnvTokenPrincipal) (env 
 		scope = "migration-analysis:write"
 	case r.Method == http.MethodPost && rest == "annotations":
 		scope = "deploy-annotation:write"
+	case r.Method == http.MethodPost && (rest == "quality-contracts/runs" ||
+		(strings.HasPrefix(rest, "quality-contracts/") && strings.HasSuffix(rest, "/runs"))):
+		scope = "quality-contract:run"
+	case r.Method == http.MethodGet && rest == "restore-drill-context":
+		scope = "restore-evidence:write"
+	case r.Method == http.MethodPost && rest == "restore-drills":
+		scope = "restore-evidence:write"
 	default:
 		return env, false, ""
 	}
@@ -465,6 +472,12 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 			return environmentFromRequest(r, parts), false
 		}
 	}
+	// PII dictionary and settings: PUT is operator-only (ADR-0001 D14).
+	if r.Method == http.MethodPut && (strings.Contains(path, "/pii-dictionary") || strings.Contains(path, "/pii-settings")) {
+		if !roleAtLeast(user.Role, "operator") {
+			return environmentFromRequest(r, parts), false
+		}
+	}
 	if r.Method != http.MethodGet {
 		minimum := "operator"
 		if path == "auth/password" {
@@ -473,7 +486,11 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 		if strings.Contains(path, "/annotations") || strings.Contains(path, "/regressions/") {
 			minimum = "auditor"
 		}
-		if strings.Contains(path, "/quality-scans") || strings.Contains(path, "/quality-issues/") {
+		if strings.Contains(path, "/quality-scans") || strings.Contains(path, "/quality-issues/") ||
+			strings.Contains(path, "/quality-contracts") {
+			minimum = "auditor"
+		}
+		if strings.Contains(path, "/pii-scans") || strings.Contains(path, "/pii-classifications/") {
 			minimum = "auditor"
 		}
 		if strings.Contains(path, "/timescale-scenarios") {

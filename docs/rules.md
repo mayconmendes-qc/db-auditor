@@ -294,3 +294,33 @@ Guia de uso: [migration-risk.md](migration-risk.md).
 - Sem preço configurado, o impacto fica "não estimado — preço não configurado";
   bytes e tempo continuam visíveis.
 
+
+
+## Dados pessoais (`pii.*`)
+
+Mapa LGPD (spec 05). Nenhum valor amostrado é persistido.
+
+| ID | Severidade | Notas |
+|---|---|---|
+| `pii.column_detected` | informativa | confiança ≥ média |
+| `pii.broad_read_access` | média (alta p/ CPF/CNPJ/PIX) | ≥ 5 contas LOGIN com SELECT; evidência lista contas; pode marcar "nível tabela" |
+| `pii.no_rls_hypothesis` | baixa (hipótese) | dado pessoal alta, sem RLS, ≥ 2 contas |
+
+A etapa 2 de conteúdo exige `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` **e** habilitação por ambiente (ADR-0001 D4).
+
+## Restauração do banco auditado (`backup.*`)
+
+Evidência `target_restore_drill` enviada por `auditor restore-verify` (plano 08).
+Separada de `retention_evidence` / ensaio do snapshot store.
+
+| ID | Condição | Severidade |
+|---|---|---|
+| `backup.restore_failed` | pré-validação, restauração ou verificação física falhou | crítica |
+| `backup.restore_divergence` | inventário / contagem / checksum / amcheck diverge | crítica, alta ou média |
+| `backup.rto_exceeded` | RTO medido > RTO-alvo do ambiente | alta |
+| `backup.drill_overdue` | sem ensaio bem-sucedido no prazo (padrão 30 dias) | média |
+
+Hash de amostra é opt-in (`--sample-hash` + `AUDITOR_RESTORE_VERIFY_SOURCE_DSN`/`_FILE`).
+Sem opt-in, (c) fica "desabilitada" e não conta como parcial (ADR-0001 D8).
+Runbook: [backup-verifier.md](backup-verifier.md).
+

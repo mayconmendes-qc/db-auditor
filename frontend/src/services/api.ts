@@ -73,6 +73,8 @@ import type {
   PagedResponse,
   PolicySnapshot,
   PrioritiesResponse,
+  QualityContract,
+  QualityContractTrendPoint,
   QualityRequest,
   QualityScan,
   QueryDigest,
@@ -739,13 +741,80 @@ export const api = {
       `/api/v1/environments/${env}/capabilities`,
       signal,
     ),
-  qualityScans: (env: string, signal?: AbortSignal) =>
+  piiScans: (env: string, signal?: AbortSignal) =>
+    getJSON<{ items: unknown[]; applicable?: boolean; reason?: string; content_scan_enabled?: boolean }>(
+      `/api/v1/environments/${env}/pii-scans`,
+      signal,
+    ),
+  startPiiScan: (env: string, body: { stages: number[] }) =>
+    postJSON(`/api/v1/environments/${env}/pii-scans`, body),
+  piiMap: (
+    env: string,
+    params?: { category?: string; confidence?: string; limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<{ items: any[]; total: number; limit: number; offset: number; applicable?: boolean; reason?: string }>(
+      `/api/v1/environments/${env}/pii-map${qs(params)}`,
+      signal,
+    ),
+  reviewPiiClassification: (
+    env: string,
+    column: string,
+    body: { decision: string; justification: string },
+  ) =>
+    patchJSON(`/api/v1/environments/${env}/pii-classifications/${encodeURIComponent(column)}`, body),
+  exportPiiMapCsv: async (env: string) => {
+    const res = await fetch(`/api/v1/environments/${env}/pii-map/export/download?format=csv`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error(`export ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pii-map.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+    qualityScans: (env: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<QualityScan> & { enabled: boolean }>(
       `/api/v1/environments/${env}/quality-scans`,
       signal,
     ),
   runQualityScan: (env: string, body: QualityRequest) =>
     postJSON<QualityScan>(`/api/v1/environments/${env}/quality-scans`, body),
+  qualityContracts: (env: string, signal?: AbortSignal) =>
+    getJSON<{ items: QualityContract[]; enabled: boolean }>(
+      `/api/v1/environments/${env}/quality-contracts`,
+      signal,
+    ),
+  proposeQualityContract: (
+    env: string,
+    body: { database: string; schema: string; table: string },
+  ) =>
+    postJSON<QualityContract>(
+      `/api/v1/environments/${env}/quality-contracts/proposals`,
+      body,
+    ),
+  approveQualityContractVersion: (
+    env: string,
+    contract: string,
+    version: string,
+  ) =>
+    postJSON(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/versions/${version}/approve`,
+      {},
+    ),
+  runQualityContract: (env: string, contract: string) =>
+    postJSON(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/runs`,
+      {},
+    ),
+  qualityContractTrend: (env: string, contract: string, signal?: AbortSignal) =>
+    getJSON<{ items: QualityContractTrendPoint[]; sampling_note: string }>(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/trend`,
+      signal,
+    ),
   updateQualityIssue: (
     env: string,
     issue: string,

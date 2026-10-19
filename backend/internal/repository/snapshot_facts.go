@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -277,6 +278,25 @@ WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRu
 	}
 	if camps, err := s.LoadAccessReviewFacts(ctx, environmentID, auditRunID); err == nil {
 		f.AccessReviewCampaigns = camps
+	}
+	if pol, err := s.GetTargetRestorePolicy(ctx, environmentID); err == nil && pol != nil {
+		f.RestorePolicy = &analyzer.RestorePolicyFact{
+			RTOTargetSeconds: pol.RTOTargetSeconds,
+			MaxAgeDays:       pol.MaxAgeDays,
+		}
+	}
+	if last, err := s.LastSuccessfulTargetRestoreDrill(ctx, environmentID); err == nil && last != nil {
+		divN := 0
+		if len(last.Divergences) > 2 {
+			var arr []any
+			if json.Unmarshal(last.Divergences, &arr) == nil {
+				divN = len(arr)
+			}
+		}
+		f.LastRestoreDrill = &analyzer.RestoreDrillFact{
+			ID: last.ID, Succeeded: last.Succeeded, RTOSeconds: last.RTOSeconds,
+			PerformedAt: last.PerformedAt, DivergenceN: divN, ArtifactSHA: last.ArtifactSHA256,
+		}
 	}
 	return f, nil
 }

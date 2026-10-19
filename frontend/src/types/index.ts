@@ -14,6 +14,7 @@ export type NavigationSection =
   | "Custo"
   | "Análises de migration"
   | "Revisão de acessos"
+  | "Dados pessoais"
   | "Contas"
   | "Acompanhamento"
   | "Ações assistidas"
@@ -250,6 +251,74 @@ export interface QualityRequest {
   expected_non_null: string[];
   candidate_keys: string[];
   date_ranges: Array<{ column: string; from: string; to: string }>;
+}
+
+export interface QualityContractCheck {
+  type: string;
+  column?: string;
+  columns?: string[];
+  max_null_pct?: number;
+  critical?: boolean;
+  ref_schema?: string;
+  ref_table?: string;
+  ref_column?: string;
+  allowed?: string[];
+  max_age_hours?: number;
+  max_change_pct?: number;
+  severity?: string;
+}
+
+export interface QualityContractDocument {
+  database: string;
+  schema: string;
+  table: string;
+  sample_limit: number;
+  schedule_profile?: string;
+  checks: QualityContractCheck[];
+}
+
+export interface QualityContractVersion {
+  id: string;
+  contract_id: string;
+  version_number: number;
+  document: QualityContractDocument;
+  sample_limit: number;
+  schedule_profile: string;
+  status: "proposed" | "approved" | "superseded";
+  authored_by: string;
+  authored_at: string;
+  approved_by?: string;
+  approved_at?: string;
+}
+
+export interface QualityContract {
+  id: string;
+  environment_id: string;
+  database: string;
+  schema: string;
+  table: string;
+  created_by: string;
+  created_at: string;
+  latest_version?: QualityContractVersion;
+  last_run?: {
+    id: string;
+    status: string;
+    coverage: string;
+    mode: string;
+    started_at: string;
+  };
+}
+
+export interface QualityContractTrendPoint {
+  check_key: string;
+  check_type: string;
+  result: string;
+  observed_pct?: number;
+  observed_count?: number;
+  sample_size?: number;
+  started_at: string;
+  run_id: string;
+  gap?: boolean;
 }
 
 export interface ActionMeasurement {
@@ -1587,3 +1656,46 @@ export interface RetentionScenario {
   saved_by: string;
   saved_at: string;
 }
+
+export interface RestoreDrillDivergence {
+  table: string;
+  kind: string;
+  severity: string;
+  expected?: number;
+  actual?: number;
+  detail?: string;
+  object_type?: string;
+}
+
+export interface RestoreDrillCheck {
+  name: string;
+  status: string;
+  duration_seconds: number;
+  detail?: string;
+}
+
+export interface RestoreDrill {
+  id: string;
+  environment_id: string;
+  kind: string;
+  artifact_sha256: string;
+  succeeded: boolean;
+  rto_seconds?: number | null;
+  prevalidate_seconds?: number | null;
+  verify_seconds?: number | null;
+  checks: RestoreDrillCheck[];
+  divergences: RestoreDrillDivergence[];
+  cli_version: string;
+  note?: string;
+  performed_at: string;
+  recorded_at: string;
+}
+
+export interface RestoreDrillPolicy {
+  environment_id: string;
+  rto_target_seconds: number;
+  max_age_days: number;
+  updated_by?: string;
+  updated_at: string;
+}
+

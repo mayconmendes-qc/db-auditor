@@ -61,6 +61,7 @@ var ruleIDs = []string{
 	"access_review.revocation_not_applied", "access_review.powerful_without_approve",
 	"access_review.inactive_with_write", "access_review.public_outside_public",
 	"access_review.new_privilege_undecided", "access_review.campaign_overdue_pending",
+	"backup.restore_failed", "backup.restore_divergence", "backup.rto_exceeded", "backup.drill_overdue",
 }
 
 // Catalog is the versioned, golden-tested source of rule metadata.

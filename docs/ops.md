@@ -385,6 +385,8 @@ Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (A
 `snapshot-context:read`, `migration-analysis:write`, `deploy-annotation:write`, e os reservados
 `quality-contract:run`, `restore-evidence:write`, `last-login:write`.
 
+Ensaios do **banco auditado** (pg_dump → container efêmero): veja [backup-verifier.md](backup-verifier.md) (`auditor restore-verify`, evidência `target_restore_drill`). O ensaio do snapshot store continua em `deploy/snapshot-restore-verify.sh` → `retention_evidence`.
+
 - O segredo (`dba_<prefixo>_<segredo>`) aparece **uma vez** na criação. Guarde no GitHub Secrets (`AUDITOR_CLI_TOKEN`) ou em um gerenciador de segredos.
 - Rotação: crie um token novo, atualize o secret no CI, revogue o antigo (DELETE na API ou na UI).
 - Validade obrigatória (padrão 90 dias). Expirado ou revogado → HTTP 401; a CLI sai com código 2.
@@ -406,3 +408,12 @@ Procedimento manual (corta a série):
 
 3. Recrie a primeira versão pela API (`PUT .../cost/prices`) com a nova moeda.
 
+
+
+## Mapa de dados pessoais (PII)
+
+- Flag de processo (mais restrita que qualidade): `AUDITOR_PII_CONTENT_SCAN_ENABLED=1`.
+- Habilitação por ambiente: `PUT /api/v1/environments/{id}/pii-settings` (`content_scan_enabled`, operator).
+- Sem as duas, `POST .../pii-scans` com etapa 2 responde **409**; a etapa 1 (só metadados) continua disponível.
+- Migration `35_pii_scanner.sql`.
+- Download do mapa CSV exige auditor (RNF-04).

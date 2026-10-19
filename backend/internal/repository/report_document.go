@@ -226,6 +226,8 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 	}
 	d.CostSummary = r.loadCostSummary(ctx, job.EnvironmentID, job.AuditRunID)
 	d.RetentionSimulation = r.loadRetentionSimulation(ctx, job.EnvironmentID, job.AuditRunID)
+	d.RestoreVerified = r.loadRestoreVerified(ctx, job.EnvironmentID)
+	d.QualityContracts = r.loadQualityContracts(ctx, job.EnvironmentID)
 	if job.Type == "access_review" || job.Filters.CampaignID != "" {
 		campaignID := job.Filters.CampaignID
 		if campaignID == "" {
@@ -302,6 +304,72 @@ LIMIT 100`, env, runID)
 			out.Partial = true
 		}
 		out.Items = append(out.Items, item)
+	}
+	return out
+}
+
+func (r *ReportSections) loadRestoreVerified(ctx context.Context, env string) *report.RestoreVerifiedSummary {
+	out := &report.RestoreVerifiedSummary{MaxAgeDays: 30, RTOTargetSeconds: 600}
+	if pol, err := r.store.GetTargetRestorePolicy(ctx, env); err == nil && pol != nil {
+		out.RTOTargetSeconds = pol.RTOTargetSeconds
+		out.MaxAgeDays = pol.MaxAgeDays
+	}
+	items, _, err := r.store.ListTargetRestoreDrills(ctx, env, 1, 0)
+	if err != nil || len(items) == 0 {
+		out.Overdue = true
+		return out
+	}
+	d := items[0]
+	out.HasDrill = true
+	out.Succeeded = d.Succeeded
+	out.PerformedAt = d.PerformedAt.UTC().Format(time.RFC3339)
+	out.RTOSeconds = d.RTOSeconds
+	out.Note = d.Note
+	var divs []any
+	if json.Unmarshal(d.Divergences, &divs) == nil {
+		out.DivergenceCount = len(divs)
+	}
+	var checks []struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal(d.Checks, &checks) == nil {
+		out.ChecksTotal = len(checks)
+		for _, c := range checks {
+			if c.Status == "ok" || c.Status == "disabled" || c.Status == "skipped" {
+				out.ChecksOK++
+			}
+		}
+	}
+	lastOK, _ := r.store.LastSuccessfulTargetRestoreDrill(ctx, env)
+	maxAge := time.Duration(out.MaxAgeDays) * 24 * time.Hour
+	if lastOK == nil || time.Since(lastOK.PerformedAt) > maxAge {
+		out.Overdue = true
+	}
+	return out
+}
+
+func (r *ReportSections) loadQualityContracts(ctx context.Context, env string) *report.QualityContractsSummary {
+	results, note, err := r.store.ListQualityContractSummariesForReport(ctx, env, 30)
+	if err != nil {
+		return &report.QualityContractsSummary{SamplingNote: note}
+	}
+	out := &report.QualityContractsSummary{SamplingNote: note, Items: make([]report.QualityContractLine, 0, len(results))}
+	for _, cr := range results {
+		observed := "—"
+		switch {
+		case cr.FreshnessAgeHours != nil:
+			observed = fmt.Sprintf("%.0f h", *cr.FreshnessAgeHours)
+		case cr.ObservedPct != nil && cr.ObservedCount != nil:
+			observed = fmt.Sprintf("%d (%.2f%%)", *cr.ObservedCount, *cr.ObservedPct)
+		case cr.ObservedPct != nil:
+			observed = fmt.Sprintf("%.2f%%", *cr.ObservedPct)
+		case cr.ObservedCount != nil:
+			observed = fmt.Sprintf("%d", *cr.ObservedCount)
+		}
+		out.Items = append(out.Items, report.QualityContractLine{
+			CheckKey: cr.CheckKey, Result: cr.Result, Severity: cr.Severity,
+			SampleSize: cr.SampleSize, Observed: observed, Reason: cr.Reason,
+		})
 	}
 	return out
 }

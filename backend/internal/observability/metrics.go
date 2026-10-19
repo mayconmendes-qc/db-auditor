@@ -49,6 +49,16 @@ type Metrics struct {
 	// Plan 07 — access review
 	accessReviewCampaigns sync.Map // status -> *atomic.Uint64
 	accessReviewPending   atomic.Int64
+
+	// Plan 05 — PII scanner
+	piiScans           sync.Map
+	piiColumnsByMethod sync.Map
+	piiScanCeilings    atomic.Uint64
+	piiExportRows      atomic.Uint64
+
+	// Plan 08 — target restore drills
+	targetRestoreDrillAge sync.Map // environment -> *atomic.Uint64 (seconds)
+	targetRestoreRTO      sync.Map // environment -> *atomic.Uint64 (seconds)
 }
 
 
@@ -181,6 +191,52 @@ func (m *Metrics) AddAccessReviewPendingDelta(delta int) {
 // SetAccessReviewPending sets the pending-lines gauge from a store recount.
 func (m *Metrics) SetAccessReviewPending(n int) {
 	m.accessReviewPending.Store(int64(n))
+}
+
+// IncPIIScan increments auditor_pii_scans_total{status,content}.
+func (m *Metrics) IncPIIScan(status string, content bool) {
+	if status == "" {
+		status = "unknown"
+	}
+	contentLabel := "false"
+	if content {
+		contentLabel = "true"
+	}
+	m.incMap(&m.piiScans, status+"|"+contentLabel)
+	if status == "partial_success" {
+		m.piiScanCeilings.Add(1)
+	}
+}
+
+func (m *Metrics) IncPIIColumnMethod(method string, n int) {
+	if method == "" || n <= 0 {
+		return
+	}
+	m.addMap(&m.piiColumnsByMethod, method, uint64(n))
+}
+
+func (m *Metrics) AddPIIExportRows(n int) {
+	if n > 0 {
+		m.piiExportRows.Add(uint64(n))
+	}
+}
+
+// SetTargetRestoreDrillAge records seconds since the last successful target restore drill.
+func (m *Metrics) SetTargetRestoreDrillAge(environment string, seconds uint64) {
+	if environment == "" {
+		environment = "unknown"
+	}
+	v, _ := m.targetRestoreDrillAge.LoadOrStore(environment, &atomic.Uint64{})
+	v.(*atomic.Uint64).Store(seconds)
+}
+
+// SetTargetRestoreRTO records the RTO seconds of the last successful target restore drill.
+func (m *Metrics) SetTargetRestoreRTO(environment string, seconds uint64) {
+	if environment == "" {
+		environment = "unknown"
+	}
+	v, _ := m.targetRestoreRTO.LoadOrStore(environment, &atomic.Uint64{})
+	v.(*atomic.Uint64).Store(seconds)
 }
 
 func normalizePath(path string) string {
@@ -371,6 +427,52 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# HELP auditor_access_review_pending_lines Pending access-review matrix lines.\n")
 		b.WriteString("# TYPE auditor_access_review_pending_lines gauge\n")
 		fmt.Fprintf(&b, "auditor_access_review_pending_lines %d\n", m.accessReviewPending.Load())
+
+		b.WriteString("# HELP auditor_pii_scans_total PII map scans by status and whether content stage ran.\n")
+		b.WriteString("# TYPE auditor_pii_scans_total counter\n")
+		pkeys := make([]string, 0)
+		m.piiScans.Range(func(k, _ any) bool { pkeys = append(pkeys, k.(string)); return true })
+		sort.Strings(pkeys)
+		for _, k := range pkeys {
+			v, _ := m.piiScans.Load(k)
+			parts := strings.SplitN(k, "|", 2)
+			if len(parts) != 2 { continue }
+			fmt.Fprintf(&b, "auditor_pii_scans_total{status=%q,content=%q} %d\n", parts[0], parts[1], v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_pii_scan_ceilings_total PII scans stopped by duration or table ceiling.\n")
+		b.WriteString("# TYPE auditor_pii_scan_ceilings_total counter\n")
+		fmt.Fprintf(&b, "auditor_pii_scan_ceilings_total %d\n", m.piiScanCeilings.Load())
+		b.WriteString("# HELP auditor_pii_export_rows_total Rows streamed in PII CSV exports.\n")
+		b.WriteString("# TYPE auditor_pii_export_rows_total counter\n")
+		fmt.Fprintf(&b, "auditor_pii_export_rows_total %d\n", m.piiExportRows.Load())
+		b.WriteString("# HELP auditor_pii_columns_by_method_total Classified PII columns by detection method.\n")
+		b.WriteString("# TYPE auditor_pii_columns_by_method_total counter\n")
+		piiMethodKeys := make([]string, 0)
+		m.piiColumnsByMethod.Range(func(k, _ any) bool { piiMethodKeys = append(piiMethodKeys, k.(string)); return true })
+		sort.Strings(piiMethodKeys)
+		for _, k := range piiMethodKeys {
+			v, _ := m.piiColumnsByMethod.Load(k)
+			fmt.Fprintf(&b, "auditor_pii_columns_by_method_total{method=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_target_restore_drill_age_seconds Seconds since the last successful target_restore_drill per environment.\n")
+		b.WriteString("# TYPE auditor_target_restore_drill_age_seconds gauge\n")
+		ageKeys := make([]string, 0)
+		m.targetRestoreDrillAge.Range(func(k, _ any) bool { ageKeys = append(ageKeys, k.(string)); return true })
+		sort.Strings(ageKeys)
+		for _, env := range ageKeys {
+			v, _ := m.targetRestoreDrillAge.Load(env)
+			fmt.Fprintf(&b, "auditor_target_restore_drill_age_seconds{environment=%q} %d\n", env, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_target_restore_rto_seconds RTO seconds of the last successful target_restore_drill per environment.\n")
+		b.WriteString("# TYPE auditor_target_restore_rto_seconds gauge\n")
+		rtoKeys := make([]string, 0)
+		m.targetRestoreRTO.Range(func(k, _ any) bool { rtoKeys = append(rtoKeys, k.(string)); return true })
+		sort.Strings(rtoKeys)
+		for _, env := range rtoKeys {
+			v, _ := m.targetRestoreRTO.Load(env)
+			fmt.Fprintf(&b, "auditor_target_restore_rto_seconds{environment=%q} %d\n", env, v.(*atomic.Uint64).Load())
+		}
 
 		_, _ = w.Write([]byte(b.String()))
 	}

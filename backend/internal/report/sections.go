@@ -110,6 +110,7 @@ func planSections(ctx context.Context, source SectionSource, redaction *Redactio
 		overview.RedactMetadata(redaction.Metadata)
 		overview.redactOverview(redaction.Level, rawDatabases)
 		overview.redactAccessReview(redaction.Level)
+		overview.redactPersonalData(redaction.Level)
 	}
 	if overview.TotalDatabases == 0 {
 		overview.TotalDatabases = plan.databases
@@ -253,6 +254,15 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 		return err
 	}
 	if err := emitRetentionSimulation(d, out); err != nil {
+		return err
+	}
+	if err := emitRestoreVerified(d, out); err != nil {
+		return err
+	}
+	if err := emitQualityContracts(d, out); err != nil {
+		return err
+	}
+	if err := emitPersonalDataSection(d, out); err != nil {
 		return err
 	}
 	if d.Type == "access_review" || d.AccessReview != nil {

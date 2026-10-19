@@ -34,8 +34,11 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `30_migration_analysis.sql`: histórico de análises de migration por ambiente (cabeçalho + itens sem SQL/literais).
 - `33_grant_origin_column_privilege.sql`: origem do privilégio efetivo (`grant_origin_snapshot`) e privilégios por coluna (`column_grant_snapshot`). Snapshots antigos ficam sem origem até a próxima coleta; `grant_snapshot` permanece inalterado.
 - `34_access_review.sql`: campanhas de revisão de acessos, matriz congelada, responsáveis (conta do auditor + contato opcional) e decisões append-only; amplia `report_job.report_type` com `access_review`.
+- `35_pii_scanner.sql`: mapa de dados pessoais LGPD (dicionário, settings, scans, resultados sem valores, revisão humana; ADR-0001 D4/D14/D11).
+- `36_dq_contracts.sql`: contratos de qualidade versionados, execuções e resultados (só contagens; ADR-0001 D4/D13).
 - `37_retention_scenarios.sql`: cenários salvos de retenção/compressão Timescale (spec 09, ADR-0001 D9/D11).
 - `38_chunk_scan_counters.sql`: contadores de varredura/escrita por chunk em `chunk_snapshot` (RF-07; nulos = não coletado).
+- `39_target_restore_drill.sql`: ensaios `target_restore_drill` e política RTO/prazo por ambiente (plano 08; distinto de `retention_evidence`).
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

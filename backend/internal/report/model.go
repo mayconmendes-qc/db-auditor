@@ -48,6 +48,44 @@ type Document struct {
 	RetentionSimulation *RetentionSimulationSummary
 	// Spec 07 — access review evidence PDF.
 	AccessReview *AccessReviewSummary
+	// Spec 05 — personal-data map (categories/counts only; no sample values).
+	PersonalData *PersonalDataSummary
+	// Plan 03 — quality contracts section in the technical PDF.
+	QualityContracts *QualityContractsSummary
+}
+
+// QualityContractsSummary feeds the technical PDF (RF-09). Counts only.
+type QualityContractsSummary struct {
+	SamplingNote string
+	Items        []QualityContractLine
+}
+
+// QualityContractLine is one check result line (no domain lists, no timestamps).
+type QualityContractLine struct {
+	CheckKey   string
+	Result     string
+	Severity   string
+	SampleSize *int
+	Observed   string
+	Reason     string
+}
+
+type PersonalDataSummary struct {
+	TotalColumns  int
+	ByCategory    []PersonalDataCategoryCount
+	DetailColumns []PersonalDataColumnLine
+	JSONNote      string
+}
+
+type PersonalDataCategoryCount struct {
+	Category string
+	Count    int
+}
+
+type PersonalDataColumnLine struct {
+	Qualified, Category, Confidence, Method string
+	ReadCount int
+	HasRLS bool
 }
 
 // AccessReviewSummary feeds the access_review PDF (RF-09).

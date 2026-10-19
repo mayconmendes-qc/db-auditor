@@ -120,6 +120,8 @@ type SnapshotFacts struct {
 	QueryCostWindow *QueryCostWindowFact
 	// Spec 07 — access review campaigns (optional; empty when none).
 	AccessReviewCampaigns []AccessReviewCampaignFact
+	// Spec 05 — PII / personal-data map (optional; empty when no scan).
+	PIIColumns []PIIColumnFact
 }
 
 // CostPriceFact is the current price table version for monetary impact.
