@@ -275,6 +275,8 @@ var entries = []entry{
 	{"config.version_drift", "security", "médio", "", "server_version de cada ambiente.", "não estimado: a diferença pode ser planejada.", "", qVersion, nil},
 	{"config.extension_drift", "security", "médio", "", "pg_extension de cada ambiente.", "não estimado: a diferença pode ser planejada.", "", qExtensions, nil},
 	{"config.guc_drift", "security", "médio", "", "pg_settings de cada ambiente.", "não estimado: o efeito depende da carga.", "", qSetting, nil},
+	{"drift.out_of_pipeline", "structure", "médio", "Objeto de schema mudou entre coletas sem evidência de implantação.", "Evento em schema_change_event com correlation=none (sem anotação deployment nem registro de migrations).", "não estimado: o impacto depende do objeto e do ambiente.", "Confirme a mudança com a equipe e registre a implantação ou o registro de migrations.", qNaming, nil},
+	{"drift.environment_divergence", "structure", "médio", "Objeto diverge do ambiente pareado em duas coletas completas de cada lado.", "Diff persistente entre ambientes ligados por object_mapping validado.", "não estimado: a divergência pode ser intencional.", "Alinhe os ambientes ou documente a diferença esperada.", qNaming, nil},
 }
 
 // rulePlans is the only match table. Unknown ids use the investigation fallback.

@@ -11,5 +11,6 @@ export { MigrationAnalysesPage } from "./MigrationAnalysesPage";
 export { MonitoringPage } from "./MonitoringPage";
 export { ReportsPage } from "./ReportsPage";
 export { SchemaDriftPage } from "./SchemaDriftPage";
+export { SchemaTimelinePage } from "./SchemaTimelinePage";
 export { ServerComparePage } from "./ServerComparePage";
 export { StatusPage } from "./StatusPage";

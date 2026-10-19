@@ -356,6 +356,19 @@ BA-15: após algumas janelas reais, registre falso positivo e ajuste. Sem
 destinatário por ambiente, o digest cai nos canais globais `AUDITOR_ALERT_*`;
 configure `notification-destinations` por ambiente em instalações multi-time.
 
+### Drift de schema, registro de migrations e Slack (spec 04)
+
+Migrations `27_schema_timeline.sql` e `28_migration_registry.sql` (depois da
+26; antes dos tokens/análises 29–30). A timeline grava eventos na ingestão;
+`is_production` no ambiente sobe a severidade dos achados `drift.*`.
+
+Registro opcional de migrations por ambiente (`GET`/`PUT
+.../migration-registry`): ferramentas `golang-migrate`, `goose`, `flyway`,
+`alembic`, `rails`, `prisma`. Schema/tabela são validados como identificadores
+PostgreSQL; a coleta só lê versão e carimbo, nunca falha a execução se a tabela
+faltar. Webhooks de destino aceitam `format=generic` (padrão) ou `format=slack`
+(ADR-0001 D15). O webhook global `AUDITOR_ALERT_WEBHOOK_URL` permanece genérico.
+
 ## Recuperar o acesso de operador
 
 Se todos os operadores perderem acesso, não apague `auditor_user`. Confirme um backup recente e restaurável do snapshot store e execute em terminal interativo na VPS:
@@ -377,4 +390,5 @@ Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (A
 - Validade obrigatória (padrão 90 dias). Expirado ou revogado → HTTP 401; a CLI sai com código 2.
 - Um token pertence a um único ambiente; uso cruzado → 403 (registrado em `auditor_operation_log` com o id do token, nunca o segredo).
 - `AUDITOR_REPORT_API_TOKEN` **não** autentica rotas de CLI/contexto/análises.
+
 

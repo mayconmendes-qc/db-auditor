@@ -4,10 +4,43 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/osmendes/db-auditor/internal/comparison"
 	"github.com/osmendes/db-auditor/internal/schemadiff"
 )
+
+// latestCompleteRunID returns the newest successful complete analyzed run.
+func (s *Store) latestCompleteRunID(ctx context.Context, environmentID string) (string, time.Time, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT r.id::text, r.started_at
+FROM audit_run r
+LEFT JOIN analysis_run a ON a.audit_run_id = r.id
+WHERE r.environment_id=$1::uuid
+  AND r.status = 'success'
+  AND COALESCE(a.status, '') = 'success'
+ORDER BY r.started_at DESC
+LIMIT 20`, environmentID)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var started time.Time
+		if err := rows.Scan(&id, &started); err != nil {
+			return "", time.Time{}, err
+		}
+		cov, err := s.GetSnapshotCompleteness(ctx, environmentID, id)
+		if err != nil {
+			return "", time.Time{}, err
+		}
+		if cov != nil && cov.Completeness == "complete" {
+			return id, started, nil
+		}
+	}
+	return "", time.Time{}, rows.Err()
+}
 
 // SchemaDiffRequest selects two runs (same or different environments).
 type SchemaDiffRequest struct {
@@ -43,14 +76,14 @@ func (s *Store) ResolveSchemaDiffRuns(ctx context.Context, req SchemaDiffRequest
 	}
 	sourceRun = req.SourceRun
 	if sourceRun == "" {
-		sourceRun, err = s.latestCompleteRunID(ctx, req.SourceEnv)
+		sourceRun, _, err = s.latestCompleteRunID(ctx, req.SourceEnv)
 		if err != nil {
 			return "", "", false, err
 		}
 	}
 	targetRun = req.TargetRun
 	if targetRun == "" {
-		targetRun, err = s.latestCompleteRunID(ctx, targetEnv)
+		targetRun, _, err = s.latestCompleteRunID(ctx, targetEnv)
 		if err != nil {
 			return "", "", false, err
 		}
@@ -179,22 +212,11 @@ func sameMechanism(a, b string) bool {
 	return na == nb
 }
 
-func (s *Store) latestCompleteRunID(ctx context.Context, env string) (string, error) {
-	cov, err := s.GetSnapshotCompleteness(ctx, env, "")
-	if err != nil {
-		return "", err
-	}
-	if cov == nil || cov.AuditRunID == "" {
-		return "", nil
-	}
-	return cov.AuditRunID, nil
-}
-
 func (s *Store) schemaDiffMappings(ctx context.Context, sourceEnv, targetEnv string) ([]schemadiff.NameMapping, error) {
 	if sourceEnv == targetEnv {
 		return nil, nil
 	}
-	items, err := s.ListObjectMappings(ctx, sourceEnv, targetEnv, "accepted")
+	items, err := s.ListObjectMappings(ctx, sourceEnv, targetEnv, "validated")
 	if err != nil {
 		return nil, err
 	}

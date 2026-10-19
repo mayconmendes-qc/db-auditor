@@ -7,9 +7,11 @@ export type NavigationSection =
   | "Inventário"
   | "Mapeamentos"
   | "Desvio de schema"
+  | "Linha do tempo"
   | "Comparar"
   | "Findings"
   | "Digest"
+  | "Custo"
   | "Análises de migration"
   | "Contas"
   | "Acompanhamento"
@@ -418,8 +420,80 @@ export interface Environment {
   engine: string;
   discovery_mode: string;
   active: boolean;
+  is_production?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SchemaDiffResult {
+  source_environment_id: string;
+  target_environment_id: string;
+  source_run_id: string;
+  target_run_id: string;
+  partial: boolean;
+  summary: CompareResult["summary"];
+  objects: ObjectDiff[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SchemaTimelineEvent {
+  id: string;
+  environment_id: string;
+  prior_audit_run_id?: string;
+  current_audit_run_id: string;
+  detected_at: string;
+  object_type: string;
+  object_key: string;
+  change_kind: string;
+  prior_fingerprint?: string;
+  current_fingerprint?: string;
+  changed_fields?: string[];
+  correlation: string;
+  annotation_id?: string;
+  registry_version?: string;
+  confidence: string;
+}
+
+export interface SchemaTimelineGap {
+  id: string;
+  environment_id: string;
+  prior_audit_run_id?: string;
+  current_audit_run_id?: string;
+  gap_from: string;
+  gap_to: string;
+  reason: string;
+}
+
+export interface SchemaTimelinePage {
+  environment_id: string;
+  from: string;
+  to: string;
+  events: SchemaTimelineEvent[];
+  gaps: SchemaTimelineGap[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MigrationRegistryItem {
+  id: string;
+  environment_id: string;
+  database_name: string;
+  tool: string;
+  schema_name: string;
+  table_name: string;
+  enabled: boolean;
+  updated_at: string;
+}
+
+export interface MigrationRegistryInput {
+  database_name?: string;
+  tool: string;
+  schema_name?: string;
+  table_name?: string;
+  enabled: boolean;
 }
 
 export interface EnvironmentsResponse {

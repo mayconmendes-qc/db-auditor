@@ -27,6 +27,7 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Inventário: "inventory",
   Mapeamentos: "mappings",
   "Desvio de schema": "schema-drift",
+  "Linha do tempo": "schema-timeline",
   Comparar: "compare",
   Findings: "findings",
   Digest: "digest",

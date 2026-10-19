@@ -18,6 +18,7 @@ export const navigationSections: NavigationSection[] = [
   "Inventário",
   "Mapeamentos",
   "Desvio de schema",
+  "Linha do tempo",
   "Comparar",
   "Findings",
   "Digest",
@@ -44,6 +45,7 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
     label: "Análise",
     items: [
       "Desvio de schema",
+      "Linha do tempo",
       "Comparar",
       "Findings",
       "Digest",

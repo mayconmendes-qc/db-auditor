@@ -254,6 +254,56 @@
         }
       }
     },
+    "/api/v1/auth/totp": {
+      "post": {
+        "description": "Segundo passo do login TOTP ou código de recuperação.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/confirm": {
+      "post": {
+        "description": "Confirma o TOTP da sessão.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/disable": {
+      "post": {
+        "description": "Desativa TOTP depois da senha e do código.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/enroll": {
+      "post": {
+        "description": "Inicia TOTP e devolve segredo e códigos de recuperação uma vez.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/totp/require": {
+      "post": {
+        "description": "Operador exige TOTP na própria conta.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/auth/users": {
       "get": {
         "description": "Lista contas e escopos; somente operador.",
@@ -328,6 +378,111 @@
         }
       }
     },
+    "/api/v1/environments/{id}": {
+      "patch": {
+        "description": "Atualiza atributos do ambiente (is_production). Exige operator.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/actions": {
+      "get": {
+        "description": "Lista ações paginadas com total, confirmação de carga comparável e resumo das medições recentes.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/actions/export": {
+      "get": {
+        "description": "Exporta todo o histórico de ações e medições em CSV ou JSONL por streaming, sem limite de 100 registros. Exige acesso ao ambiente.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv",
+                "jsonl"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Arquivo para download"
+          },
+          "400": {
+            "description": "Formato ou ambiente inválido"
+          },
+          "403": {
+            "description": "Sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/annotations": {
+      "get": {
+        "description": "Lista eventos operacionais anotados no ambiente.",
+        "responses": {
+          "200": {
+            "description": "Anotações"
+          }
+        }
+      },
+      "post": {
+        "description": "Registra implantação, manutenção, incidente ou nota; exige auditor.",
+        "responses": {
+          "201": {
+            "description": "Anotação registrada"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/api-tokens": {
+      "get": {
+        "description": "Lista tokens de API do ambiente.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "description": "Cria token de API do ambiente.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/api-tokens/{token}": {
+      "delete": {
+        "description": "Revoga token de API.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/baseline": {
       "get": {
         "responses": {
@@ -353,20 +508,21 @@
         }
       }
     },
-    "/api/v1/environments/{id}/annotations": {
+    "/api/v1/environments/{id}/capabilities": {
       "get": {
-        "description": "Lista eventos operacionais anotados no ambiente.",
+        "description": "Matriz de capacidades observadas para o mecanismo e a execução mais recente.",
         "responses": {
           "200": {
-            "description": "Anotações"
-          }
-        }
-      },
-      "post": {
-        "description": "Registra implantação, manutenção, incidente ou nota; exige auditor.",
-        "responses": {
-          "201": {
-            "description": "Anotação registrada"
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
           }
         }
       }
@@ -451,6 +607,16 @@
     },
     "/api/v1/environments/{id}/dimensions": {
       "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/findings-diff": {
+      "get": {
+        "description": "Diff added/removed/unchanged entre duas execuções do snapshot store.",
         "responses": {
           "200": {
             "description": "ok"
@@ -632,11 +798,202 @@
         }
       }
     },
+    "/api/v1/environments/{id}/migration-analyses": {
+      "get": {
+        "description": "Lista análises de migration.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "description": "Registra análise de migration.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/migration-analyses/{analysis}": {
+      "get": {
+        "description": "Detalhe de análise de migration.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/migration-context": {
+      "get": {
+        "description": "Contexto de snapshot para análise de migration (plan 01).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/migration-registry": {
+      "get": {
+        "description": "Configuração do registro de migrations (viewer).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "description": "Substitui configuração do registro (operator).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "400": {
+            "description": "identificador inválido"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/notification-destinations": {
+      "get": {
+        "description": "Destinatários do ambiente (URL mascarada); exige operator.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "description": "Substitui destinatários; exige operator.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/policies": {
       "get": {
         "responses": {
           "200": {
             "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-issues/{issue}": {
+      "patch": {
+        "description": "Registra decisão de saneamento externo; o estado validado exige diagnóstico comparável posterior ao registro da execução externa e devolve validation_scan_id. Exige auditor.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "409": {
+            "description": "Diagnóstico posterior comparável obrigatório para validar"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/quality-scans": {
+      "get": {
+        "description": "Lista até 50 diagnósticos agregados; nenhuma linha é retornada.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      },
+      "post": {
+        "description": "Executa diagnóstico de leitura autorizado, com limite de 1.000 linhas e 20 segundos; exige auditor e opt-in operacional.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/query-digest-config": {
+      "get": {
+        "description": "Configuração do digest.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "description": "Atualiza janela e limiares; exige operator.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/query-digests": {
+      "get": {
+        "description": "Lista digests de consultas do ambiente.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "description": "Gera digest sob demanda; exige operator.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/query-digests/{digest}": {
+      "get": {
+        "description": "Detalhe do digest com seções e entregas.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/query-digests/{digest}/markdown": {
+      "get": {
+        "description": "Corpo Markdown do digest.",
+        "responses": {
+          "200": {
+            "description": "markdown"
           }
         }
       }
@@ -816,6 +1173,316 @@
         }
       }
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/dependencies": {
+      "get": {
+        "description": "Dependências observadas da visão do agregado, paginadas.",
+        "responses": {
+          "200": {
+            "description": "Página de dependências"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/detail": {
+      "get": {
+        "description": "Detalhe do agregado contínuo na execução selecionada, sem definição SQL bruta.",
+        "responses": {
+          "200": {
+            "description": "Agregado observado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAGGDetailSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Objeto ou execução não encontrado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/findings": {
+      "get": {
+        "description": "Achados específicos do agregado nesta execução, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de achados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/grants": {
+      "get": {
+        "description": "Acessos observados da visão do agregado, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de acessos"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/history": {
+      "get": {
+        "description": "Histórico de atraso e tamanho da materialização até a execução, paginado.",
+        "responses": {
+          "200": {
+            "description": "Página de histórico"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/refresh-policies": {
+      "get": {
+        "description": "Políticas de atualização do agregado, paginadas.",
+        "responses": {
+          "200": {
+            "description": "Página de políticas"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/dependencies": {
+      "get": {
+        "description": "Dependências observadas da sobrecarga, paginadas.",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de dependências"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/detail": {
+      "get": {
+        "description": "Detalhe da sobrecarga identificada pelo parâmetro obrigatório signature; corpo SQL e configurações brutas não são retornados.",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Função observada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FunctionDetailSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Função ou execução não encontrada"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings": {
+      "get": {
+        "description": "Achados específicos da sobrecarga nesta execução, paginados.",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de achados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/grants": {
+      "get": {
+        "description": "Papéis com EXECUTE efetivo e USAGE no esquema, paginados para a sobrecarga.",
+        "parameters": [
+          {
+            "name": "signature",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de acessos"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/chunks": {
+      "get": {
+        "description": "Chunks da tabela temporal, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de chunks"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/detail": {
+      "get": {
+        "description": "Tabela temporal e cobertura da tabela base nesta execução.",
+        "responses": {
+          "200": {
+            "description": "Tabela temporal observada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HypertableDetailSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Objeto ou execução não encontrado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/dimensions": {
+      "get": {
+        "description": "Dimensões da tabela temporal, paginadas.",
+        "responses": {
+          "200": {
+            "description": "Página de dimensões"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/findings": {
+      "get": {
+        "description": "Achados da tabela temporal nesta execução, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de achados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/grants": {
+      "get": {
+        "description": "Acessos efetivos observados da tabela base, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de acessos"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/history": {
+      "get": {
+        "description": "Evolução de espaço e chunks até a execução selecionada, paginada.",
+        "responses": {
+          "200": {
+            "description": "Página de histórico"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/indexes": {
+      "get": {
+        "description": "Índices da tabela base observados na execução, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de índices"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/jobs": {
+      "get": {
+        "description": "Jobs associados à tabela temporal, com status observado, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de jobs"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/policies": {
+      "get": {
+        "description": "Políticas e estado observado dos jobs, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de políticas"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/rls-policies": {
+      "get": {
+        "description": "Políticas RLS observadas da tabela base, paginadas.",
+        "responses": {
+          "200": {
+            "description": "Página de RLS"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail": {
+      "get": {
+        "description": "Estrutura e métricas do índice na execução selecionada, sem SQL bruto.",
+        "responses": {
+          "200": {
+            "description": "Índice observado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexDetailSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Índice ou execução não encontrado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings": {
+      "get": {
+        "description": "Achados observados para o índice nesta execução, paginados.",
+        "responses": {
+          "200": {
+            "description": "Página de achados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history": {
+      "get": {
+        "description": "Métricas históricas do mesmo índice até a execução selecionada, paginadas.",
+        "responses": {
+          "200": {
+            "description": "Página de histórico"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/tables/{table}/assessment": {
       "get": {
         "responses": {
@@ -879,6 +1546,56 @@
         }
       }
     },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/dependencies": {
+      "get": {
+        "description": "Dependências coletadas da visão, paginadas e limitadas à execução.",
+        "responses": {
+          "200": {
+            "description": "Página de dependências"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/detail": {
+      "get": {
+        "description": "Metadados de uma visão em uma execução. A definição SQL não é retornada; somente sua impressão digital.",
+        "responses": {
+          "200": {
+            "description": "Visão observada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewDetailSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Objeto ou execução não encontrado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/findings": {
+      "get": {
+        "description": "Achados observados da visão, paginados e limitados à execução.",
+        "responses": {
+          "200": {
+            "description": "Página de achados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/grants": {
+      "get": {
+        "description": "Acessos efetivos observados, paginados e limitados à execução.",
+        "responses": {
+          "200": {
+            "description": "Página de acessos"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/runs/{run}/score": {
       "get": {
         "responses": {
@@ -923,6 +1640,115 @@
         }
       },
       "put": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/schema-diff": {
+      "get": {
+        "description": "Diff de schema entre duas execuções (viewer com acesso aos dois lados).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source_run",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_environment_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target_run",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "object_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "400": {
+            "description": "mecanismos diferentes ou parcial inválido"
+          },
+          "403": {
+            "description": "sem concessão a um dos lados"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/schema-diff/export": {
+      "get": {
+        "description": "Exporta diff em csv|md (CSV termina com # export_complete).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/schema-timeline": {
+      "get": {
+        "description": "Linha do tempo de mudanças de schema (eventos gravados na ingestão).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/schema-timeline/export": {
+      "get": {
+        "description": "Exporta timeline em csv|md.",
         "responses": {
           "200": {
             "description": "ok"
@@ -1092,367 +1918,233 @@
         }
       }
     },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/detail": {
-      "get": {
-        "description": "Metadados de uma visão em uma execução. A definição SQL não é retornada; somente sua impressão digital.",
-        "responses": {
-          "200": {
-            "description": "Visão observada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ViewDetailSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Objeto ou execução não encontrado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/dependencies": {
-      "get": {
-        "description": "Dependências coletadas da visão, paginadas e limitadas à execução.",
-        "responses": {
-          "200": {
-            "description": "Página de dependências"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/grants": {
-      "get": {
-        "description": "Acessos efetivos observados, paginados e limitados à execução.",
-        "responses": {
-          "200": {
-            "description": "Página de acessos"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/views/{view}/findings": {
-      "get": {
-        "description": "Achados observados da visão, paginados e limitados à execução.",
-        "responses": {
-          "200": {
-            "description": "Página de achados"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail": {
-      "get": {
-        "description": "Estrutura e métricas do índice na execução selecionada, sem SQL bruto.",
-        "responses": {
-          "200": {
-            "description": "Índice observado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IndexDetailSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Índice ou execução não encontrado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history": {
-      "get": {
-        "description": "Métricas históricas do mesmo índice até a execução selecionada, paginadas.",
-        "responses": {
-          "200": {
-            "description": "Página de histórico"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings": {
-      "get": {
-        "description": "Achados observados para o índice nesta execução, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de achados"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/detail": {
-      "get": {
-        "description": "Detalhe da sobrecarga identificada pelo parâmetro obrigatório signature; corpo SQL e configurações brutas não são retornados.",
-        "parameters": [
-          {
-            "name": "signature",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Função observada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FunctionDetailSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Função ou execução não encontrada"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/dependencies": {
-      "get": {
-        "description": "Dependências observadas da sobrecarga, paginadas.",
-        "parameters": [
-          {
-            "name": "signature",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Página de dependências"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/grants": {
-      "get": {
-        "description": "Papéis com EXECUTE efetivo e USAGE no esquema, paginados para a sobrecarga.",
-        "parameters": [
-          {
-            "name": "signature",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Página de acessos"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/functions/{function}/findings": {
-      "get": {
-        "description": "Achados específicos da sobrecarga nesta execução, paginados.",
-        "parameters": [
-          {
-            "name": "signature",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Página de achados"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/detail": {
-      "get": {
-        "description": "Tabela temporal e cobertura da tabela base nesta execução.",
-        "responses": {
-          "200": {
-            "description": "Tabela temporal observada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HypertableDetailSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Objeto ou execução não encontrado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/dimensions": {
-      "get": {
-        "description": "Dimensões da tabela temporal, paginadas.",
-        "responses": {
-          "200": {
-            "description": "Página de dimensões"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/chunks": {
-      "get": {
-        "description": "Chunks da tabela temporal, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de chunks"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/policies": {
-      "get": {
-        "description": "Políticas e estado observado dos jobs, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de políticas"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/jobs": {
-      "get": {
-        "description": "Jobs associados à tabela temporal, com status observado, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de jobs"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/history": {
-      "get": {
-        "description": "Evolução de espaço e chunks até a execução selecionada, paginada.",
-        "responses": {
-          "200": {
-            "description": "Página de histórico"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/indexes": {
-      "get": {
-        "description": "Índices da tabela base observados na execução, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de índices"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/grants": {
-      "get": {
-        "description": "Acessos efetivos observados da tabela base, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de acessos"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/rls-policies": {
-      "get": {
-        "description": "Políticas RLS observadas da tabela base, paginadas.",
-        "responses": {
-          "200": {
-            "description": "Página de RLS"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/findings": {
-      "get": {
-        "description": "Achados da tabela temporal nesta execução, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de achados"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/detail": {
-      "get": {
-        "description": "Detalhe do agregado contínuo na execução selecionada, sem definição SQL bruta.",
-        "responses": {
-          "200": {
-            "description": "Agregado observado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CAGGDetailSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Objeto ou execução não encontrado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/refresh-policies": {
-      "get": {
-        "description": "Políticas de atualização do agregado, paginadas.",
-        "responses": {
-          "200": {
-            "description": "Página de políticas"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/history": {
-      "get": {
-        "description": "Histórico de atraso e tamanho da materialização até a execução, paginado.",
-        "responses": {
-          "200": {
-            "description": "Página de histórico"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/dependencies": {
-      "get": {
-        "description": "Dependências observadas da visão do agregado, paginadas.",
-        "responses": {
-          "200": {
-            "description": "Página de dependências"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/grants": {
-      "get": {
-        "description": "Acessos observados da visão do agregado, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de acessos"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/continuous-aggregates/{cagg}/findings": {
-      "get": {
-        "description": "Achados específicos do agregado nesta execução, paginados.",
-        "responses": {
-          "200": {
-            "description": "Página de achados"
-          }
-        }
-      }
-    },
     "/api/v1/finding-categories/{category}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/findings": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/analyze": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/priorities": {
+      "get": {
+        "description": "Top achados abertos priorizados por severidade × impacto conservador × confiança ÷ esforço (fórmula priority-v1). Achado sem métrica ou confiança permanece com confiança baixa.",
+        "parameters": [
+          {
+            "name": "environment_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "candidates",
+                    "candidate_limit",
+                    "formula",
+                    "max_score"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PriorityItem"
+                      }
+                    },
+                    "candidates": {
+                      "type": "number"
+                    },
+                    "candidate_limit": {
+                      "type": "number"
+                    },
+                    "formula": {
+                      "type": "string"
+                    },
+                    "max_score": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "parâmetro inválido"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}/action": {
+      "get": {
+        "description": "Plano de investigação e ação assistida, nunca executada pelo auditor.",
+        "responses": {
+          "200": {
+            "description": "Plano e estado"
+          }
+        }
+      },
+      "patch": {
+        "description": "Registra decisão, responsável e resultado; exige auditor.",
+        "responses": {
+          "200": {
+            "description": "Estado salvo"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}/action/events": {
+      "get": {
+        "description": "Histórico auditável das decisões da ação.",
+        "responses": {
+          "200": {
+            "description": "Eventos"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}/action/measurements": {
+      "get": {
+        "description": "Lista medições paginadas antes e depois com hipótese, janela, confirmação de carga e ressalvas de comparabilidade.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      },
+      "post": {
+        "description": "Registra hipótese, janela, workload_comparable e métrica antes/depois. Inclui presença do achado, tamanho, latência média e leituras por mil chamadas quando há fingerprint; exige auditor.",
+        "responses": {
+          "200": {
+            "description": "Resultado"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "403": {
+            "description": "Sem permissão"
+          },
+          "422": {
+            "description": "Escopo ou comparação indisponível"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{id}/timeline": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/mappings": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/mappings/suggest": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/mappings/{id}": {
+      "patch": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/findings": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/inventory": {
       "get": {
         "responses": {
           "200": {
@@ -1552,10 +2244,33 @@
         }
       }
     },
-    "/api/v1/retention-policy/plan": {
-      "get": {
-        "summary": "Dry-run retention plan",
-        "description": "Operator session required. Counts only; nothing is removed. Lists every blocker (approval, verified backup within 7 days, successful restore drill within 30 days).",
+    "/api/v1/retention-policy/apply": {
+      "post": {
+        "summary": "Remove expired report job trails beyond the approved period",
+        "description": "Operator session required. Refused (409) without approval, recent verified backup and restore drill, or when expected_report_jobs differs from the current plan. Snapshots are never removed by the API.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "expected_report_jobs",
+                  "confirm"
+                ],
+                "properties": {
+                  "expected_report_jobs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "ok",
@@ -1564,52 +2279,25 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "policy",
-                    "snapshot_runs_eligible",
-                    "report_jobs_eligible",
-                    "expired_artifacts",
-                    "blockers",
-                    "cleanup_allowed",
-                    "snapshot_deletion_notes"
+                    "report_jobs_removed"
                   ],
                   "properties": {
-                    "policy": {
-                      "$ref": "#/components/schemas/RetentionPolicy"
-                    },
-                    "snapshot_runs_eligible": {
+                    "report_jobs_removed": {
                       "type": "integer"
-                    },
-                    "report_jobs_eligible": {
-                      "type": "integer"
-                    },
-                    "expired_artifacts": {
-                      "type": "integer"
-                    },
-                    "last_backup_verified": {
-                      "$ref": "#/components/schemas/RetentionEvidence"
-                    },
-                    "last_restore_drill": {
-                      "$ref": "#/components/schemas/RetentionEvidence"
-                    },
-                    "blockers": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "cleanup_allowed": {
-                      "type": "boolean"
-                    },
-                    "snapshot_deletion_notes": {
-                      "type": "string"
                     }
                   }
                 }
               }
             }
           },
+          "400": {
+            "description": "Confirmation missing"
+          },
           "403": {
             "description": "Operator session required"
+          },
+          "409": {
+            "description": "Blocked by governance"
           }
         }
       }
@@ -1691,33 +2379,10 @@
         }
       }
     },
-    "/api/v1/retention-policy/apply": {
-      "post": {
-        "summary": "Remove expired report job trails beyond the approved period",
-        "description": "Operator session required. Refused (409) without approval, recent verified backup and restore drill, or when expected_report_jobs differs from the current plan. Snapshots are never removed by the API.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "expected_report_jobs",
-                  "confirm"
-                ],
-                "properties": {
-                  "expected_report_jobs": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
+    "/api/v1/retention-policy/plan": {
+      "get": {
+        "summary": "Dry-run retention plan",
+        "description": "Operator session required. Counts only; nothing is removed. Lists every blocker (approval, verified backup within 7 days, successful restore drill within 30 days).",
         "responses": {
           "200": {
             "description": "ok",
@@ -1726,224 +2391,52 @@
                 "schema": {
                   "type": "object",
                   "required": [
-                    "report_jobs_removed"
+                    "policy",
+                    "snapshot_runs_eligible",
+                    "report_jobs_eligible",
+                    "expired_artifacts",
+                    "blockers",
+                    "cleanup_allowed",
+                    "snapshot_deletion_notes"
                   ],
                   "properties": {
-                    "report_jobs_removed": {
+                    "policy": {
+                      "$ref": "#/components/schemas/RetentionPolicy"
+                    },
+                    "snapshot_runs_eligible": {
                       "type": "integer"
+                    },
+                    "report_jobs_eligible": {
+                      "type": "integer"
+                    },
+                    "expired_artifacts": {
+                      "type": "integer"
+                    },
+                    "last_backup_verified": {
+                      "$ref": "#/components/schemas/RetentionEvidence"
+                    },
+                    "last_restore_drill": {
+                      "$ref": "#/components/schemas/RetentionEvidence"
+                    },
+                    "blockers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "cleanup_allowed": {
+                      "type": "boolean"
+                    },
+                    "snapshot_deletion_notes": {
+                      "type": "string"
                     }
                   }
                 }
               }
             }
-          },
-          "400": {
-            "description": "Confirmation missing"
           },
           "403": {
             "description": "Operator session required"
-          },
-          "409": {
-            "description": "Blocked by governance"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/priorities": {
-      "get": {
-        "description": "Top achados abertos priorizados por severidade × impacto conservador × confiança ÷ esforço (fórmula priority-v1). Achado sem métrica ou confiança permanece com confiança baixa.",
-        "parameters": [
-          {
-            "name": "environment_id",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 20,
-              "default": 5
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ok",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "items",
-                    "candidates",
-                    "candidate_limit",
-                    "formula",
-                    "max_score"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PriorityItem"
-                      }
-                    },
-                    "candidates": {
-                      "type": "number"
-                    },
-                    "candidate_limit": {
-                      "type": "number"
-                    },
-                    "formula": {
-                      "type": "string"
-                    },
-                    "max_score": {
-                      "type": "number"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "parâmetro inválido"
-          }
-        }
-      }
-    },
-    "/api/v1/findings": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/analyze": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/{id}": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "patch": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/{id}/action": {
-      "get": {
-        "description": "Plano de investigação e ação assistida, nunca executada pelo auditor.",
-        "responses": {
-          "200": {
-            "description": "Plano e estado"
-          }
-        }
-      },
-      "patch": {
-        "description": "Registra decisão, responsável e resultado; exige auditor.",
-        "responses": {
-          "200": {
-            "description": "Estado salvo"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/{id}/action/events": {
-      "get": {
-        "description": "Histórico auditável das decisões da ação.",
-        "responses": {
-          "200": {
-            "description": "Eventos"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/{id}/timeline": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mappings": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "post": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mappings/suggest": {
-      "post": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/mappings/{id}": {
-      "patch": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/reports/findings": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/reports/inventory": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/server-compare": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
           }
         }
       }
@@ -2001,370 +2494,17 @@
         }
       }
     },
+    "/api/v1/server-compare": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
     "/api/v1/status": {
       "get": {
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/capabilities": {
-      "get": {
-        "description": "Matriz de capacidades observadas para o mecanismo e a execução mais recente.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/quality-scans": {
-      "get": {
-        "description": "Lista até 50 diagnósticos agregados; nenhuma linha é retornada.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      },
-      "post": {
-        "description": "Executa diagnóstico de leitura autorizado, com limite de 1.000 linhas e 20 segundos; exige auditor e opt-in operacional.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/quality-issues/{issue}": {
-      "patch": {
-        "description": "Registra decisão de saneamento externo; o estado validado exige diagnóstico comparável posterior ao registro da execução externa e devolve validation_scan_id. Exige auditor.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "409": {
-            "description": "Diagnóstico posterior comparável obrigatório para validar"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/actions": {
-      "get": {
-        "description": "Lista ações paginadas com total, confirmação de carga comparável e resumo das medições recentes.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/actions/export": {
-      "get": {
-        "description": "Exporta todo o histórico de ações e medições em CSV ou JSONL por streaming, sem limite de 100 registros. Exige acesso ao ambiente.",
-        "parameters": [
-          {
-            "name": "format",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "csv",
-                "jsonl"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Arquivo para download"
-          },
-          "400": {
-            "description": "Formato ou ambiente inválido"
-          },
-          "403": {
-            "description": "Sem permissão"
-          }
-        }
-      }
-    },
-    "/api/v1/findings/{id}/action/measurements": {
-      "get": {
-        "description": "Lista medições paginadas antes e depois com hipótese, janela, confirmação de carga e ressalvas de comparabilidade.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      },
-      "post": {
-        "description": "Registra hipótese, janela, workload_comparable e métrica antes/depois. Inclui presença do achado, tamanho, latência média e leituras por mil chamadas quando há fingerprint; exige auditor.",
-        "responses": {
-          "200": {
-            "description": "Resultado"
-          },
-          "400": {
-            "description": "Entrada inválida"
-          },
-          "403": {
-            "description": "Sem permissão"
-          },
-          "422": {
-            "description": "Escopo ou comparação indisponível"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/totp": {
-      "post": {
-        "description": "Segundo passo do login TOTP ou código de recuperação.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/totp/enroll": {
-      "post": {
-        "description": "Inicia TOTP e devolve segredo e códigos de recuperação uma vez.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/totp/confirm": {
-      "post": {
-        "description": "Confirma o TOTP da sessão.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/totp/require": {
-      "post": {
-        "description": "Operador exige TOTP na própria conta.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/auth/totp/disable": {
-      "post": {
-        "description": "Desativa TOTP depois da senha e do código.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/findings-diff": {
-      "get": {
-        "description": "Diff added/removed/unchanged entre duas execuções do snapshot store.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/query-digests": {
-      "get": {
-        "description": "Lista digests de consultas do ambiente.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "post": {
-        "description": "Gera digest sob demanda; exige operator.",
-        "responses": {
-          "201": {
-            "description": "criado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/query-digests/{digest}": {
-      "get": {
-        "description": "Detalhe do digest com seções e entregas.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/query-digests/{digest}/markdown": {
-      "get": {
-        "description": "Corpo Markdown do digest.",
-        "responses": {
-          "200": {
-            "description": "markdown"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/query-digest-config": {
-      "get": {
-        "description": "Configuração do digest.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "put": {
-        "description": "Atualiza janela e limiares; exige operator.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/notification-destinations": {
-      "get": {
-        "description": "Destinatários do ambiente (URL mascarada); exige operator.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "put": {
-        "description": "Substitui destinatários; exige operator.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/migration-context": {
-      "get": {
-        "description": "Contexto de snapshot para análise de migration (plan 01).",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/migration-analyses": {
-      "get": {
-        "description": "Lista análises de migration.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "post": {
-        "description": "Registra análise de migration.",
-        "responses": {
-          "201": {
-            "description": "criado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/migration-analyses/{analysis}": {
-      "get": {
-        "description": "Detalhe de análise de migration.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/api-tokens": {
-      "get": {
-        "description": "Lista tokens de API do ambiente.",
-        "responses": {
-          "200": {
-            "description": "ok"
-          }
-        }
-      },
-      "post": {
-        "description": "Cria token de API do ambiente.",
-        "responses": {
-          "201": {
-            "description": "criado"
-          }
-        }
-      }
-    },
-    "/api/v1/environments/{id}/api-tokens/{token}": {
-      "delete": {
-        "description": "Revoga token de API.",
         "responses": {
           "200": {
             "description": "ok"
@@ -3510,6 +3650,52 @@
           },
           "finding_id": {
             "type": "string"
+          }
+        }
+      },
+      "SchemaDiffResult": {
+        "type": "object",
+        "properties": {
+          "source_environment_id": {
+            "type": "string"
+          },
+          "target_environment_id": {
+            "type": "string"
+          },
+          "source_run_id": {
+            "type": "string"
+          },
+          "target_run_id": {
+            "type": "string"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "SchemaTimelinePage": {
+        "type": "object",
+        "properties": {
+          "environment_id": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
           }
         }
       }

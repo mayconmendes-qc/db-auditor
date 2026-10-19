@@ -16,6 +16,7 @@ type Environment struct {
 	Engine        string    `json:"engine"`
 	DiscoveryMode string    `json:"discovery_mode"`
 	Active        bool      `json:"active"`
+	IsProduction  bool      `json:"is_production"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
@@ -51,24 +52,36 @@ type SchemaSnapshot struct {
 }
 
 func (s *Store) ListEnvironmentsAPI(ctx context.Context) ([]Environment, error) {
-	rows, err := s.q.ListEnvironments(ctx)
+	rows, err := s.pool.Query(ctx, `
+SELECT id::text, name, type, engine, discovery_mode, active, created_at, updated_at,
+       COALESCE(is_production, false)
+FROM audit_environment ORDER BY name`)
 	if err != nil {
-		return nil, err
+		// Fallback without is_production when migration 27 is not applied yet.
+		legacy, err2 := s.q.ListEnvironments(ctx)
+		if err2 != nil {
+			return nil, err
+		}
+		out := make([]Environment, 0, len(legacy))
+		for _, r := range legacy {
+			out = append(out, Environment{
+				ID: uuidString(r.ID), Name: r.Name, Type: r.Type, Engine: r.Engine,
+				DiscoveryMode: r.DiscoveryMode, Active: r.Active,
+				CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time,
+			})
+		}
+		return out, nil
 	}
-	out := make([]Environment, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, Environment{
-			ID:            uuidString(r.ID),
-			Name:          r.Name,
-			Type:          r.Type,
-			Engine:        r.Engine,
-			DiscoveryMode: r.DiscoveryMode,
-			Active:        r.Active,
-			CreatedAt:     r.CreatedAt.Time,
-			UpdatedAt:     r.UpdatedAt.Time,
-		})
+	defer rows.Close()
+	out := make([]Environment, 0)
+	for rows.Next() {
+		var e Environment
+		if err := rows.Scan(&e.ID, &e.Name, &e.Type, &e.Engine, &e.DiscoveryMode, &e.Active, &e.CreatedAt, &e.UpdatedAt, &e.IsProduction); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
 	}
-	return out, nil
+	return out, rows.Err()
 }
 
 func (s *Store) SaveDiscovery(

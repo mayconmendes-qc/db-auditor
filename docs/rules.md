@@ -92,6 +92,20 @@ severidade e ID do achado. `GET /api/v1/findings/priorities` devolve os cinco
 primeiros entre até 500 achados abertos; Dashboard, Findings e PDF usam a
 mesma fórmula e mostram o ID do achado.
 
+## Drift de schema (timeline × regressão `structure`)
+
+A **linha do tempo de schema** compara cada coleta completa com a coleta
+completa anterior do mesmo perfil e da mesma versão de coletor. Os eventos são
+gravados na ingestão (`schema_change_event`); a leitura da API não recalcula o
+diff. Mudanças sem anotação de implantação (`kind=deployment`) nem evidência no
+registro de migrations viram `drift.out_of_pipeline`. Divergência persistente
+entre ambientes pareados (`object_mapping` + `is_production`) vira
+`drift.environment_divergence`.
+
+A regressão **`structure`** (abaixo) compara a coleta atual com o **baseline**
+escolhido, não com a coleta anterior. As duas visões coexistirem: timeline =
+coleta a coleta; regressão = baseline.
+
 ## Baseline e regressões (AN-11)
 
 Uma regressão só é registrada quando:

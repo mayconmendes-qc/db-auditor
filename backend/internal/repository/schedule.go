@@ -3,20 +3,28 @@ package repository
 import (
 	"context"
 	"time"
-
-	"github.com/osmendes/db-auditor/internal/scheduler"
 )
 
-func (s *Store) ListSchedules(ctx context.Context) ([]scheduler.Entry, error) {
+// ScheduleEntry is the persisted agenda row (avoids importing scheduler).
+type ScheduleEntry struct {
+	EnvironmentID string
+	Profile       string
+	Enabled       bool
+	LastRunAt     time.Time
+	LastStatus    string
+	NextRunAt     time.Time
+}
+
+func (s *Store) ListSchedules(ctx context.Context) ([]ScheduleEntry, error) {
 	rows, err := s.pool.Query(ctx, `SELECT environment_id::text, profile, enabled, next_run_at, last_status, last_run_at
 		FROM audit_schedule ORDER BY environment_id, profile`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []scheduler.Entry
+	var out []ScheduleEntry
 	for rows.Next() {
-		var entry scheduler.Entry
+		var entry ScheduleEntry
 		var lastStatus *string
 		var lastRun *time.Time
 		if err = rows.Scan(&entry.EnvironmentID, &entry.Profile, &entry.Enabled, &entry.NextRunAt, &lastStatus, &lastRun); err != nil {
@@ -33,7 +41,7 @@ func (s *Store) ListSchedules(ctx context.Context) ([]scheduler.Entry, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) SaveSchedule(ctx context.Context, entry scheduler.Entry) error {
+func (s *Store) SaveSchedule(ctx context.Context, entry ScheduleEntry) error {
 	var lastRun *time.Time
 	if !entry.LastRunAt.IsZero() {
 		t := entry.LastRunAt.UTC()

@@ -151,7 +151,7 @@ func main() {
 		},
 	})
 	sch := scheduler.NewWithLimits(runner, cfg.MaxConcurrentRuns)
-	sch.UseStore(store)
+	sch.UseStore(scheduleStoreAdapter{store: store})
 	if err := sch.Load(ctx); err != nil {
 		slog.Error("could not load schedules", "error", err)
 		os.Exit(1)

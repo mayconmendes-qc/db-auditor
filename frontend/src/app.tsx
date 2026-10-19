@@ -63,6 +63,11 @@ const SchemaDriftPage = lazy(() =>
     default: m.SchemaDriftPage,
   })),
 );
+const SchemaTimelinePage = lazy(() =>
+  import("./pages/SchemaTimelinePage").then((m) => ({
+    default: m.SchemaTimelinePage,
+  })),
+);
 const ServerComparePage = lazy(() =>
   import("./pages/ServerComparePage").then((m) => ({
     default: m.ServerComparePage,
@@ -90,6 +95,7 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     Relatórios: <ReportsPage />,
     Mapeamentos: <MappingsPage />,
     "Desvio de schema": <SchemaDriftPage />,
+    "Linha do tempo": <SchemaTimelinePage />,
     Comparar: <ServerComparePage />,
     Findings: <FindingsPage />,
     Digest: <QueryDigestPage />,

@@ -54,6 +54,7 @@ var ruleIDs = []string{
 	"index.candidate", "sequence.near_limit", "security.definer_search_path",
 	"security.rls_disabled_hypothesis", "security.public_schema_create", "security.account_inactive_review",
 	"replication.lag_high", "replication.archive_stalled", "timescale.chunk_dead_tuples",
+	"drift.out_of_pipeline", "drift.environment_divergence",
 }
 
 // Catalog is the versioned, golden-tested source of rule metadata.

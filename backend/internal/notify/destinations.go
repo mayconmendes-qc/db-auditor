@@ -16,7 +16,7 @@ type Destination struct {
 	ID      string
 	Channel string // email | webhook
 	Target  string
-	Format  string // generic (slack rejected upstream until plan 04)
+	Format  string // generic | slack (per webhook; ADR-0001 D15)
 }
 
 // DigestPayload is the webhook summary for Kind=query_digest (counts + link only).
@@ -37,9 +37,17 @@ func SendToDestinations(ctx context.Context, dests []Destination, event Event, b
 	var errs []error
 	for _, d := range dests {
 		var err error
+		payload := body
+		if drift, ok := body.(*DriftPayload); ok {
+			payload = BodyForDestination(d, event, drift)
+		} else if drift, ok := body.(DriftPayload); ok {
+			payload = BodyForDestination(d, event, &drift)
+		} else if body == nil || body == event {
+			payload = BodyForDestination(d, event, nil)
+		}
 		switch d.Channel {
 		case "webhook":
-			err = postDestination(ctx, d.Target, body)
+			err = postDestination(ctx, d.Target, payload)
 		case "email":
 			err = mailDestination(d.Target, event)
 		default:

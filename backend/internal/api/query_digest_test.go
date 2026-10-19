@@ -272,7 +272,7 @@ func TestWebhookURLValidationAndNeverExposed(t *testing.T) {
 		`{"items":[{"channel":"webhook","target":"https://user:pass@example.com/hook","format":"generic","active":true}]}`,
 		`{"items":[{"channel":"webhook","target":"https://127.0.0.1/hook","format":"generic","active":true}]}`,
 		`{"items":[{"channel":"webhook","target":"https://10.0.0.5/hook","format":"generic","active":true}]}`,
-		`{"items":[{"channel":"webhook","target":"https://hooks.example.com/hook","format":"slack","active":true}]}`,
+		`{"items":[{"channel":"webhook","target":"https://hooks.example.com/hook","format":"xml","active":true}]}`,
 	} {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/environments/"+env+"/notification-destinations", strings.NewReader(bad))
 		req.Header.Set("Authorization", "Bearer valid-token")

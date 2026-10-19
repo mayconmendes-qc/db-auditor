@@ -177,7 +177,7 @@ func TestRulePolicyScopeAndVersionedDedup(t *testing.T) {
 
 func TestCatalogVersionGolden(t *testing.T) {
 	items := Catalog()
-	if len(items) != 69 {
+	if len(items) != 71 {
 		t.Fatalf("catalog size changed: %d", len(items))
 	}
 	for i, item := range items {
@@ -191,7 +191,7 @@ func TestCatalogVersionGolden(t *testing.T) {
 			t.Fatalf("heuristic confidence too high: %s", item.ID)
 		}
 	}
-	if len(items) != 69 {
+	if len(items) != 71 {
 		t.Fatalf("catalog length %d", len(items))
 	}
 	encoded, err := json.Marshal(items)
@@ -199,7 +199,7 @@ func TestCatalogVersionGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(encoded)
-	const golden = "187e0452cc15cf1d5783abb3bb119c83ee35baf3b4ea36a1a049ada10ada9d3f"
+	const golden = "8deb7f627aa628eb7773817ec1a6993915f8a91c660435d5872fc73d82fcff1d"
 	if got := hex.EncodeToString(digest[:]); got != golden {
 		t.Fatalf("catalog golden changed: %s", got)
 	}

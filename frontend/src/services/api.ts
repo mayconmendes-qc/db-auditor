@@ -51,6 +51,8 @@ import type {
   MappingCandidate,
   MigrationAnalysis,
   MigrationAnalysisItem,
+  MigrationRegistryInput,
+  MigrationRegistryItem,
   NotificationDestination,
   NotificationDestinationInput,
   ObjectMapping,
@@ -66,7 +68,9 @@ import type {
   ReportFilters,
   ReportJob,
   RLSPolicySnapshot,
+  SchemaDiffResult,
   SchemaSnapshot,
+  SchemaTimelinePage,
   ScopeAggregate,
   ScopeHistoryPoint,
   ServerCompareReport,
@@ -669,6 +673,47 @@ export const api = {
     postJSON<{ id: string; name: string; dsn: null }>("/api/v1/environments", {
       name,
     }),
+  patchEnvironment: (env: string, body: { is_production: boolean }) =>
+    patchJSON<{ id: string; is_production: boolean }>(
+      `/api/v1/environments/${env}`,
+      body,
+    ),
+  schemaDiff: (
+    env: string,
+    params?: {
+      source_run?: string;
+      target_environment_id?: string;
+      target_run?: string;
+      object_type?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<SchemaDiffResult>(
+      `/api/v1/environments/${env}/schema-diff${qs(params)}`,
+      signal,
+    ),
+  schemaTimeline: (
+    env: string,
+    params?: { from?: string; to?: string; limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<SchemaTimelinePage>(
+      `/api/v1/environments/${env}/schema-timeline${qs(params)}`,
+      signal,
+    ),
+  migrationRegistry: (env: string, signal?: AbortSignal) =>
+    getJSON<{ items: MigrationRegistryItem[] }>(
+      `/api/v1/environments/${env}/migration-registry`,
+      signal,
+    ),
+  putMigrationRegistry: (env: string, items: MigrationRegistryInput[]) =>
+    putJSON<{ items: MigrationRegistryItem[] }>(
+      `/api/v1/environments/${env}/migration-registry`,
+      { items },
+    ),
   environmentCapabilities: (env: string, signal?: AbortSignal) =>
     getJSON<EnvironmentCapabilities>(
       `/api/v1/environments/${env}/capabilities`,

@@ -187,12 +187,14 @@ func liveCollectorProfiles(name string) map[string]struct{} {
 		"timescale.dimensions": {}, "timescale.chunks": {}, "timescale.continuous_aggregates": {},
 		"timescale.jobs": {}, "timescale.policies": {}, "timescale.chunk_dead_tuples": {},
 		"postgres.column_stats": {}, "postgres.workload": {}, "postgres.replication": {},
+		"postgres.migration_registry": {},
 	}
 	daily := map[string]struct{}{
 		"postgres.server": {}, "postgres.databases": {}, "postgres.schemas": {},
 		"postgres.tables": {}, "postgres.indexes": {}, "timescale.version": {},
 		"timescale.hypertables": {}, "timescale.jobs": {}, "timescale.policies": {},
 		"postgres.workload": {}, "postgres.replication": {}, "timescale.chunk_dead_tuples": {},
+		"postgres.migration_registry": {},
 	}
 	if _, ok := weekly[name]; ok {
 		profiles[ProfileWeekly] = struct{}{}

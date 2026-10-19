@@ -60,6 +60,8 @@ var ruleText = map[string]struct{ Meaning, Next string }{
 	"config.version_drift":                {"Versões dos ambientes comparados são diferentes.", "Confirme se a diferença é planejada e revise compatibilidade."},
 	"config.extension_drift":              {"Extensões diferem entre os ambientes.", "Confirme necessidade e versão antes de alinhar configurações."},
 	"config.guc_drift":                    {"Um parâmetro de configuração difere da referência.", "Verifique se o ajuste é intencional e meça o impacto."},
+	"drift.out_of_pipeline":               {"Houve mudança de schema sem evidência de pipeline.", "Confirme a mudança e registre a implantação ou o registro de migrations."},
+	"drift.environment_divergence":        {"Ambientes pareados divergem de forma persistente.", "Alinhe os ambientes ou documente a diferença esperada."},
 	"index.candidate":                     {"Uma consulta pode justificar um novo índice.", "Confirme plano, seletividade e custo de escrita antes de criar o índice."},
 	"sequence.near_limit":                 {"Uma sequência pode estar próxima do limite de valores.", "Projete o crescimento e planeje a ampliação antes de esgotar valores."},
 	"security.definer_search_path":        {"Uma função privilegiada pode depender de um caminho de busca inseguro.", "Revise search_path e resolução de objetos com o administrador."},

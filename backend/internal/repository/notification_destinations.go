@@ -64,10 +64,7 @@ func ValidateNotificationDestination(in NotificationDestinationInput) error {
 			return fmt.Errorf("e-mail inválido")
 		}
 	case "webhook":
-		if in.Format == "slack" {
-			return fmt.Errorf("formato slack ainda não disponível")
-		}
-		if in.Format != "generic" {
+		if in.Format != "generic" && in.Format != "slack" {
 			return fmt.Errorf("formato de webhook inválido")
 		}
 		if err := validateWebhookURL(in.Target); err != nil {

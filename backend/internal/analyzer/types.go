@@ -111,7 +111,11 @@ type SnapshotFacts struct {
 	PreviousComplete   bool
 	PreviousTables     []TableFact
 	PreviousGap        bool
+	// Spec 04 — schema timeline facts (reprocess / analyzer path).
+	SchemaChanges []SchemaChangeFact
+	IsProduction  bool
 }
+
 
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {

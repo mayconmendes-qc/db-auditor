@@ -12,6 +12,7 @@ describe("navigationSections", () => {
       "Inventário",
       "Mapeamentos",
       "Desvio de schema",
+      "Linha do tempo",
       "Comparar",
       "Findings",
       "Digest",

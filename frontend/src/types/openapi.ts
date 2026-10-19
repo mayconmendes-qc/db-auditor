@@ -29,6 +29,7 @@ export type ApiPath =
   | "/api/v1/compare"
   | "/api/v1/environments"
   | "/api/v1/environments/connection-status"
+  | "/api/v1/environments/{id}"
   | "/api/v1/environments/{id}/actions"
   | "/api/v1/environments/{id}/actions/export"
   | "/api/v1/environments/{id}/annotations"
@@ -54,6 +55,7 @@ export type ApiPath =
   | "/api/v1/environments/{id}/migration-analyses"
   | "/api/v1/environments/{id}/migration-analyses/{analysis}"
   | "/api/v1/environments/{id}/migration-context"
+  | "/api/v1/environments/{id}/migration-registry"
   | "/api/v1/environments/{id}/notification-destinations"
   | "/api/v1/environments/{id}/policies"
   | "/api/v1/environments/{id}/quality-issues/{issue}"
@@ -110,6 +112,10 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/score/compare"
   | "/api/v1/environments/{id}/runs/{run}/scores"
   | "/api/v1/environments/{id}/schedules"
+  | "/api/v1/environments/{id}/schema-diff"
+  | "/api/v1/environments/{id}/schema-diff/export"
+  | "/api/v1/environments/{id}/schema-timeline"
+  | "/api/v1/environments/{id}/schema-timeline/export"
   | "/api/v1/environments/{id}/schemas"
   | "/api/v1/environments/{id}/snapshot-status"
   | "/api/v1/environments/{id}/tables"
@@ -346,6 +352,24 @@ export interface RetentionPolicy {
   approved_by: string;
   approved_at?: string;
   updated_at: string;
+}
+
+export interface SchemaDiffResult {
+  source_environment_id?: string;
+  target_environment_id?: string;
+  source_run_id?: string;
+  target_run_id?: string;
+  partial?: boolean;
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SchemaTimelinePage {
+  environment_id?: string;
+  total?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface ScopeScore {

@@ -281,25 +281,44 @@ Mapeamento é dizer que um objeto de um ambiente corresponde a um objeto de outr
 
 <!-- topic: desvio | abrir: Desvio de schema -->
 
-Desvio de schema é a diferença de estrutura entre dois ambientes: o que está igual, o que mudou e o que existe só de um lado. A tela mostra a diferença. Ela não aplica correção.
+Desvio de schema é a diferença de estrutura entre duas execuções reais (mesmo ambiente ou ambientes distintos): o que está igual, o que mudou e o que existe só de um lado. A tela não usa dados de demonstração. Ela não aplica correção.
 
 **Como usar**
 
-1. Escolha a origem e o destino. Os dois precisam ter inventário comparável.
+1. Escolha ambiente e execução de origem e de destino (padrão: última completa de cada lado).
 2. Leia as categorias: igual, diferente, só na origem e só no destino.
-3. Abra um item para ver o que divergiu, como coluna, tipo ou índice.
+3. Abra um item para ver fingerprints e campos alterados — nunca o corpo SQL.
 4. Use o resultado como evidência para a equipe do banco. A mudança, se houver, acontece fora do auditor.
 
 **Vale saber**
 
 - Versão, perfil de coleta e cobertura mudam o que dá para comparar. Uma ausência pode ser objeto que não entrou na visita.
-- Ambientes de mecanismos diferentes, como PostgreSQL e MongoDB, não têm a mesma estrutura para comparar.
+- Ambientes de mecanismos diferentes, como PostgreSQL e MongoDB, não têm a mesma estrutura para comparar (a API responde 400).
+- Execução parcial marca o diff como parcial e não gera achados de drift.
 
 **Termos desta tela**
 
 - **Igual** — Os dois lados parecem o mesmo objeto, sem diferença relevante de estrutura nesta comparação.
 - **Diferente** — O par existe nos dois lados, mas alguma parte da estrutura não coincide.
 - **Só de um lado** — O objeto apareceu na origem ou no destino, e não no outro.
+- **Fingerprint** — Assinatura do objeto ou da definição; o corpo SQL nunca é exibido.
+
+### Linha do tempo de schema
+
+<!-- topic: timeline | abrir: Linha do tempo -->
+
+A linha do tempo registra, na ingestão, o que mudou entre duas coletas completas do mesmo perfil e versão de coletor. Lacunas (coleta parcial no meio) aparecem sem gerar eventos.
+
+**Como usar**
+
+1. Escolha o ambiente.
+2. Veja eventos com tipo de mudança, correlação (anotação de implantação ou registro de migrations) e o selo **fora do pipeline** quando não houver evidência.
+3. Exporte CSV ou Markdown se precisar anexar a um ticket.
+
+**Vale saber**
+
+- Em **Ambientes**, o operador marca se o ambiente é de produção; isso sobe a severidade dos achados `drift.*`.
+- A regressão `structure` compara com o baseline; a timeline compara coleta a coleta.
 
 ### Comparar servidores
 
@@ -447,6 +466,7 @@ O relatório em PDF é uma leitura para compartilhar: resumo executivo, detalhe 
 
 - **Fila** — A lista de pedidos. O PDF não sai no instante do clique. A tela avisa quando ele fica pronto.
 - **Redação** — Uma opção de esconder identificadores no PDF, para compartilhar o conteúdo com menos contexto interno.
+
 
 ### Digest
 

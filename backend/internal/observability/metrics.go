@@ -32,6 +32,11 @@ type Metrics struct {
 	migrationAnalyses    sync.Map // result -> *atomic.Uint64
 	migrationParseErrors atomic.Uint64
 	envTokenRequests     sync.Map // scope|result -> *atomic.Uint64
+
+
+	// Plan 04 — schema drift
+	schemaChangeEvents    sync.Map // kind -> *atomic.Uint64
+	alertDeliveriesFailed sync.Map // kind -> *atomic.Uint64
 }
 
 // DefaultMetrics is the process-wide registry.
@@ -94,6 +99,7 @@ func (m *Metrics) IncEnvTokenRequest(scope, result string) {
 	m.incMap(&m.envTokenRequests, scope+"|"+result)
 }
 
+
 // IncQueryDigest records one generated digest by result state.
 func (m *Metrics) IncQueryDigest(result string) {
 	switch result {
@@ -111,6 +117,22 @@ func (m *Metrics) IncQueryDigest(result string) {
 // IncQueryDigestDeliveryFailed records one failed digest delivery attempt.
 func (m *Metrics) IncQueryDigestDeliveryFailed() {
 	m.queryDigestDeliveriesFailed.Add(1)
+}
+
+// IncSchemaChangeEvent records one timeline event by change kind.
+func (m *Metrics) IncSchemaChangeEvent(kind string) {
+	if kind == "" {
+		kind = "unknown"
+	}
+	m.incMap(&m.schemaChangeEvents, kind)
+}
+
+// IncAlertDeliveryFailed records one failed alert delivery by kind (RNF-05).
+func (m *Metrics) IncAlertDeliveryFailed(kind string) {
+	if kind == "" {
+		kind = "unknown"
+	}
+	m.incMap(&m.alertDeliveriesFailed, kind)
 }
 
 func normalizePath(path string) string {
@@ -246,6 +268,32 @@ func (m *Metrics) Handler() http.HandlerFunc {
 			}
 			fmt.Fprintf(&b, "auditor_env_token_requests_total{scope=%q,result=%q} %d\n",
 				parts[0], parts[1], v.(*atomic.Uint64).Load())
+		}
+
+
+		b.WriteString("# HELP auditor_schema_change_events_total Schema timeline events by change kind.\n")
+		b.WriteString("# TYPE auditor_schema_change_events_total counter\n")
+		skeys := make([]string, 0)
+		m.schemaChangeEvents.Range(func(k, _ any) bool {
+			skeys = append(skeys, k.(string))
+			return true
+		})
+		sort.Strings(skeys)
+		for _, k := range skeys {
+			v, _ := m.schemaChangeEvents.Load(k)
+			fmt.Fprintf(&b, "auditor_schema_change_events_total{kind=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_alert_deliveries_failed_total Failed alert delivery attempts by kind.\n")
+		b.WriteString("# TYPE auditor_alert_deliveries_failed_total counter\n")
+		akeys := make([]string, 0)
+		m.alertDeliveriesFailed.Range(func(k, _ any) bool {
+			akeys = append(akeys, k.(string))
+			return true
+		})
+		sort.Strings(akeys)
+		for _, k := range akeys {
+			v, _ := m.alertDeliveriesFailed.Load(k)
+			fmt.Fprintf(&b, "auditor_alert_deliveries_failed_total{kind=%q} %d\n", k, v.(*atomic.Uint64).Load())
 		}
 
 		_, _ = w.Write([]byte(b.String()))
