@@ -422,6 +422,8 @@ func authorizeEnvToken(r *http.Request, tok *repository.EnvTokenPrincipal) (env 
 		scope = "restore-evidence:write"
 	case r.Method == http.MethodPost && rest == "restore-drills":
 		scope = "restore-evidence:write"
+	case r.Method == http.MethodPost && rest == "account-last-logins":
+		scope = "last-login:write"
 	default:
 		return env, false, ""
 	}

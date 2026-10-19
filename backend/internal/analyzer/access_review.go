@@ -42,6 +42,9 @@ type AccessReviewItemFact struct {
 	RevokeDueAt  *time.Time
 	FindingActionID string
 	PrivilegeStillPresent bool // set when a later complete run still has the privilege
+	// Optional last-login from log aggregate (ADR-0001 D10); empty source = none.
+	LastLoginAt     *time.Time
+	LastLoginSource string // "log" when set
 }
 
 func (AccessReviewAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]Finding, error) {
@@ -110,12 +113,26 @@ func (AccessReviewAnalyzer) Analyze(_ context.Context, facts SnapshotFacts) ([]F
 
 			if containsHighlight(item.Highlights, "inactive_or_expired") && isWritePrivilege(item.Privilege) {
 				title := fmt.Sprintf("Conta inativa com escrita: %s em %s", item.AccountName, obj)
+				ev := map[string]any{
+					"campaign_id": camp.ID, "inactive_days_threshold": accessReviewInactiveDays, "privilege": item.Privilege,
+					"session_sample": "no_session_observed_or_expired",
+				}
+				if item.LastLoginAt != nil && item.LastLoginSource != "" {
+					ev["last_login_at"] = item.LastLoginAt.UTC().Format(time.RFC3339)
+					ev["last_login_source"] = item.LastLoginSource
+				} else {
+					ev["last_login_source"] = "none"
+				}
+				summary := fmt.Sprintf("Conta sem sessão observada (amostra) ou validade vencida (≥ %d dias) com privilégio de escrita.", accessReviewInactiveDays)
+				if item.LastLoginAt != nil && item.LastLoginSource == "log" {
+					summary += fmt.Sprintf(" Último login (log): %s.", item.LastLoginAt.UTC().Format(time.RFC3339))
+				}
 				out = append(out, Finding{
 					EnvironmentID: camp.EnvironmentID, AuditRunID: facts.AuditRunID,
 					FindingType: "access_review.inactive_with_write", Severity: SeverityMedium, Status: StatusOpen,
-					Title: title, Summary: fmt.Sprintf("Conta sem sessão observada ou validade vencida (≥ %d dias) com privilégio de escrita.", accessReviewInactiveDays),
+					Title: title, Summary: summary,
 					ObjectType: item.ObjectType, ObjectKey: key, ObjectName: obj,
-					Evidence: map[string]any{"campaign_id": camp.ID, "inactive_days_threshold": accessReviewInactiveDays, "privilege": item.Privilege},
+					Evidence: ev,
 					DedupKey: DedupKey("access_review.inactive_with_write", key, title),
 				})
 			}

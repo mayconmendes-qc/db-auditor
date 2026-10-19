@@ -156,6 +156,7 @@ export function AccessReviewMatrix({
           { id: "priv", label: "Privilégio" },
           { id: "origin", label: "Origem" },
           { id: "highlight", label: "Destaque" },
+          { id: "lastlogin", label: "Último login" },
           { id: "owner", label: "Responsável" },
           { id: "decision", label: "Decisão" },
         ]}
@@ -167,6 +168,9 @@ export function AccessReviewMatrix({
               : item.object_name;
           const decidableRow =
             canDecideRow(item) && item.pending && !campaignClosed;
+          const sampleInactive = (item.highlights ?? []).includes(
+            "inactive_or_expired",
+          );
           return (
             <tr key={item.id} className="border-t border-slate-800">
               <td className="px-3 py-1.5">
@@ -195,10 +199,24 @@ export function AccessReviewMatrix({
                   <span className="flex flex-wrap gap-1">
                     {item.highlights.map((h) => (
                       <Badge key={h} tone="warning">
-                        {h}
+                        {h === "inactive_or_expired"
+                          ? "sem sessão (amostra)"
+                          : h}
                       </Badge>
                     ))}
                   </span>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td className="px-3 py-1.5 text-xs">
+                {item.last_login_at ? (
+                  <span title={`fonte: ${item.last_login_source || "log"}`}>
+                    {new Date(item.last_login_at).toLocaleString()}{" "}
+                    <Badge tone="neutral">log</Badge>
+                  </span>
+                ) : sampleInactive ? (
+                  <span className="text-slate-400">sem sessão (amostra)</span>
                 ) : (
                   "—"
                 )}

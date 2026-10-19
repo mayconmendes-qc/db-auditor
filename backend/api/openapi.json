@@ -2771,7 +2771,7 @@
     },
     "/api/v1/environments/{id}/access-reviews/{campaign}/matrix": {
       "get": {
-        "description": "Matriz congelada paginada (account, object, privilege, origin, highlight, pending, mine).",
+        "description": "Matriz congelada paginada (account, object, privilege, origin, highlight, pending, mine). Inclui last_login_at/last_login_source (log) quando houver agregado.",
         "responses": {
           "200": {
             "description": "ok"
@@ -2842,6 +2842,25 @@
           },
           "403": {
             "description": "proibido"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/account-last-logins": {
+      "post": {
+        "description": "Ingere agregado de último login por role (só role + last_login_at). Token last-login:write; outro ambiente ou escopo → 403; campo extra → 400 (ADR-0001 D10).",
+        "responses": {
+          "200": {
+            "description": "aceito"
+          },
+          "400": {
+            "description": "campo extra ou payload inválido"
+          },
+          "403": {
+            "description": "token de outro ambiente ou sem escopo"
+          },
+          "413": {
+            "description": "corpo excede o limite"
           }
         }
       }

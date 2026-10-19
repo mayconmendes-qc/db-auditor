@@ -89,6 +89,9 @@ type AccessReviewItem struct {
 	DecidedBy      string     `json:"decided_by,omitempty"`
 	DecidedAt      *time.Time `json:"decided_at,omitempty"`
 	Pending        bool       `json:"pending"`
+	// Last login from log aggregate (ADR-0001 D10); source is always "log" when set.
+	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
+	LastLoginSource string     `json:"last_login_source,omitempty"`
 }
 
 type AccessReviewMatrixFilter struct {
@@ -560,9 +563,11 @@ func (s *Store) ListAccessReviewMatrix(ctx context.Context, env, campaignID stri
 	args = append(args, f.Limit, f.Offset)
 	q := `SELECT i.id::text,i.campaign_id::text,i.database_name,i.account_name,i.object_type,i.object_name,i.column_name,
 i.privilege,i.origin_kind,i.via_chain,i.origin_label,i.highlights,i.owner_user_id::text,COALESCE(u.username,''),
-ld.decision,COALESCE(ld.justification,''),COALESCE(ld.decided_by,''),ld.decided_at
+ld.decision,COALESCE(ld.justification,''),COALESCE(ld.decided_by,''),ld.decided_at,
+ll.last_login_at,COALESCE(ll.source,'')
 FROM access_review_item i
 LEFT JOIN auditor_user u ON u.id=i.owner_user_id
+LEFT JOIN account_last_login_observation ll ON ll.environment_id=i.environment_id AND ll.role_name=i.account_name
 ` + latestDecision + `
 WHERE ` + whereSQL + `
 ORDER BY i.account_name,i.object_name,i.column_name,i.privilege,i.id
@@ -578,15 +583,20 @@ LIMIT $` + fmt.Sprint(len(args)-1) + ` OFFSET $` + fmt.Sprint(len(args))
 		var ownerID *string
 		var decision *string
 		var decidedAt *time.Time
+		var lastLogin *time.Time
+		var lastSrc string
 		if err := rows.Scan(&item.ID, &item.CampaignID, &item.DatabaseName, &item.AccountName, &item.ObjectType,
 			&item.ObjectName, &item.ColumnName, &item.Privilege, &item.OriginKind, &item.ViaChain, &item.OriginLabel,
-			&item.Highlights, &ownerID, &item.OwnerName, &decision, &item.Justification, &item.DecidedBy, &decidedAt); err != nil {
+			&item.Highlights, &ownerID, &item.OwnerName, &decision, &item.Justification, &item.DecidedBy, &decidedAt,
+			&lastLogin, &lastSrc); err != nil {
 			return nil, 0, err
 		}
 		item.OwnerUserID = ownerID
 		item.Decision = decision
 		item.DecidedAt = decidedAt
 		item.Pending = decision == nil
+		item.LastLoginAt = lastLogin
+		item.LastLoginSource = lastSrc
 		out = append(out, item)
 	}
 	return out, total, rows.Err()
@@ -978,6 +988,7 @@ func (s *Store) LoadAccessReviewFacts(ctx context.Context, environmentID, auditR
 				ID: it.ID, AccountName: it.AccountName, ObjectType: it.ObjectType,
 				ObjectName: it.ObjectName, ColumnName: it.ColumnName, Privilege: it.Privilege,
 				OriginKind: it.OriginKind, Highlights: it.Highlights, Decision: dec,
+				LastLoginAt: it.LastLoginAt, LastLoginSource: it.LastLoginSource,
 			}
 			if dec == "revoke" {
 				var due *time.Time

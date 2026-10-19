@@ -527,6 +527,9 @@ export interface AccessReviewItem {
   decided_by?: string;
   decided_at?: string | null;
   pending: boolean;
+  /** Último login do agregado de logs (ADR-0001 D10); fonte explícita. */
+  last_login_at?: string | null;
+  last_login_source?: string;
 }
 
 export interface AccessReviewDecisionInput {

@@ -2,8 +2,15 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/osmendes/db-auditor/internal/loganomaly"
 )
 
 func TestHelpListsCommands(t *testing.T) {
@@ -90,5 +97,42 @@ func TestIsHelpArg(t *testing.T) {
 	}
 	if IsHelpArg([]string{"migration-risk"}) {
 		t.Fatal("migration-risk is not help")
+	}
+}
+
+func TestMapHTTPStatusToExitForbiddenIsUsage(t *testing.T) {
+	if MapHTTPStatusToExit(http.StatusForbidden) != ExitUsage {
+		t.Fatalf("403 should map to ExitUsage")
+	}
+	if MapHTTPStatusToExit(http.StatusUnauthorized) != ExitUsage {
+		t.Fatalf("401 should map to ExitUsage")
+	}
+}
+
+func TestAPIClientSubmitLastLoginBody(t *testing.T) {
+	var got []byte
+	var n int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n++
+		got, _ = io.ReadAll(r.Body)
+		if r.URL.Path != "/api/v1/environments/11111111-1111-1111-1111-111111111111/account-last-logins" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	client := NewAPIClient(srv.URL, "dba_tok", time.Second)
+	f := loganomaly.LastLoginFile{
+		SchemaVersion: loganomaly.SchemaVersion,
+		Entries:       []loganomaly.LastLoginEntry{{Role: "app_ro", LastLoginAt: "2026-10-19T14:30:00Z"}},
+	}
+	if err := loganomaly.SubmitLastLogin(context.Background(), client, "11111111-1111-1111-1111-111111111111", f); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("requests=%d", n)
+	}
+	if err := loganomaly.ValidateLastLoginOnlyRoleAndTime(got); err != nil {
+		t.Fatal(err)
 	}
 }

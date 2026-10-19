@@ -119,6 +119,7 @@ func NewHandlerWithOptions(store InventoryStore, opts HandlerOptions) http.Handl
 	registerCostLensRoutes(mux, store)
 	registerTimescaleSimulationRoutes(mux, store)
 	registerAccessReviewRoutes(mux, store)
+	registerAccountLastLoginRoutes(mux, store)
 	registerPIIRoutes(mux, store, opts.Targets)
 	registerRestoreDrillRoutes(mux, store, opts.Targets)
 	if opts.Auth != nil {

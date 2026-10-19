@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `38_chunk_scan_counters.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
+O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `40_account_last_login.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
 
 Antes de atualizar uma instalação persistente, faça backup do snapshot store e confira a restauração. A migração `12_view_detail.sql` acrescenta campos sem apagar visões existentes. Depois do deploy, execute uma nova coleta de PostgreSQL para preencher colunas e opções de segurança: execuções antigas mostram esses campos como não coletados. Para voltar à versão anterior, pare a API nova e restaure o backup ou use a versão anterior do aplicativo; não remova as novas colunas manualmente.
 
@@ -386,6 +386,12 @@ Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (A
 `quality-contract:run`, `restore-evidence:write`, `last-login:write`.
 
 Ensaios do **banco auditado** (pg_dump → container efêmero): veja [backup-verifier.md](backup-verifier.md) (`auditor restore-verify`, evidência `target_restore_drill`). O ensaio do snapshot store continua em `deploy/snapshot-restore-verify.sh` → `retention_evidence`.
+
+Último login por role (agregado local da CLI `log-anomaly`, ADR-0001 D10):
+`auditor log-anomaly --path ./pgjson.log --last-login-out ultimo-login.json --submit-last-login --environment <uuid>`
+com `AUDITOR_API_URL` e `AUDITOR_CLI_TOKEN`/`_FILE` (escopo `last-login:write`). O corpo POST
+`/api/v1/environments/{id}/account-last-logins` leva só `role` e `last_login_at`. A matriz de
+revisão de acessos exibe o horário com fonte `log` ao lado de “sem sessão (amostra)”.
 
 - O segredo (`dba_<prefixo>_<segredo>`) aparece **uma vez** na criação. Guarde no GitHub Secrets (`AUDITOR_CLI_TOKEN`) ou em um gerenciador de segredos.
 - Rotação: crie um token novo, atualize o secret no CI, revogue o antigo (DELETE na API ou na UI).

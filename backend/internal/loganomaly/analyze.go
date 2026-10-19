@@ -36,8 +36,9 @@ func Analyze(opts Options, stdin io.Reader) (AnalyzeResult, error) {
 	if err != nil {
 		return AnalyzeResult{ExitCode: 2}, err
 	}
-	if opts.LastLoginOut != "" && prof.Name() != ProfilePostgresJSONLog {
-		return AnalyzeResult{ExitCode: 2}, fmt.Errorf("--last-login-out só é suportado com perfil postgres-jsonlog")
+	needLastLogin := opts.LastLoginOut != "" || opts.CollectLastLogin
+	if needLastLogin && prof.Name() != ProfilePostgresJSONLog {
+		return AnalyzeResult{ExitCode: 2}, fmt.Errorf("--last-login-out/--submit-last-login só é suportado com perfil postgres-jsonlog")
 	}
 
 	store := NewTemplateStore()
@@ -68,7 +69,7 @@ func Analyze(opts Options, stdin io.Reader) (AnalyzeResult, error) {
 		}
 		counter.Add(ev)
 
-		if opts.LastLoginOut != "" && IsConnectionAuthorized(msg) {
+		if needLastLogin && IsConnectionAuthorized(msg) {
 			role := prof.RoleFromJSON(raw)
 			if role == "" {
 				role = RoleFromConnMessage(msg)
@@ -149,10 +150,10 @@ func Analyze(opts Options, stdin io.Reader) (AnalyzeResult, error) {
 		rep.PeriodEnd = max.Add(th.Window).UTC().Format(time.RFC3339)
 	}
 
-	if opts.LastLoginOut != "" {
+	if needLastLogin {
 		f := login.File()
 		rep.LastLogin = &f
-		if opts.LastLoginOut != "-" {
+		if opts.LastLoginOut != "" && opts.LastLoginOut != "-" {
 			if werr := WriteLastLoginJSON(opts.LastLoginOut, f); werr != nil {
 				return AnalyzeResult{ExitCode: 2, Stats: stats, Report: rep}, werr
 			}

@@ -49,6 +49,7 @@ type Metrics struct {
 	// Plan 07 — access review
 	accessReviewCampaigns sync.Map // status -> *atomic.Uint64
 	accessReviewPending   atomic.Int64
+	lastLoginIngest       sync.Map // result -> *atomic.Uint64 (accepted|rejected)
 
 	// Plan 05 — PII scanner
 	piiScans           sync.Map
@@ -196,6 +197,14 @@ func (m *Metrics) AddAccessReviewPendingDelta(delta int) {
 // SetAccessReviewPending sets the pending-lines gauge from a store recount.
 func (m *Metrics) SetAccessReviewPending(n int) {
 	m.accessReviewPending.Store(int64(n))
+}
+
+// IncLastLoginIngest increments auditor_last_login_ingest_total{result}.
+func (m *Metrics) IncLastLoginIngest(result string) {
+	if result == "" {
+		result = "unknown"
+	}
+	m.incMap(&m.lastLoginIngest, result)
 }
 
 // IncPIIScan increments auditor_pii_scans_total{status,content}.
@@ -445,6 +454,19 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# HELP auditor_access_review_pending_lines Pending access-review matrix lines.\n")
 		b.WriteString("# TYPE auditor_access_review_pending_lines gauge\n")
 		fmt.Fprintf(&b, "auditor_access_review_pending_lines %d\n", m.accessReviewPending.Load())
+
+		b.WriteString("# HELP auditor_last_login_ingest_total Last-login aggregate ingest attempts by result.\n")
+		b.WriteString("# TYPE auditor_last_login_ingest_total counter\n")
+		llKeys := make([]string, 0)
+		m.lastLoginIngest.Range(func(k, _ any) bool {
+			llKeys = append(llKeys, k.(string))
+			return true
+		})
+		sort.Strings(llKeys)
+		for _, k := range llKeys {
+			v, _ := m.lastLoginIngest.Load(k)
+			fmt.Fprintf(&b, "auditor_last_login_ingest_total{result=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
 
 		b.WriteString("# HELP auditor_pii_scans_total PII map scans by status and whether content stage ran.\n")
 		b.WriteString("# TYPE auditor_pii_scans_total counter\n")

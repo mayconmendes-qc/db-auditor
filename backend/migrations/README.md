@@ -39,6 +39,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `37_retention_scenarios.sql`: cenários salvos de retenção/compressão Timescale (spec 09, ADR-0001 D9/D11).
 - `38_chunk_scan_counters.sql`: contadores de varredura/escrita por chunk em `chunk_snapshot` (RF-07; nulos = não coletado).
 - `39_target_restore_drill.sql`: ensaios `target_restore_drill` e política RTO/prazo por ambiente (plano 08; distinto de `retention_evidence`).
+- `40_account_last_login.sql`: agregado de último login por role (`account_last_login_observation`: ambiente, role, horário, fonte `log`, token; ADR-0001 D10 / plano 07 L6).
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 

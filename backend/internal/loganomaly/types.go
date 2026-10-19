@@ -133,7 +133,8 @@ type Options struct {
 	BaselineFrom time.Time // zero = use trailing K windows
 	BaselineTo   time.Time
 	FailOn       string
-	Format       string // md|json
-	LastLoginOut string // path or empty; "-" for stdout section only via report
-	Thresholds   Thresholds
+	Format           string // md|json
+	LastLoginOut     string // path or empty; "-" for stdout section only via report
+	CollectLastLogin bool   // also true when submitting (plan 10 L5); no network here
+	Thresholds       Thresholds
 }
