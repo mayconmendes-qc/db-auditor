@@ -24,11 +24,11 @@ Lacuna verificada: a tela **Desvio de schema** (`SchemaDriftPage`) envia **dados
 - **RF-04** Linha do tempo por ambiente: a cada coleta completa, registrar os eventos de mudança em relação à coleta completa anterior (objeto, tipo de mudança, campos, execução, intervalo de tempo em que ocorreu).
 - **RF-05** Correlacionar cada evento com a evidência de pipeline:
   - (a) anotação de implantação existente (`audit_annotation`, tela Acompanhamento) no intervalo;
-  - (b) opcional: o registro de migrations da ferramenta usada pela aplicação no alvo (versão mais recente e momento de aplicação), configurado por ambiente.
+  - (b) opcional: o registro de migrations da ferramenta usada pela aplicação no alvo (golang-migrate, goose, Flyway, Alembic, Rails ou Prisma; versão mais recente e momento de aplicação, quando a ferramenta grava), configurado por ambiente.
 
-  Sem correlação, o evento é marcado como "fora do pipeline".
-- **RF-06** Achados novos: `drift.out_of_pipeline` (mudança sem implantação correspondente) e `drift.environment_divergence` (divergência entre ambientes pareados que persiste em duas coletas completas de cada lado).
-- **RF-07** Webhook e e-mail pelo canal de alerta existente, com payload sanitizado (tipo, ambiente, objeto qualificado, tipo de mudança, link). Sem definição SQL.
+  Qualquer uma das duas fontes correlaciona o evento, e o registro não é obrigatório. Para ferramentas sem carimbo de aplicação (golang-migrate, Alembic, Rails), a correlação é "a versão mudou entre as duas coletas", com confiança rebaixada. Sem correlação, o evento é marcado como "fora do pipeline" (ADR-0001 D5).
+- **RF-06** Achados novos: `drift.out_of_pipeline` (mudança sem implantação correspondente) e `drift.environment_divergence` (divergência entre ambientes pareados que persiste em duas coletas completas de cada lado). O par vem de `object_mapping`, e o atributo `is_production` define o lado de produção. Não há entidade nova de par (ADR-0001 D5).
+- **RF-07** Webhook e e-mail para os destinos do ambiente, com fallback nos canais globais quando não há destino (ADR-0001 D6). Payload sanitizado (tipo, ambiente, objeto qualificado, tipo de mudança, link), sem definição SQL. Cada webhook tem o seu formato, JSON genérico ou nativo do Slack. O webhook global continua no JSON genérico, e os alertas existentes não mudam (ADR-0001 D15).
 - **RF-08** Exportar o diff e a timeline em Markdown e CSV.
 
 ## 2. Requisitos não funcionais
@@ -105,6 +105,6 @@ Lacuna verificada: a tela **Desvio de schema** (`SchemaDriftPage`) envia **dados
 - Anotação manual esquecida gera falso "fora do pipeline". Mitigação: a CLI de CI ou deploy registra a anotação automaticamente.
 - Sobreposição com a regressão `structure`. Regra: a regressão compara com o baseline, a timeline compara coleta a coleta. Os textos devem deixar isso claro.
 
-**Perguntas em aberto.**
-- P-01: quais ferramentas de migration suportar no RF-05(b) (golang-migrate, goose, Flyway, Alembic, Rails, Prisma), ou só a anotação via API/CI?
-- P-02: o webhook precisa de formato nativo do Slack, ou o JSON genérico atual basta?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md)).
+- P-01: quais ferramentas no RF-05(b)? **Resolvida (D5):** as seis listadas, além da anotação de implantação. Qualquer fonte correlaciona.
+- P-02: formato nativo do Slack? **Resolvida (D5, D15):** sim, escolhido por webhook. O JSON genérico continua o padrão.

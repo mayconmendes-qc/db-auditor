@@ -10,7 +10,7 @@
 
 ## 1. Requisitos funcionais
 
-- **RF-01** Tabela de preços por ambiente (operator), versionada, com moeda, armazenamento (por GB/mês), I/O (por milhão de requisições ou por GB lido), computação (por vCPU-hora ou custo mensal da instância) e data de vigência. Modelos iniciais editáveis: "RDS PostgreSQL", "Cloud SQL", "self-hosted".
+- **RF-01** Tabela de preços por ambiente (operator), versionada, com moeda (uma por ambiente, `BRL` ou `USD`, fixada na primeira versão; ADR-0001 D3), armazenamento (por GB/mês), I/O (por milhão de requisições ou por GB lido), computação (por vCPU-hora ou custo mensal da instância) e data de vigência. Modelos iniciais editáveis: "RDS PostgreSQL", "Cloud SQL", "self-hosted".
 - **RF-02** Custo de armazenamento por tabela e índice = tamanho do último snapshot completo × preço de armazenamento.
 - **RF-03** Desperdício de índice sem uso: índices com `index.unused` ativo, valorados por tamanho × preço.
 - **RF-04** Bloat recuperável **estimado** por tabela e índice (método estatístico sobre catálogo e estatísticas, sem ler linhas). Sempre rotulado "estimativa", nunca "medido".
@@ -22,7 +22,7 @@
 
 ## 2. Requisitos não funcionais
 
-- **RNF-01 Segurança e só leitura.** Nenhuma consulta nova pesada ao alvo. O bloat estimado usa catálogo e estatísticas. Medir bloat de verdade com extensão de varredura física é opcional e desligado por padrão (ver perguntas).
+- **RNF-01 Segurança e só leitura.** Nenhuma consulta nova pesada ao alvo. O bloat estimado usa catálogo e estatísticas. Medir bloat de verdade com extensão de varredura física fica fora do v1 (ADR-0001 D3).
 - **RNF-02 LGPD.** Apenas tamanhos, contagens, fingerprints sem literais e valores monetários. Nenhum texto SQL com literal.
 - **RNF-03 Desempenho.** O cálculo roda sobre o snapshot store, sem nova sessão no alvo. Ranking de um ambiente com 5000 tabelas em menos de 2 s. A série respeita a janela máxima de 90 dias já aplicada às séries.
 - **RNF-04 Multi-tenant.** Tabela de preços por ambiente. Viewer lê, operator edita. A alteração vai para `auditor_operation_log`.
@@ -48,7 +48,7 @@ Arredondamento: moeda com 2 casas e o rótulo "estimado/mês". Não haverá conv
 - **API.** Leitura do ranking e da série por ambiente (viewer). Leitura e gravação da tabela de preços (gravação: operator).
 - **CSV.** Uma linha por item do ranking, com moeda e vigência do preço, terminando no marcador de exportação completa (padrão do export de ações).
 - **PDF.** Seção "Custo estimado", respeitando a redação. No modo estrito sai só o total por tipo.
-- **Erros.** Ambiente sem coleta completa: lista vazia com motivo. Preço com valor negativo ou moeda inválida: 400. Janela com reset: item marcado "janela inválida".
+- **Erros.** Ambiente sem coleta completa: lista vazia com motivo. Preço com valor negativo, moeda inválida ou moeda diferente da já fixada no ambiente: 400. Janela com reset: item marcado "janela inválida".
 
 ## 5. Critérios de aceite
 
@@ -84,7 +84,7 @@ Arredondamento: moeda com 2 casas e o rótulo "estimado/mês". Não haverá conv
 - Bloat estatístico erra em tabelas com tipos de largura variável.
 - Gestão pode ler estimativa como promessa. Mitigação: rótulo "estimado" e faixa de confiança.
 
-**Perguntas em aberto.**
-- P-01: moedas aceitas (BRL e USD com câmbio manual por tabela, ou uma moeda só por ambiente)?
-- P-02: permitir, como opt-in, a medição física de bloat por extensão no alvo (mais I/O) ou ficar só na estimativa?
-- P-03: quais provedores entram como modelos iniciais além de RDS, Cloud SQL e self-hosted?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md), D3).
+- P-01: moedas aceitas? **Resolvida:** uma moeda por ambiente (`BRL` ou `USD`), travada depois da primeira versão da tabela de preços, sem câmbio.
+- P-02: medição física de bloat? **Resolvida:** só estimativa no v1. A medição exata fica para depois.
+- P-03: outros provedores? **Resolvida:** no v1, só RDS PostgreSQL, Cloud SQL e self-hosted.

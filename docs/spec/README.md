@@ -2,6 +2,8 @@
 
 Autor: M (Product Owner). Fonte: `ideias-projetos.md` (10 ideias). Decisão de arquitetura (Q): as 10 ideias viram **features do db-auditor**, não projetos separados. Base lida: `main` em `d12c362`.
 
+**Decisões de arquitetura do v1:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18). As perguntas em aberto (P-xx) de cada spec estão resolvidas lá. Quando uma spec e a ADR divergirem, vale a ADR.
+
 ## Índice
 
 | # | Spec | Feature | Onde roda |
@@ -12,10 +14,10 @@ Autor: M (Product Owner). Fonte: `ideias-projetos.md` (10 ideias). Decisão de a
 | 04 | [04-schema-drift-watch.md](04-schema-drift-watch.md) | Linha do tempo e alerta de drift de schema | API/UI/webhook |
 | 05 | [05-pii-scanner.md](05-pii-scanner.md) | Mapa de dados pessoais (LGPD) | API/UI/PDF/CSV |
 | 06 | [06-slow-query-digest.md](06-slow-query-digest.md) | Digest semanal de regressões de consultas | API/UI/e-mail/webhook |
-| 07 | [07-access-review.md](07-access-review.md) | Revisão periódica de acessos | API/UI/CSV/XLSX |
+| 07 | [07-access-review.md](07-access-review.md) | Revisão periódica de acessos | API/UI/CSV (XLSX depois, ADR-0001 D7) |
 | 08 | [08-backup-verifier.md](08-backup-verifier.md) | Prova de restauração do backup do banco auditado | CLI do mesmo binário (container efêmero) + API |
 | 09 | [09-timescale-retention-advisor.md](09-timescale-retention-advisor.md) | Simulação de retenção e compressão no TimescaleDB | API/UI/PDF |
-| 10 | [10-log-anomaly.md](10-log-anomaly.md) | Anomalias em logs estruturados | CLI do mesmo binário (+ envio opcional à API) |
+| 10 | [10-log-anomaly.md](10-log-anomaly.md) | Anomalias em logs estruturados | CLI do mesmo binário (+ envio do agregado de último login à API, ADR-0001 D10) |
 
 ## Ordem sugerida de implementação
 
@@ -57,6 +59,6 @@ graph LR
 - **Histórico.** Resultados ficam vinculados a `audit_run` ou a um novo registro de execução da feature, com versão do coletor/regra e cobertura. Coleta parcial nunca vira "resolvido" nem dispara regressão (AN-11).
 - **Multi-tenant.** No repositório não existe uma entidade "tenant" separada. A unidade de isolamento é o **ambiente** (`audit_environment`), com papéis `viewer` < `auditor` < `operator` e concessões por ambiente (`auditor_user_environment`). Hoje: GET exige viewer, escrita exige operator por padrão (algumas exigem auditor) e download exige auditor. O operator vê todos os ambientes. Toda feature segue esse modelo.
 - **LGPD.** Persistir e exibir só metadados, contagens, proporções, hashes e fingerprints. Nunca valores de linha, texto SQL com literais ou linhas de log brutas. A redação do PDF (sem redação / identificadores / estrita) vale para as novas seções.
-- **Modo CLI (novo, comum a 01, 03, 08, 10).** O mesmo binário da API (`backend/cmd/auditor`) ganha subcomandos. Hoje ele só tem `recover-operator`. Saídas em Markdown e JSON. Segredos só por variável de ambiente ou arquivo, nunca em argumento. O envio opcional de resultado à API usa credencial com escopo de ambiente.
+- **Modo CLI (novo, comum a 01, 03, 08, 10).** O mesmo binário da API (`backend/cmd/auditor`) ganha subcomandos. Hoje ele só tem `recover-operator`. Saídas em Markdown e JSON. Segredos só por variável de ambiente ou arquivo, nunca em argumento. O envio de resultado à API usa o token por ambiente com escopo mínimo (ADR-0001 D1). O runner de CI nunca recebe DSN do banco auditado (ADR-0001 D2), com a única exceção do opt-in da 08 (ADR-0001 D8).
 - **Códigos de saída da CLI (novo, comum).** 0 = nada acima do limiar. 1 = achado igual ou acima do limiar de bloqueio configurado. 2 = erro de uso ou configuração. 3 = dados insuficientes ou execução parcial (nunca conta como sucesso). 4 = recusa de segurança (conta com escrita, destino não isolado, host fora da allowlist).
 - **Limiar "valor inicial, calibrar".** É um palpite de produto, configurável por ambiente. A calibração segue o padrão do BA-15 (#104): coletas reais e taxa de falso positivo registrada.

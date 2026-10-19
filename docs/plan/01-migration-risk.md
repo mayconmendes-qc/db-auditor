@@ -3,21 +3,24 @@
 - **Spec:** [../spec/01-migration-risk.md](../spec/01-migration-risk.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 3ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 6 lotes, **25 d**, 5 lotes com gate R2, Trinity necessária (2 lotes, escopo pequeno)
 
 ## 0. Resumo
 
 Este plano cria o **modo CLI** do binário `backend/cmd/auditor`, que hoje só tem `recover-operator`. Esse modo é a base comum das specs 03, 08 e 10. O plano também cria a **credencial de API por ambiente** que todas as CLIs usam, um parser de DDL PostgreSQL em Go puro, o catálogo MR-01…MR-11, a integração com GitHub Actions (um único comentário por PR) e o histórico de análises por ambiente.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 1):** a CLI usa um **token novo por ambiente, com escopo mínimo**. `AUDITOR_REPORT_API_TOKEN` (`internal/api/pdf_reports.go`, `authorizeReport`) **não** é reutilizado. Responde à P-01.
-- **decisão padrão (Q, nº 2):** **o CI usa só o último snapshot, via API** (modo a). **O runner nunca recebe a senha do banco.** A GitHub Action não expõe o modo (b). Responde à P-02.
-- **decisão padrão (Q, nº 11):** tenant = ambiente. Um token pertence a um único ambiente e não lê nem escreve em outro (RNF-04).
+- **ADR-0001 D1:** a CLI usa um **token novo por ambiente, com escopo mínimo**. `AUDITOR_REPORT_API_TOKEN` (`internal/api/pdf_reports.go`, `authorizeReport`) **não** é reutilizado. Responde à P-01.
+- **ADR-0001 D2 (confirmada):** **o CI usa só o último snapshot, via API** (modo a). **O runner de CI nunca recebe a senha do banco.** O modo (b) existe **só para uso local do operador**, e a GitHub Action não o expõe. Responde à P-02.
+- **ADR-0001 D12:** a operação de referência do CA-08 é tornar uma coluna obrigatória (MR-04): `NOT NULL ... NOT VALID` no PG 18, `CHECK ... NOT VALID` + `VALIDATE` no PG 14–17. Golden nas cinco versões. SARIF fora do v1 (P-03).
+- **ADR-0001 D16:** a remoção de literais é extraída do coletor de workload para `internal/fingerprint`, e o parser é em Go puro (`CGO_ENABLED=0`).
+- **ADR-0001 D11:** tenant = ambiente. Um token pertence a um único ambiente e não lê nem escreve em outro (RNF-04).
 
 ### Dependências
 
-Nenhuma bloqueante. A 04 é opcional: o contexto pode trazer "tabela mudou desde o snapshot" a partir da timeline (`schema_change_event`). Este plano é **pré-requisito** da 03 (lote 5), da 08 (lotes 1 e 3) e da 10 (lote 5 condicional).
+Nenhuma bloqueante. A 04 é opcional: o contexto pode trazer "tabela mudou desde o snapshot" a partir da timeline (`schema_change_event`). Este plano é **pré-requisito** da 03 (lote 5), da 08 (lotes 1 e 3), da 07 (lote 6, escopo `last-login:write`) e da 10 (lotes 1 e 5).
 
 ## 1. Módulos e arquivos afetados
 
@@ -57,7 +60,7 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 | `GET /api/v1/environments/{id}/migration-analyses`, `GET .../{analysis}` | viewer | — |
 | `POST /api/v1/environments/{id}/annotations` | **também** token `deploy-annotation:write` | rota existente (hoje exige auditor). Atende a mitigação de risco da spec 04 |
 
-**Telas (Trinity necessária, escopo pequeno).** (1) Cartão "Tokens de API" em Ambientes: criar com escopos, exibir uma vez, revogar. (2) Lista "Análises de migration" por ambiente, com PR, commit, maior severidade e data, e detalhe com a mesma tabela do Markdown.
+**Telas (Trinity necessária, escopo pequeno).** (1) Cartão "Tokens de API" em Ambientes: criar com escopos, exibir uma vez, revogar. (2) Lista "Análises de migration" por ambiente, com PR, commit, maior severidade e data, e detalhe com a mesma tabela do Markdown. A posição na navegação citada aqui é a da spec. A decisão final fica adiada para o lote de tela, quando Q chamará a Trinity (ADR-0001, Pendente).
 
 ## 4. Lotes
 
@@ -80,13 +83,13 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 
 **Issue:** `feat(migration-risk): parser DDL PostgreSQL, regras MR-01..MR-11 por versão 14–18, supressão por linha e saída sem literais`
 
-**Descrição.** Um lexer em Go puro (comentários, `$tag$`, aspas, `E''`) e um parser do subconjunto de DDL da §3: `CREATE INDEX` sem `CONCURRENTLY`, `ALTER TABLE ... ADD COLUMN ... DEFAULT` volátil, `ALTER COLUMN TYPE`, `SET NOT NULL`, `ADD CONSTRAINT ... FOREIGN KEY/CHECK` sem `NOT VALID`, `PRIMARY KEY/UNIQUE` sem `USING INDEX`, `DROP`/`RENAME`, `VACUUM FULL`, `CLUSTER`, `REFRESH MATERIALIZED VIEW` sem `CONCURRENTLY`, `SET lock_timeout`, `BEGIN`/`COMMIT`. Cada operação sai com arquivo e linha. A tabela de locks fica em `locks.go`, por major 14–18, com referência à página da documentação oficial de cada versão (RF-03). Exemplo de diferença por versão a cobrir: o PG 18 aceita `NOT NULL ... NOT VALID`, o que muda a alternativa segura do MR-04. Operação que não roda em transação dentro de `BEGIN` (MR-11) e combinações inseguras na mesma transação (RF-07). Supressão por linha `-- db-auditor:ignore MR-01 motivo: <texto>`, com justificativa obrigatória (RF-08). Normalização sem literais extraída para `internal/fingerprint/literals.go`. Tabela criada na própria migration gera severidade informativa. Limite de 500 operações, com aviso. Subcomando `auditor migration-risk --path <arq|dir>... --pg-version N --fail-on high --format md|json`.
+**Descrição.** Um lexer em Go puro (comentários, `$tag$`, aspas, `E''`) e um parser do subconjunto de DDL da §3: `CREATE INDEX` sem `CONCURRENTLY`, `ALTER TABLE ... ADD COLUMN ... DEFAULT` volátil, `ALTER COLUMN TYPE`, `SET NOT NULL`, `ADD CONSTRAINT ... FOREIGN KEY/CHECK` sem `NOT VALID`, `PRIMARY KEY/UNIQUE` sem `USING INDEX`, `DROP`/`RENAME`, `VACUUM FULL`, `CLUSTER`, `REFRESH MATERIALIZED VIEW` sem `CONCURRENTLY`, `SET lock_timeout`, `BEGIN`/`COMMIT`. Cada operação sai com arquivo e linha. A tabela de locks fica em `locks.go`, por major 14–18, com referência à página da documentação oficial de cada versão (RF-03). Operação de referência da diferença por versão (CA-08, ADR-0001 D12): o PG 18 aceita `NOT NULL ... NOT VALID`, o que muda a alternativa segura do MR-04 em relação ao PG 14–17 (`CHECK ... NOT VALID` + `VALIDATE`). Operação que não roda em transação dentro de `BEGIN` (MR-11) e combinações inseguras na mesma transação (RF-07). Supressão por linha `-- db-auditor:ignore MR-01 motivo: <texto>`, com justificativa obrigatória (RF-08). Normalização sem literais extraída para `internal/fingerprint/literals.go`. Tabela criada na própria migration gera severidade informativa. Limite de 500 operações, com aviso. Subcomando `auditor migration-risk --path <arq|dir>... --pg-version N --fail-on high --format md|json`.
 
 **Critérios de aceite.**
 - [ ] CA-02: MR-01 sem contexto sai média, com confiança baixa e impacto "não estimado" (com motivo, AN-03), código 0 com gate padrão.
 - [ ] CA-03: um literal de e-mail num `UPDATE` não aparece no Markdown nem no JSON.
 - [ ] CA-07: operação suprimida aparece "suprimida" com a justificativa e não conta para o gate. Supressão sem justificativa resulta em código 2.
-- [ ] CA-08: golden por versão (14, 15, 16, 17, 18) da mesma migration. A saída segue a tabela daquela versão.
+- [ ] CA-08: golden por versão (14, 15, 16, 17, 18) da mesma migration de MR-04. No PG 18, a alternativa é `NOT NULL ... NOT VALID`. No PG 14–17, é `CHECK ... NOT VALID` + `VALIDATE`.
 - [ ] RNF-03: 200 arquivos / 2 MB em menos de 10 s (benchmark no CI).
 - [ ] RNF-06: a mesma entrada produz saída byte a byte igual (golden).
 - [ ] Erro de parse marca a operação "não analisada" com arquivo:linha e código 3.
@@ -99,7 +102,7 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 
 **Issue:** `feat(auth): token de API por ambiente com escopos mínimos para CLIs; não reutiliza AUDITOR_REPORT_API_TOKEN`
 
-**Descrição.** Implementa a **decisão padrão** nº 1. Migration `29_environment_api_token.sql` (provisória). Formato `dba_<prefixo>_<segredo>` com menos de 128 caracteres, porque `authMiddleware` recusa `Bearer` maior. `authMiddleware` reconhece o prefixo e resolve um principal **token** (ambiente, escopos), distinto de `AuditorUser`. `authorizeRequest` ganha um ramo para token: uma lista fechada de pares (método, rota, escopo), ambiente do caminho igual ao do token, e nenhum acesso a `auth/*`, `environments` global, downloads ou rotas de operator. Escopos iniciais: `snapshot-context:read`, `migration-analysis:write`, `deploy-annotation:write`. A lista é extensível pelos planos 03 (`quality-contract:run`), 08 (`restore-evidence:write`) e 10 (`log-aggregate:write`, condicional). Validade obrigatória (padrão 90 dias, **valor inicial, calibrar**) e `last_used_at`. Todo uso vai para `auditor_operation_log` com o id do token, nunca o segredo. CSRF não se aplica (sem cookie). Rate limit por token. Cartão de tokens na UI (Trinity).
+**Descrição.** Implementa a ADR-0001 D1. Migration `29_environment_api_token.sql` (provisória). Formato `dba_<prefixo>_<segredo>` com menos de 128 caracteres, porque `authMiddleware` recusa `Bearer` maior. `authMiddleware` reconhece o prefixo e resolve um principal **token** (ambiente, escopos), distinto de `AuditorUser`. `authorizeRequest` ganha um ramo para token: uma lista fechada de pares (método, rota, escopo), ambiente do caminho igual ao do token, e nenhum acesso a `auth/*`, `environments` global, downloads ou rotas de operator. Escopos iniciais: `snapshot-context:read`, `migration-analysis:write`, `deploy-annotation:write`. A lista é extensível pelos planos 03 (`quality-contract:run`), 08 (`restore-evidence:write`) e 07/10 (`last-login:write`, só o agregado de role e horário, ADR-0001 D10). Validade obrigatória (padrão 90 dias, **valor inicial, calibrar**) e `last_used_at`. Todo uso vai para `auditor_operation_log` com o id do token, nunca o segredo. CSRF não se aplica (sem cookie). Rate limit por token. Cartão de tokens na UI (Trinity).
 
 **Critérios de aceite.**
 - [ ] O token de A usado em `/environments/B/...` recebe 403, e o log registra "denied" com o id do token (base do RNF-04 da 01, CA-06 da 10 e RNF-04 da 08).
@@ -117,12 +120,12 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 
 **Issue:** `feat(migration-risk): contexto por snapshot via API e por conexão direta só leitura; escalonamento de severidade e duração estimada`
 
-**Descrição.** Rota `migration-context`: por tabela afetada, tamanho total, linhas estimadas, taxa de escrita (delta de `n_tup_ins/upd/del` entre duas coletas completas e comparáveis, regra de `maintenance.growth_trend`), `server_version_num` e execução de referência (id e data), com `partial` e idade. Uma única leitura por tabela (RNF-03). A CLI escala a severidade pelos limiares da §3 (por ambiente, **valor inicial, calibrar**) e estima a duração = tamanho ÷ 50 MB/s, sempre com confiança. Código 3 quando o snapshot é parcial, mais velho que 7 dias (**valor inicial, calibrar**) ou inexistente. Modo (b) `--direct` com DSN em `AUDITOR_MIGRATION_RISK_DSN`/`_FILE`, via `ConnectReadOnly`: allowlist, TLS `verify-full` e recusa de conta com escrita (código 4). Pela **decisão padrão** nº 2, o modo (b) existe só para uso local do operador. A Action do lote 5 não o oferece, e a documentação proíbe DSN no runner de CI.
+**Descrição.** Rota `migration-context`: por tabela afetada, tamanho total, linhas estimadas, taxa de escrita (delta de `n_tup_ins/upd/del` entre duas coletas completas e comparáveis, regra de `maintenance.growth_trend`), `server_version_num` e execução de referência (id e data), com `partial` e idade. Uma única leitura por tabela (RNF-03). A CLI escala a severidade pelos limiares da §3 (por ambiente, **valor inicial, calibrar**) e estima a duração = tamanho ÷ 50 MB/s, sempre com confiança. Código 3 quando o snapshot é parcial, mais velho que 7 dias (**valor inicial, calibrar**) ou inexistente. Modo (b) `--direct` com DSN em `AUDITOR_MIGRATION_RISK_DSN`/`_FILE`, via `ConnectReadOnly`: allowlist, TLS `verify-full` e recusa de conta com escrita (código 4). Pela ADR-0001 D2 (confirmada por Q), o modo (b) existe só para uso local do operador. A Action do lote 5 não o oferece, e a documentação proíbe DSN no runner de CI.
 
 **Critérios de aceite.**
 - [ ] CA-01: índice sem `CONCURRENTLY` numa tabela de 12 GB no snapshot sai MR-01 crítica, com tamanho, lock SHARE e alternativa concorrente, código 1.
 - [ ] CA-05: snapshot `partial_success` resulta em código 3 e a saída diz "contexto parcial".
-- [ ] CA-06: modo (b) com conta com escrita é recusado com código 4 antes de qualquer leitura (teste com role de escrita no alvo descartável, matriz PG 14–18).
+- [ ] CA-06: modo (b), em uso local, com conta com escrita é recusado com código 4 antes de qualquer leitura (teste com role de escrita no alvo descartável, matriz PG 14–18).
 - [ ] O rodapé do Markdown traz o `audit_run_id`, a data e a versão das regras.
 - [ ] Token sem `snapshot-context:read` recebe 403 → código 2.
 - [ ] A resposta do contexto não traz nada além de metadados das tabelas pedidas (máximo de tabelas por chamada definido e testado).
@@ -134,7 +137,7 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 
 **Issue:** `feat(ci): GitHub Action migration-risk com comentário único atualizado por push e release do binário estático`
 
-**Descrição.** Action composite `.github/actions/migration-risk/action.yml`: baixa o binário da release (checksum sha256 verificado), roda `auditor migration-risk` em modo (a) com `AUDITOR_CLI_TOKEN` vindo de `secrets`, e publica **um** comentário no PR com o marcador oculto `<!-- db-auditor:migration-risk -->`. Se o comentário existe, é atualizado. Se não existe, é criado (RF-09). Permissões mínimas: `contents: read`, `pull-requests: write`. A Action não aceita DSN (**decisão padrão** nº 2). Workflow `release-cli.yml`: build `CGO_ENABLED=0` linux/amd64 e arm64, `SHA256SUMS`, gatilho por tag. Um job de autoteste no `ci.yml` roda a CLI sobre fixtures, sem token. A Action pode opcionalmente registrar a anotação `deployment` no merge (escopo `deploy-annotation:write`), mitigando o falso "fora do pipeline" da 04.
+**Descrição.** Action composite `.github/actions/migration-risk/action.yml`: baixa o binário da release (checksum sha256 verificado), roda `auditor migration-risk` em modo (a) com `AUDITOR_CLI_TOKEN` vindo de `secrets`, e publica **um** comentário no PR com o marcador oculto `<!-- db-auditor:migration-risk -->`. Se o comentário existe, é atualizado. Se não existe, é criado (RF-09). Permissões mínimas: `contents: read`, `pull-requests: write`. A Action não aceita DSN (ADR-0001 D2). Workflow `release-cli.yml`: build `CGO_ENABLED=0` linux/amd64 e arm64, `SHA256SUMS`, gatilho por tag. Um job de autoteste no `ci.yml` roda a CLI sobre fixtures, sem token. A Action pode opcionalmente registrar a anotação `deployment` no merge (escopo `deploy-annotation:write`), mitigando o falso "fora do pipeline" da 04.
 
 **Critérios de aceite.**
 - [ ] CA-04: dois pushes seguidos resultam em um único comentário, atualizado (teste com repositório de exemplo ou mock da API do GitHub).
@@ -174,7 +177,8 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 | `TestDirectModeRefusesWriteAccount` | integração no alvo descartável, matriz PG 14–18 | CA-06, RNF-01 |
 | `TestInlineSuppressionWithJustification` | unitário | CA-07, RF-08 |
 | `TestLockTablePerMajor` (golden por versão 14–18) | unitário + job da matriz | CA-08, RF-03 |
-| `TestEnvTokenCrossEnvironmentForbidden`, `TestEnvTokenExpiredRevoked`, `TestReportTokenNotAccepted` | API com `authMiddleware` | RNF-04, decisão padrão nº 1 |
+| `TestEnvTokenCrossEnvironmentForbidden`, `TestEnvTokenExpiredRevoked`, `TestReportTokenNotAccepted` | API com `authMiddleware` | RNF-04, ADR-0001 D1 |
+| `TestActionRejectsDSNInput` | teste da Action | ADR-0001 D2 |
 | `TestStaticAnalysisBudget` (200 arquivos / 2 MB < 10 s) | benchmark | RNF-03 |
 | `TestDeterministicOutput` | golden | RNF-06 |
 | `FuzzMigrationLexer` | fuzz curto | robustez do RF-01 |
@@ -199,8 +203,9 @@ Os números supõem 26 (plano 06) e 27–28 (plano 04) já mergeados. Lembrar `c
 - O ramo de token em `authorizeRequest` é uma superfície nova de bypass de RBAC. Mitigação: lista fechada, deny-by-default e testes negativos por rota.
 - Sem cgo, um parser completo de SQL fica fora de alcance. O escopo é o subconjunto de DDL da §3.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- A **decisão padrão** nº 2 proíbe DSN no CI, mas o RF-04(b) e o CA-06 exigem o modo (b). O plano mantém o modo (b) só para uso local. Confirmar se ele deve existir no v1 ou sair do binário.
-- O CA-08 cita "PostgreSQL 14 e 16". O plano testa as cinco versões. A diferença de lock mais clara dentro da matriz é a do PG 18 (`NOT NULL ... NOT VALID`). Confirmar a operação de referência com o PO.
-- A P-03 (SARIF) não foi decidida e fica fora do v1.
+- ~~Modo (b) × DSN no CI.~~ **Resolvido por ADR-0001 D2 (confirmada):** o modo (b) fica no binário, só para uso local do operador. O RF-04(b) e o CA-06 da spec foram ajustados.
+- ~~Operação de referência do CA-08.~~ **Resolvido por ADR-0001 D12:** MR-04 com `NOT NULL ... NOT VALID` (PG 18) × `CHECK ... NOT VALID` (PG 14–17), nas cinco versões. O CA-08 da spec foi ajustado.
+- ~~SARIF (P-03).~~ **Resolvido por ADR-0001 D12:** fora do v1.
+- **Pendente (fora do escopo de Q):** posição da lista "Análises de migration" e do cartão de tokens, com a Trinity nos lotes 3 e 6.

@@ -11,7 +11,7 @@ O db-auditor já coleta:
 
 Falta: o **caminho** da herança por privilégio, o ciclo de revisão com responsável e decisão, o diff com a revisão anterior e a exportação para auditoria.
 
-**Objetivo.** Campanhas de revisão por ambiente. A matriz conta × objeto × privilégio efetivo vem com origem (direto ou via qual role), cada linha recebe aprovar, revogar ou justificar do responsável, há diff com a campanha anterior e exportação CSV/XLSX como evidência.
+**Objetivo.** Campanhas de revisão por ambiente. A matriz conta × objeto × privilégio efetivo vem com origem (direto ou via qual role), cada linha recebe aprovar, revogar ou justificar do responsável, há diff com a campanha anterior e exportação CSV como evidência (XLSX depois, ADR-0001 D7).
 
 **Fora de escopo.** Executar revogação, mesmo que a decisão seja "revogar" (vira ação assistida para execução externa). Contas do próprio db-auditor (já em Contas). Integração com IdP/LDAP. MongoDB no MVP.
 
@@ -29,18 +29,18 @@ Falta: o **caminho** da herança por privilégio, o ciclo de revisão com respon
   - contas sem sessão observada ou com validade vencida (`security.account_inactive_review`);
   - privilégio de escrita em schema de outra aplicação;
   - privilégio novo desde a campanha anterior.
-- **RF-05** Agrupar por responsável: cada role ou conta recebe um responsável (mapeamento mantido no auditor, novo). Linhas sem responsável vão para o operator.
-- **RF-06** Decisão por linha ou em lote: aprovar, revogar (com prazo), ou manter com justificativa obrigatória. Registro de quem, quando e por quê, imutável.
+- **RF-05** Agrupar por responsável: cada role ou conta recebe um responsável, que é uma **conta do auditor** com papel auditor ou acima no ambiente, mais um contato livre opcional (nome e/ou e-mail) para a planilha. O mapeamento é mantido no auditor (novo). Linhas sem responsável vão para o operator (ADR-0001 D7).
+- **RF-06** Decisão por linha ou em lote: aprovar, revogar (com prazo), ou manter com justificativa obrigatória. Decide o responsável da linha. Nas linhas sem responsável, decide o operator (ADR-0001 D7). Registro de quem, quando e por quê, imutável.
 - **RF-07** "Revogar" cria uma ação assistida existente (plano, execução externa, medição na próxima coleta). Na campanha seguinte, um privilégio revogado que continua presente aparece como "revogação não aplicada".
 - **RF-08** Diff com a campanha anterior: privilégios novos, removidos, decisões que mudaram e contas novas ou removidas.
-- **RF-09** Exportações CSV e XLSX da matriz com as decisões. PDF de evidência da campanha: resumo, responsáveis, % decidido, pendências.
+- **RF-09** Exportação CSV da matriz com as decisões (XLSX fica para depois, fora do v1, ADR-0001 D7). PDF de evidência da campanha: resumo, responsáveis, % decidido, pendências.
 
 ## 2. Requisitos não funcionais
 
 - **RNF-01 Segurança e só leitura.** A matriz usa os snapshots. A resolução de origem e os privilégios por coluna são leituras de catálogo pela conexão só leitura, na coleta. Nada é revogado pelo auditor.
 - **RNF-02 LGPD.** Só nomes de roles, objetos e privilégios. Nomes de role podem identificar pessoas, então os modos de redação do PDF valem (identificadores ocultam nomes de conta). Nenhum dado de tabela.
-- **RNF-03 Desempenho e limites.** Matriz de até 500 contas × 5000 objetos, paginada e filtrável no servidor, com resposta em menos de 2 s por página. Exportação em streaming, com o marcador de fim (padrão do export de ações). XLSX limitado a 1 M linhas por aba, com aviso.
-- **RNF-04 Multi-tenant.** A campanha pertence ao ambiente. Responsável deve ter acesso ao ambiente (papel auditor ou acima). Viewer lê. Operator cria a campanha e o mapeamento de responsáveis.
+- **RNF-03 Desempenho e limites.** Matriz de até 500 contas × 5000 objetos, paginada e filtrável no servidor, com resposta em menos de 2 s por página. Exportação em streaming, com o marcador de fim (padrão do export de ações). (Quando o XLSX entrar, depois do v1: limite de 1 M linhas por aba, com aviso.)
+- **RNF-04 Multi-tenant.** A campanha pertence ao ambiente. Responsável deve ter acesso ao ambiente (papel auditor ou acima). Viewer lê. Operator cria a campanha e o mapeamento de responsáveis. Um auditor que não é o responsável da linha recebe 403 ao decidir (ADR-0001 D7).
 - **RNF-05 Observabilidade.** Métricas de campanhas por estado e de linhas pendentes. Toda decisão vai para `auditor_operation_log`.
 - **RNF-06 Imutabilidade.** Uma campanha concluída não muda. Correção = nova decisão registrada, com referência à anterior.
 
@@ -66,7 +66,7 @@ Falta: o **caminho** da herança por privilégio, o ciclo de revisão com respon
   - diff com a anterior;
   - visão "minhas pendências" para o responsável.
 - **API.** Criar e encerrar campanha e mapear responsáveis (operator). Decidir (auditor responsável). Ler matriz, diff e progresso (viewer). Exportar (auditor, regra de download).
-- **CSV/XLSX.** Colunas: conta, objeto qualificado, tipo, privilégio, origem, destaque, responsável, decisão, justificativa, decidido por, decidido em.
+- **CSV.** Colunas: conta, objeto qualificado, tipo, privilégio, origem, destaque, responsável, decisão, justificativa, decidido por, decidido em.
 - **PDF.** Evidência da campanha, respeitando a redação.
 - **Erros.**
   - coleta de referência parcial: 409 (campanha exige coleta completa);
@@ -105,17 +105,17 @@ Falta: o **caminho** da herança por privilégio, o ciclo de revisão com respon
 - mapeamento de responsáveis;
 - decisões imutáveis;
 - diff entre campanhas;
-- XLSX (hoje só CSV/JSONL);
+- último login por role vindo do agregado de logs da 10 (ADR-0001 D10);
 - regras de revogação não aplicada.
 
-**Dependências.** É base da 05. Usa de forma opcional a 10 (último login vindo de log) e a 04 (timeline de quando o privilégio apareceu).
+**Dependências.** É base da 05. Usa a 10 para o último login vindo de log (o agregado de role e horário, ADR-0001 D10; sem ele vale só a amostra de sessões) e, de forma opcional, a 04 (timeline de quando o privilégio apareceu).
 
 **Riscos.**
 - Matriz grande demais para revisão humana. Mitigação: lote e filtros por destaque.
 - "Sem sessão observada" é amostral, então não pode embasar revogação sozinho.
 - Nomes de role são dados pessoais em alguns contextos.
 
-**Perguntas em aberto.**
-- P-01: o "responsável" é uma conta do auditor (papel auditor por ambiente) ou um campo livre (nome/e-mail) só para a planilha?
-- P-02: XLSX é obrigatório para os auditores externos, ou CSV basta no MVP?
-- P-03: fonte de "último login": só a amostragem de sessões atual, ou também os logs de conexão (spec 10)?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md), D7 e D10).
+- P-01: o responsável é conta do auditor ou campo livre? **Resolvida:** conta do auditor com papel auditor ou acima no ambiente, mais contato livre opcional.
+- P-02: XLSX? **Resolvida:** CSV no v1. XLSX depois.
+- P-03: fonte de último login? **Resolvida:** a amostragem de sessões atual e o agregado de último login da spec 10 (só role e horário), com a fonte explícita.

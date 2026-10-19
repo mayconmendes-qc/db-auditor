@@ -27,7 +27,7 @@ Também já gera `chunk.*`, `cagg.*` e as opções de retenção e compressão e
   - (a) retenção mais curta que a janela de refresh de um CAGG dependente;
   - (b) retenção sobre dados ainda dentro de um CAGG sem política de refresh;
   - (c) compressão de chunks que ainda recebem escrita (chunks recentes com tuplas mortas ou inserções).
-- **RF-07** Chunks possivelmente sem consulta: por contadores de varredura por chunk entre duas coletas completas (proxy, novo), sempre como hipótese. Ver as perguntas em aberto.
+- **RF-07** Chunks possivelmente sem consulta: por contadores de varredura por chunk entre duas coletas completas (proxy, novo), sempre como hipótese rotulada **aproximada**. Um reset de estatística invalida a janela (ADR-0001 D9).
 - **RF-08** Achados: `timescale.retention_missing`, `timescale.compression_missing`, `timescale.retention_cagg_conflict` e `timescale.compression_ratio_low`.
 - **RF-09** Seção no painel da hypertable (UI), no PDF técnico e no CSV dos cenários.
 
@@ -70,7 +70,7 @@ Todos os limiares e a taxa padrão são **valor inicial, calibrar**. Nenhuma rec
 - **CA-01** Dado uma hypertable com 400 chunks diários de 1 GB, sem compressão, quando simulada uma retenção de 90 dias, então a economia mostrada é de cerca de 310 GB, com a lista de faixas de idade.
 - **CA-02** Dado chunks comprimidos com antes = 10 GB e depois = 2 GB, quando simulada a compressão após 7 dias, então a taxa usada é 5× observada e a confiança não é baixa.
 - **CA-03** Dado uma hypertable sem nenhum chunk comprimido, quando simulada a compressão, então a taxa padrão é usada e marcada "confiança baixa".
-- **CA-04** Dado um CAGG com janela de refresh de 120 dias sobre uma hypertable, quando o cenário de retenção de 90 dias é salvo, então surge `timescale.retention_cagg_conflict` alta.
+- **CA-04** Dado um CAGG com janela de refresh de 120 dias sobre uma hypertable, quando o cenário de retenção de 90 dias é salvo, então surge `timescale.retention_cagg_conflict` alta, criado no salvamento e vinculado à última coleta completa (ADR-0001 D9).
 - **CA-05** Dado um ambiente PostgreSQL sem Timescale, quando a seção é aberta, então mostra "não aplicável" e nenhum coletor falha (regressão do #125).
 - **CA-06** Dado preços configurados (02), quando a simulação roda, então a economia aparece também em moeda, com a vigência do preço.
 - **CA-07** Dado um viewer, quando ele tenta salvar um cenário, então recebe 403.
@@ -98,5 +98,5 @@ Todos os limiares e a taxa padrão são **valor inicial, calibrar**. Nenhuma rec
 - Contadores por chunk zeram com reset, então "sem consulta" é fraco.
 - Retenção é decisão de compliance, não técnica.
 
-**Perguntas em aberto.**
-- P-01: incluir "chunks sem consulta" no MVP com o proxy de contadores por chunk, ou adiar até ter uma fonte melhor?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md), D9).
+- P-01: chunks sem consulta no MVP? **Resolvida:** sim, com o proxy de contadores por chunk, rotulado aproximado.

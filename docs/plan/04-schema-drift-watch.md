@@ -3,22 +3,28 @@
 - **Spec:** [../spec/04-schema-drift-watch.md](../spec/04-schema-drift-watch.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 2ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 6 lotes, **23 d**, 3 lotes com gate R2, Trinity necessária (2 lotes)
 
 ## 0. Resumo
 
-Fecha a lacuna verificada: `frontend/src/pages/SchemaDriftPage.tsx` ainda envia `demoSource`/`demoTarget` fixos para `POST /api/v1/compare` (botão "Comparar (demo payloads)"). O plano cria um diff real entre execuções, lido do snapshot store, e uma linha do tempo gravada na ingestão, no fim de cada coleta completa. Cada evento é correlacionado com anotações `deployment` (`audit_annotation`) e com o registro de migrations da ferramenta da aplicação. Os alertas saem pelos canais globais, em formato genérico ou nativo do Slack.
+Fecha a lacuna verificada: `frontend/src/pages/SchemaDriftPage.tsx` ainda envia `demoSource`/`demoTarget` fixos para `POST /api/v1/compare` (botão "Comparar (demo payloads)"). O plano cria um diff real entre execuções, lido do snapshot store, e uma linha do tempo gravada na ingestão, no fim de cada coleta completa. Cada evento é correlacionado com anotações `deployment` (`audit_annotation`) e com o registro de migrations da ferramenta da aplicação. Os alertas saem para os destinos do ambiente criados no plano 06 (fallback nos canais globais), com formato genérico ou nativo do Slack escolhido por webhook.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 5):** ler as **tabelas de histórico das ferramentas de migration conhecidas** (golang-migrate, goose, Flyway, Alembic, Rails, Prisma: as seis da P-01) e, **opcionalmente, as anotações de implantação**. Responde à P-01.
-- **decisão padrão (Q, nº 5):** **webhook genérico** (JSON atual de `notify.Event`) **mais formato nativo do Slack**. Responde à P-02.
-- **decisão padrão (Q, nº 6, por extensão):** os alertas de drift usam os **canais globais atuais** (`internal/notify`). Não há canal por ambiente.
-- **decisão padrão (Q, nº 11):** tenant = ambiente. O diff entre ambientes exige concessão aos dois lados (RNF-04).
+- **ADR-0001 D5:** duas fontes de evidência, e **qualquer uma correlaciona**:
+  - a **anotação de implantação**, que vale sempre que existir;
+  - o **registro de migrations** das ferramentas conhecidas (golang-migrate, goose, Flyway, Alembic, Rails, Prisma), opcional e configurado por ambiente.
+
+  O registro não é obrigatório para marcar "fora do pipeline". Ferramentas sem carimbo correlacionam por "a versão mudou entre as coletas", com confiança rebaixada. Responde à P-01.
+- **ADR-0001 D5:** o par do RF-06 usa `is_production` e `object_mapping`, sem entidade nova de par.
+- **ADR-0001 D5, D15:** **webhook genérico** (JSON atual de `notify.Event`) **mais formato nativo do Slack**, escolhido **por webhook** no destino do ambiente. O webhook global (`AUDITOR_ALERT_WEBHOOK_URL`) continua genérico, e **os alertas existentes não mudam**. Responde à P-02.
+- **ADR-0001 D6:** os alertas de drift vão para os **destinos do ambiente** (plano 06, lote 3), com fallback nos canais globais.
+- **ADR-0001 D11:** tenant = ambiente. O diff entre ambientes exige concessão aos dois lados (RNF-04).
 
 ### Dependências
 
-Nenhuma bloqueante. Este plano é base opcional para a 01 (mostrar se a tabela mudou desde o snapshot) e para a 07 (quando o privilégio apareceu). A anotação automática de deploy pela CLI, mitigação de risco desta spec, depende do token por ambiente da 01 (lote 3 do plano 01, escopo `deploy-annotation:write`).
+O lote 5 depende do plano 06, lote 3 (destinos por ambiente). Fora isso, nenhuma bloqueante. Este plano é base opcional para a 01 (mostrar se a tabela mudou desde o snapshot) e para a 07 (quando o privilégio apareceu). A anotação automática de deploy pela CLI, mitigação de risco desta spec, depende do token por ambiente da 01 (lote 3 do plano 01, escopo `deploy-annotation:write`).
 
 ## 1. Módulos e arquivos afetados
 
@@ -30,7 +36,7 @@ Nenhuma bloqueante. Este plano é base opcional para a 01 (mostrar se a tabela m
 | Ingestão | `backend/internal/audit/runner.go` (interface opcional `SchemaTimelineRecorder`, chamada junto de `ReconcileCompletedRun` em `repository/baseline.go`) | eventos gravados na ingestão (RNF-03) |
 | Regras | `backend/internal/analyzer/schema_drift.go` (novo), `analyzer/registry.go`, `backend/internal/actions/catalog.go`, `actions/text_pt.go` | `drift.out_of_pipeline`, `drift.environment_divergence`. Os `config.*_drift` de `analyzer/drift.go` ficam como estão |
 | Registro de migrations | `backend/internal/collectors/postgres/migration_registry.go` (novo), registro em `backend/internal/audit/live_registry_postgres.go` | leitura só leitura de versão e carimbo |
-| Alertas | `backend/internal/notify/notify.go` (formato Slack), `backend/internal/repository/alerts.go` (`ClaimAlert`) | — |
+| Alertas | `backend/internal/notify/notify.go`, novo `backend/internal/notify/slack.go` (formatador por destino), `backend/internal/notify/destinations.go` (plano 06), `backend/internal/repository/alerts.go` (`ClaimAlert`), `backend/internal/api/notification_destinations.go` (passa a aceitar `format=slack`) | — |
 | API | `backend/internal/api/schema_drift.go` (novo), `api/health.go`, `api/auth.go` (só se preciso, ver lote 1) | — |
 | Frontend | `frontend/src/pages/SchemaDriftPage.tsx`, `frontend/src/pages/SchemaTimelinePage.tsx` (novo) ou aba, `frontend/src/pages/EnvironmentsPage.tsx` (atributo produção), `frontend/src/services/api.ts`, `frontend/src/lib/export.ts` | — |
 | Docs | `docs/rules.md` (seção "Drift de schema": timeline × regressão `structure`), `docs/ops.md` (registro de migrations, Slack), `docs/guia-do-usuario.md` | — |
@@ -40,7 +46,7 @@ Nenhuma bloqueante. Este plano é base opcional para a 01 (mostrar se a tabela m
 | Nº provisório | Arquivo | Lote | Conteúdo |
 |---|---|---|---|
 | 27 | `backend/migrations/27_schema_timeline.sql` | 3 | `audit_environment.is_production boolean NOT NULL DEFAULT false`; `schema_change_event` (ambiente, execução anterior e atual, intervalo, tipo de objeto, objeto qualificado, tipo de mudança, campos alterados com fingerprints e **sem definição SQL**, correlação `deployment`/`migration_registry`/`none`/`not_verified`, id da anotação, versão do registro); `schema_timeline_gap` (intervalos com coleta parcial ou incomparável); índice `(environment_id, detected_at DESC, id)` |
-| 28 | `backend/migrations/28_migration_registry.sql` | 4 | `environment_migration_registry` (ambiente, banco, ferramenta com CHECK nas seis da **decisão padrão**, schema e tabela opcionais, ligado); `migration_registry_snapshot` (execução, ferramenta, versão mais recente, `applied_at` nulo quando a ferramenta não grava, estado de acesso) |
+| 28 | `backend/migrations/28_migration_registry.sql` | 4 | `environment_migration_registry` (ambiente, banco, ferramenta com CHECK nas seis da ADR-0001 D5, schema e tabela opcionais, ligado); `migration_registry_snapshot` (execução, ferramenta, versão mais recente, `applied_at` nulo quando a ferramenta não grava, estado de acesso) |
 
 Os números dependem do merge do plano 06 (26). Cada migration entra em `.github/workflows/ci.yml`, `backend/migrations/README.md` e `docs/ops.md`.
 
@@ -55,7 +61,7 @@ Os números dependem do merge do plano 06 (26). Cada migration entra em `.github
 | `PATCH /api/v1/environments/{id}` (`is_production`) | operator | regra padrão de não-GET |
 | `GET`/`PUT /api/v1/environments/{id}/migration-registry` | viewer / operator | configuração do RF-05(b) |
 
-**Telas (Trinity necessária).** (1) **Desvio de schema** com seletores reais de ambiente e execução (padrão: última completa de cada lado), estados igual/diferente/só origem/só destino, campos alterados, fingerprints antigo e novo, aviso "parcial" e link para o Inventário. (2) Nova aba **Linha do tempo** por ambiente, com evento, execução, correlação, selo "fora do pipeline" e lacunas. (3) Chave "ambiente de produção" em Ambientes.
+**Telas (Trinity necessária).** (1) **Desvio de schema** com seletores reais de ambiente e execução (padrão: última completa de cada lado), estados igual/diferente/só origem/só destino, campos alterados, fingerprints antigo e novo, aviso "parcial" e link para o Inventário. (2) Nova aba **Linha do tempo** por ambiente, com evento, execução, correlação, selo "fora do pipeline" e lacunas. (3) Chave "ambiente de produção" em Ambientes. A posição na navegação citada aqui é a da spec. A decisão final fica adiada para o lote de tela, quando Q chamará a Trinity (ADR-0001, Pendente).
 
 ## 4. Lotes
 
@@ -112,7 +118,7 @@ Os números dependem do merge do plano 06 (26). Cada migration entra em `.github
 
 **Issue:** `feat(schema-drift): leitura opcional do registro de migrations (golang-migrate, goose, Flyway, Alembic, Rails, Prisma) para correlação (spec 04 RF-05b)`
 
-**Descrição.** Migration `28_migration_registry.sql` (provisória). Implementa a **decisão padrão**: o operator configura por ambiente a ferramenta e, opcionalmente, schema e tabela. Um novo coletor, pela conexão só leitura (`collectors/postgres/readonly_connection.go`), lê **só** a versão mais recente e o carimbo de aplicação:
+**Descrição.** Migration `28_migration_registry.sql` (provisória). Implementa a ADR-0001 D5: o operator configura por ambiente a ferramenta e, opcionalmente, schema e tabela. Um novo coletor, pela conexão só leitura (`collectors/postgres/readonly_connection.go`), lê **só** a versão mais recente e o carimbo de aplicação:
 
 | Ferramenta | Tabela padrão | Versão | Carimbo |
 |---|---|---|---|
@@ -123,7 +129,7 @@ Os números dependem do merge do plano 06 (26). Cada migration entra em `.github
 | Rails | `schema_migrations` | `version` | **não existe** (o nome da versão costuma ser um timestamp, mas não é carimbo de aplicação) |
 | Prisma | `_prisma_migrations` | `migration_name` | `finished_at` |
 
-Sem carimbo, a correlação é "a versão mudou entre as duas coletas", com confiança menor. Os identificadores de schema e tabela são validados (regex de identificador e `pgx.Identifier.Sanitize`), nunca interpolados crus. Se a tabela estiver configurada mas inacessível, a correlação fica "não verificada" e a cobertura parcial (§4 Erros). Nada além de versão e carimbo é lido (RNF-02). As anotações de implantação continuam valendo em conjunto (**decisão padrão**: anotação opcional).
+Sem carimbo, a correlação é "a versão mudou entre as duas coletas", com confiança menor (ADR-0001 D5). Os identificadores de schema e tabela são validados (regex de identificador e `pgx.Identifier.Sanitize`), nunca interpolados crus. Se a tabela estiver configurada mas inacessível, a correlação fica "não verificada" e a cobertura parcial (§4 Erros). Nada além de versão e carimbo é lido (RNF-02). As anotações de implantação continuam valendo em conjunto: qualquer uma das fontes correlaciona, e o registro não é obrigatório (ADR-0001 D5).
 
 **Critérios de aceite.**
 - [ ] Teste de integração por ferramenta, com tabelas criadas num alvo descartável, nos jobs PG 14–18.
@@ -137,18 +143,19 @@ Sem carimbo, a correlação é "a versão mudou entre as duas coletas", com conf
 
 ### Lote 5 — Alertas: webhook genérico, Slack nativo e e-mail
 
-**Issue:** `feat(notify): alerta drift.out_of_pipeline com payload sanitizado, formato Slack e métrica de falha (spec 04 RF-07)`
+**Issue:** `feat(notify): alerta drift.out_of_pipeline para os destinos do ambiente, com payload sanitizado, formato Slack por webhook e métrica de falha (spec 04 RF-07)`
 
-**Descrição.** Um evento por episódio, com dedup pelo `ClaimAlert`/`alert_delivery` (chave = ambiente + objeto + tipo de mudança + execução do episódio). O payload leva tipo, ambiente, objeto qualificado, tipo de mudança e link, sem definição SQL. Novo `AUDITOR_ALERT_WEBHOOK_FORMAT=generic|slack` (padrão `generic`). O formato `slack` monta `text`/`blocks` a partir do mesmo `notify.Event`. Criar métrica de falha `auditor_alert_deliveries_failed_total{kind}` (RNF-05: hoje `alert_delivery` só registra entregas).
+**Descrição.** Um evento por episódio, com dedup pelo `ClaimAlert`/`alert_delivery` (chave = ambiente + objeto + tipo de mudança + execução do episódio). O payload leva tipo, ambiente, objeto qualificado, tipo de mudança e link, sem definição SQL. O envio vai para os destinos ativos do ambiente (plano 06, lote 3) e, sem destino, para os canais globais (ADR-0001 D6). Novo formatador `slack` (`text`/`blocks` a partir do mesmo `notify.Event`), aplicado **só** aos webhooks com `format=slack`. A rota de destinos passa a aceitar esse valor (ADR-0001 D15). **Não há variável global de formato.** O webhook global e os alertas existentes continuam no JSON genérico. Criar métrica de falha `auditor_alert_deliveries_failed_total{kind}` (RNF-05: hoje `alert_delivery` só registra entregas).
 
 **Critérios de aceite.**
 - [ ] CA-07: um único POST com payload sanitizado. A repetição na coleta seguinte não reenvia.
 - [ ] Golden do payload genérico e do Slack, ambos sem SQL, DSN ou senha.
 - [ ] Falha de entrega incrementa a métrica e não falha a coleta.
-- [ ] O formato Slack vale para todos os eventos já existentes sem quebrar o JSON genérico (os testes atuais de `notify` continuam verdes).
+- [ ] Com um destino `slack` e outro `generic` no mesmo ambiente, cada um recebe o seu formato.
+- [ ] Os alertas existentes e o webhook global não mudam: golden do payload atual idêntico, e os testes atuais de `notify` continuam verdes.
 
-**Arquivos.** `internal/notify/notify.go`, `internal/repository/alerts.go`, `internal/observability/metrics.go`, `.env.example`, `deploy/env.prod.example`, `docs/ops.md`.
-**Estimativa:** 3 d. **Gate:** **R2** (saída de dados para um serviço externo; sanitização do payload). **Depende de:** lote 3.
+**Arquivos.** `internal/notify/notify.go`, `internal/notify/slack.go`, `internal/notify/destinations.go`, `internal/api/notification_destinations.go`, `internal/repository/alerts.go`, `internal/observability/metrics.go`, `docs/ops.md`.
+**Estimativa:** 3 d. **Gate:** **R2** (saída de dados para um serviço externo; sanitização do payload). **Depende de:** lote 3 e plano 06 lote 3.
 
 ### Lote 6 — UI Linha do tempo, atributo produção e exportações
 
@@ -177,6 +184,7 @@ Sem carimbo, a correlação é "a versão mudou entre as duas coletas", com conf
 | `TestSchemaDiffFunctionShowsFingerprintsOnly` | unitário + API | CA-05, RNF-02 |
 | `TestSchemaDiffCrossEnvironmentRequiresBothGrants` (viewer A → A × B = 403, corpo sem objetos) | API com `authMiddleware` | CA-06, RNF-04 |
 | `TestDriftWebhookOnceAndSanitized` (servidor falso conta POSTs; Slack e genérico) | unitário/integração | CA-07, RF-07 |
+| `TestWebhookFormatPerDestinationExistingAlertsUnchanged` | unitário + golden do payload atual | ADR-0001 D15 |
 | `TestMigrationRegistryPerTool` (6 ferramentas) | integração no alvo descartável, matriz PG 14–18 | RF-05(b) |
 | `TestSchemaDiffScaleBudget` (5000/50 000 < 5 s) | escala | RNF-03 |
 | `TestEveryCatalogRuleHasFiveFieldsAndASafeQuery` (existente) | unitário | regras `drift.*` |
@@ -198,10 +206,12 @@ Sem carimbo, a correlação é "a versão mudou entre as duas coletas", com conf
 - Anotação esquecida gera falso "fora do pipeline". Mitigação: registro de migrations (lote 4) e anotação automática pela CLI do plano 01 (escopo `deploy-annotation:write`).
 - golang-migrate, Alembic e Rails não guardam carimbo. A correlação por versão é mais fraca, e a confiança fica rebaixada.
 - Sobreposição com a regressão `structure`: textos e `docs/rules.md` deixam a diferença explícita.
-- O formato Slack global afeta todos os alertas existentes. Ele só é ativado por variável explícita.
+- Um erro no formatador Slack poderia afetar outros envios. Mitigação: formato escolhido por webhook (ADR-0001 D15), sem variável global, e golden do payload genérico atual.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- A **decisão padrão** nº 5 fala em "ler as tabelas de histórico ... e, opcionalmente, anotações de implantação", invertendo a ordem do RF-05 (anotação = (a), registro = (b) opcional). O plano trata as duas fontes como válidas: a anotação vale sempre que existir, e o registro vale quando configurado. Confirmar se o registro deve ser obrigatório para marcar "fora do pipeline".
-- Para as ferramentas sem carimbo de aplicação (golang-migrate, Alembic, Rails), basta correlacionar por "versão mudou entre as coletas"?
-- O par "produção × homologação" do RF-06 não tem entidade hoje. O plano usa o atributo `is_production` e um par configurado por `object_mapping`. Confirmar se é preciso uma entidade de par de ambientes.
+- ~~Ordem das fontes do RF-05 e obrigatoriedade do registro.~~ **Resolvido por ADR-0001 D5:** qualquer fonte correlaciona, e o registro não é obrigatório.
+- ~~Ferramentas sem carimbo.~~ **Resolvido por ADR-0001 D5:** correlação por "versão mudou entre as coletas", com confiança rebaixada.
+- ~~Entidade de par de ambientes.~~ **Resolvido por ADR-0001 D5:** sem entidade nova (`is_production` + `object_mapping`).
+- ~~Formato Slack global.~~ **Resolvido por ADR-0001 D15:** formato por webhook. Os alertas existentes não mudam.
+- **Pendente (fora do escopo de Q):** posição das telas (Desvio de schema já existe; Linha do tempo nova), com a Trinity nos lotes 2 e 6.

@@ -10,9 +10,9 @@
 
 ## 1. Requisitos funcionais
 
-- **RF-01** Etapa 1, só metadados: heurística por nome e tipo de coluna (cpf, cnpj, email, telefone/celular, cep, pix, nome, nascimento, endereço, rg), com dicionário editável por ambiente. Sem ler linhas.
+- **RF-01** Etapa 1, só metadados: heurística por nome e tipo de coluna (cpf, cnpj, email, telefone/celular, cep, pix, nome, nascimento, endereço, rg), com dicionário editável por ambiente pelo operator (ADR-0001 D14). Sem ler linhas.
 - **RF-02** Etapa 2, opcional e explicitamente habilitada: validação de conteúdo sobre uma amostra limitada de colunas candidatas (texto e numéricas). Detectores:
-  - CPF e CNPJ com dígito verificador;
+  - CPF e CNPJ com dígito verificador (CNPJ numérico e alfanumérico, ADR-0001 D14);
   - e-mail;
   - telefone BR (fixo e celular, com ou sem DDI);
   - CEP;
@@ -28,9 +28,9 @@
 
 ## 2. Requisitos não funcionais
 
-- **RNF-01 Segurança e só leitura.** A etapa 2 exige habilitação pelo operator (flag própria ou a do diagnóstico de qualidade, ver perguntas). Usa a conta só leitura, transação só leitura e timeout por coluna.
+- **RNF-01 Segurança e só leitura.** A etapa 2 exige a flag própria e mais restrita `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` no processo **e** a habilitação explícita do ambiente pelo operator. `AUDITOR_DATA_QUALITY_ENABLED` não basta (ADR-0001 D4). Usa a conta só leitura, transação só leitura e timeout por coluna.
 - **RNF-02 LGPD (crítico).** Valores amostrados vivem só em memória durante a validação e são descartados. Não vão para log, store, evidência, PDF, CSV, mensagem de erro nem métrica. Nem mascarados, nem com hash: hash de CPF é reversível por força bruta. Persistir só contagens e proporções.
-- **RNF-03 Desempenho e limites.** Amostra padrão de 1000 linhas por tabela (mesmo teto do diagnóstico atual), máximo de 50 colunas candidatas por tabela e 200 tabelas por execução (**valor inicial, calibrar**). Amostragem por páginas em tabelas grandes. Teto de duração por execução: 10 min.
+- **RNF-03 Desempenho e limites.** Amostra de 1000 linhas por tabela (o mesmo teto do diagnóstico atual, independente do teto dos contratos da 03; ADR-0001 D4), máximo de 50 colunas candidatas por tabela e 200 tabelas por execução (**valor inicial, calibrar**). Amostragem por páginas em tabelas grandes. Teto de duração por execução: 10 min.
 - **RNF-04 Multi-tenant.** O mapa pertence ao ambiente. Ver o mapa exige viewer, mas a etapa 2 e a confirmação exigem auditor. O próprio mapa é informação sensível, então o download exige auditor (regra atual de download).
 - **RNF-05 Observabilidade.** Métricas de colunas analisadas por método e de execuções interrompidas por teto. Um teste automatizado garante que nenhum valor amostrado aparece em log ou store (padrão dos testes de redação existentes).
 
@@ -93,6 +93,6 @@ Os limiares de %, quantidade de contas e tamanho de amostra são **valor inicial
 - Coluna JSONB com dado pessoal fica fora do escopo.
 - O próprio mapa é um alvo de ataque (onde estão os CPFs). Mitigação: download só para auditor e redação.
 
-**Perguntas em aberto.**
-- P-01: a validação de conteúdo usa a mesma flag e a mesma conta do diagnóstico de qualidade, ou uma flag dedicada e mais restrita?
-- P-02: incluir campos JSONB e texto livre numa fase 2?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md)).
+- P-01: mesma flag do diagnóstico ou uma dedicada? **Resolvida (D4):** flag dedicada e mais restrita, com habilitação por ambiente. A conta continua sendo a só leitura existente.
+- P-02: JSONB e texto livre? **Resolvida (D14):** fora do v1.

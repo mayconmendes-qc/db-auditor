@@ -3,19 +3,23 @@
 - **Spec:** [../spec/08-backup-verifier.md](../spec/08-backup-verifier.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 9ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 4 lotes, **20 d**, 3 lotes com gate R2, Trinity necessária (1 lote)
 
 ## 0. Resumo
 
 Um subcomando da CLI restaura um `pg_dump` do banco auditado num **container efêmero, sem rede de saída**, no host em que a CLI roda. Depois verifica inventário, contagens, integridade física (amcheck) e, opcionalmente, o hash de amostra por tabela, mede o RTO e envia a evidência `target_restore_drill` para o ambiente no auditor. O procedimento e o formato de evidência do #106 (`deploy/snapshot-restore-verify.sh`, testes em `backend/internal/ops/restore_verify_test.go`) servem de modelo. A evidência do snapshot store (`retention_evidence`, `POST /api/v1/retention-policy/evidence`) continua separada e alimenta só a retenção.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 8):** a **restauração roda só pela CLI, num runner externo** (runner de CI ou máquina de operação). **A API nunca recebe acesso ao socket de container** (RNF-01). Responde à P-01.
-- **decisão padrão (Q, nº 8):** **só `pg_dump`** (formato custom ou diretório) no v1. pgBackRest e WAL-G ficam fora. Responde à P-02.
-- **decisão padrão (Q, nº 8):** o **hash de amostra por tabela é opt-in** (`--sample-hash`). Por padrão, o RF-05(c) não roda e não lê linhas da produção. Responde à P-03.
-- **decisão padrão (Q, nº 1):** a evidência é enviada com o **token por ambiente** (plano 01), escopo novo `restore-evidence:write`.
-- **decisão padrão (Q, nº 11):** tenant = ambiente.
+- **ADR-0001 D8:** a **restauração roda só pela CLI, num runner externo** (runner de CI ou máquina de operação). **A API nunca recebe acesso ao socket de container** (RNF-01). Responde à P-01.
+- **ADR-0001 D8:** **só `pg_dump`** (formato custom ou diretório) no v1. pgBackRest e WAL-G ficam fora. Responde à P-02.
+- **ADR-0001 D8 (emendada):** o **hash de amostra por tabela é opt-in** (`--sample-hash`). Ele **só roda com um DSN só leitura da origem fornecido explicitamente pelo operator no runner** (`AUDITOR_RESTORE_VERIFY_SOURCE_DSN` ou `_FILE`, nunca em argumento). É a única exceção à D2. Responde à P-03.
+  - Sem opt-in, o RF-05(c) fica "desabilitada", não lê linhas da produção e não conta como execução parcial (código 0 possível).
+  - O CA-01 padrão usa inventário, contagens e integridade física. O hash tem critério de aceite próprio (CA-09).
+- **ADR-0001 D8:** a recusa de destino do RF-03 usa **fingerprints** (sha256 de `host:porta/banco`) dos alvos do ambiente, fornecidos pela API ao token. Nunca DSNs.
+- **ADR-0001 D1:** a evidência é enviada com o **token por ambiente** (plano 01), escopo novo `restore-evidence:write`.
+- **ADR-0001 D11:** tenant = ambiente.
 
 ### Dependências
 
@@ -28,7 +32,7 @@ Plano 01 (lote 1, modo CLI; lote 3, token). Uso opcional do plano 04 (diff de in
 | Orquestração | `backend/internal/restoreverify/` (novo: `runtime.go` chamando o binário `docker`/`podman` por `exec`, sem SDK nem socket na API; `container.go` com `--network none`, rótulo por execução, credencial gerada e destruição com `defer`; `prevalidate.go`; `rto.go`; `verify_inventory.go`; `verify_counts.go`; `verify_sample_hash.go`; `verify_amcheck.go`; `evidence.go`) | — |
 | Coletores contra a cópia | `backend/internal/collectors/postgres/*` (`table.go`, `index.go`, `function.go`, `relation.go`), `backend/internal/comparison/compare.go` ou `internal/schemadiff` (plano 04) | reuso, sem a verificação de conta só leitura contra a cópia (a cópia é local e descartável; a recusa de escrita continua valendo para a **origem**) |
 | CLI | `backend/cmd/auditor/main.go`, `backend/internal/cli/` | `auditor restore-verify` |
-| Origem (opt-in) | `backend/internal/collectors/postgres/readonly_connection.go` | leitura só leitura de amostra para o hash, só com `--sample-hash` |
+| Origem (opt-in) | `backend/internal/collectors/postgres/readonly_connection.go`, `backend/internal/cli/secrets.go` | leitura só leitura de amostra para o hash, só com `--sample-hash` **e** `AUDITOR_RESTORE_VERIFY_SOURCE_DSN`/`_FILE` fornecido pelo operator (ADR-0001 D8) |
 | Cifra | dependência opcional de `age` (padrão BA-16), decifração em memória ou no volume efêmero | — |
 | API | novo `backend/internal/api/restore_drills.go`, `backend/internal/api/auth.go` (escopo `restore-evidence:write`), `api/health.go` | — |
 | Store e regras | novo `backend/internal/repository/restore_drills.go`, `repository/backup_age.go` (padrão de idade), novo `backend/internal/analyzer/backup.go`, `backend/internal/actions/catalog.go` | `backup.restore_failed`, `backup.restore_divergence`, `backup.rto_exceeded`, `backup.drill_overdue` |
@@ -54,7 +58,7 @@ Os números supõem 26–38 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `GET /api/v1/environments/{id}/restore-drills`, `GET .../{drill}` | viewer | histórico e detalhe |
 | `GET`/`PUT /api/v1/environments/{id}/restore-drill-policy` | viewer / operator | RTO-alvo e prazo (RF-09) |
 
-**Tela (Trinity necessária).** Área **Restauração verificada** (a spec diz Ambientes ou Status; a Trinity escolhe): histórico, último sucesso, RTO × alvo, tendência, divergências por tabela e link para os achados. Configuração de RTO-alvo e prazo para operator.
+**Tela (Trinity necessária).** Área **Restauração verificada** (a spec diz Ambientes ou Status; a posição fica adiada para o lote 4, quando Q chamará a Trinity, ADR-0001 Pendente): histórico, último sucesso, RTO × alvo, tendência, divergências por tabela e link para os achados. Configuração de RTO-alvo e prazo para operator.
 
 ## 4. Lotes
 
@@ -79,17 +83,23 @@ Os números supõem 26–38 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(restore-verify): inventário, contagens, integridade física (amcheck) e hash de amostra opt-in (RF-05, RNF-06)`
 
-**Descrição.** (a) Inventário: rodar os coletores PostgreSQL existentes contra a cópia e comparar com a última coleta completa da origem (`internal/schemadiff` do plano 04 ou `internal/comparison`). Tabela, índice ou função ausente gera divergência alta. (b) Contagens exatas na cópia × linhas estimadas da origem, com tolerância (> 0,5% **e** > 1000 linhas gera média, **valor inicial, calibrar**), só em tabelas comparáveis. (c) **Opt-in (`--sample-hash`, decisão padrão nº 8):** hash agregado por tabela de uma amostra determinística (ordem pela PK, até 1000 linhas, até as 200 maiores tabelas), calculado na origem pela conexão só leitura (timeouts da coleta) e na cópia. Exigido só para tabelas sem escrita entre o backup e a verificação (contadores `n_tup_*` das coletas). As outras ficam "não comparável" (RNF-06). Hash nunca por linha. Sem opt-in, (c) aparece como "desabilitada", e isso **não** é tratado como execução parcial (ver §8). Com opt-in e origem inacessível, (c) fica "não executada" e o código é 3. (d) `CREATE EXTENSION amcheck` **na cópia** e verificação de B-tree e heap (`bt_index_check`, `verify_heapam`). Corrupção gera divergência crítica.
+**Descrição.** (a) Inventário: rodar os coletores PostgreSQL existentes contra a cópia e comparar com a última coleta completa da origem (`internal/schemadiff` do plano 04 ou `internal/comparison`). Tabela, índice ou função ausente gera divergência alta. (b) Contagens exatas na cópia × linhas estimadas da origem, com tolerância (> 0,5% **e** > 1000 linhas gera média, **valor inicial, calibrar**), só em tabelas comparáveis. (c) **Opt-in (`--sample-hash`, ADR-0001 D8):** hash agregado por tabela de uma amostra determinística (ordem pela PK, até 1000 linhas, até as 200 maiores tabelas), calculado na cópia e na origem.
+
+Regras da leitura na origem:
+- usa só o DSN que o operator forneceu no runner (`AUDITOR_RESTORE_VERIFY_SOURCE_DSN` ou `_FILE`; segredo nunca em argumento);
+- passa por `ConnectReadOnly`, com allowlist, TLS `verify-full`, timeouts da coleta e recusa de conta com escrita (código 4);
+- `--sample-hash` sem DSN sai com código 2 **antes** de restaurar. Exigido só para tabelas sem escrita entre o backup e a verificação (contadores `n_tup_*` das coletas). As outras ficam "não comparável" (RNF-06). Hash nunca por linha. Sem opt-in, (c) aparece como "desabilitada", e isso **não** é tratado como execução parcial (ADR-0001 D8). Com opt-in e origem inacessível, (c) fica "não executada" e o código é 3. (d) `CREATE EXTENSION amcheck` **na cópia** e verificação de B-tree e heap (`bt_index_check`, `verify_heapam`). Corrupção gera divergência crítica.
 
 **Critérios de aceite.**
-- [ ] CA-01: dump válido com confirmação, as quatro verificações executadas (com `--sample-hash`), container destruído e código 0 sem divergência.
-- [ ] CA-05: tabela sem escrita desde o backup com amostra diferente gera `backup.restore_divergence` alta, com tabela e contagens, sem nenhum valor de linha (varredura da evidência e dos logs).
+- [ ] CA-01: dump válido com confirmação e **sem** opt-in: inventário, contagens e integridade executados, (c) "desabilitada", container destruído e código 0 sem divergência.
+- [ ] CA-09: com `--sample-hash` e DSN só leitura, as quatro verificações executam. Sem DSN, código 2 antes de restaurar. DSN de conta com escrita, código 4. O DSN não aparece em log, evidência nem `ps`.
+- [ ] CA-05 (com opt-in): tabela sem escrita desde o backup com amostra diferente gera `backup.restore_divergence` alta, com tabela e contagens, sem nenhum valor de linha (varredura da evidência e dos logs).
 - [ ] Origem inacessível com `--sample-hash` resulta em (c) "não executada" e código 3.
 - [ ] Os dados restaurados nunca saem do container. A CLI só lê contagens, hashes agregados e catálogo.
 - [ ] Testes nos jobs PG 14–18 com `pg_dump`/`pg_restore` da mesma major, a mesma restrição já documentada para `TestRestoreDrillRoundTripIntegration` em `docs/ops.md`.
 
 **Arquivos.** `internal/restoreverify/verify_*.go`, `internal/collectors/postgres/*` (reuso), `internal/comparison/compare.go` ou `internal/schemadiff`, `docs/backup-verifier.md`.
-**Estimativa:** 6 d. **Gate:** **R2** (lê linhas da produção no opt-in; dado pessoal só em memória). **Depende de:** lote 1.
+**Estimativa:** 6 d. **Gate:** **R2** (lê linhas da produção no opt-in, com DSN de origem no runner; dado pessoal só em memória). **Depende de:** lote 1.
 
 ### Lote 3 — Evidência na API, política por ambiente e regras `backup.*`
 
@@ -126,7 +136,8 @@ Os números supõem 26–38 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 | Teste | Tipo | Critério ligado |
 |---|---|---|
-| `TestRestoreVerifyHappyPath` (dump válido; quatro verificações com `--sample-hash`; container destruído) | integração com runtime de container no runner | CA-01 |
+| `TestRestoreVerifyHappyPath` (dump válido; sem opt-in; (c) "desabilitada"; container destruído; código 0) | integração com runtime de container no runner | CA-01 |
+| `TestSampleHashRequiresExplicitReadOnlySourceDSN` (sem DSN → 2; conta com escrita → 4; DSN fora de log/`ps`) | integração | CA-09, ADR-0001 D8 |
 | `TestCorruptedDumpChecksumFails` | integração | CA-02 |
 | `TestMissingIsolationConfirmationExit4NoContainer` | integração | CA-03 |
 | `TestTargetMatchesConfiguredEnvironmentExit4` | unitário + integração | CA-04 |
@@ -145,20 +156,22 @@ O CI precisa de runtime de container no runner. O job `Backend (Go)` já usa `do
 | Lote | Gate | Motivo |
 |---|---|---|
 | 1 | **R2** | isolamento, backup sensível e credenciais |
-| 2 | **R2** | leitura de linhas da produção (opt-in) |
+| 2 | **R2** | leitura de linhas da produção (opt-in, DSN de origem no runner) |
 | 3 | **R2** | escrita por token por ambiente |
 | 4 | CI verde + Trinity | UI e relatório |
 
 ## 7. Riscos
 
 - O runner precisa de acesso ao backup de produção, um ativo sensível. Mitigação: runbook com runner dedicado, artefato cifrado (`age`) e nenhum dado saindo do container.
+- No opt-in de hash, o runner também guarda um DSN só leitura da produção (única exceção à ADR-0001 D2). Mitigação: só por variável ou arquivo, recusa de conta com escrita, allowlist e TLS, e o runbook recomenda não habilitar em runners de CI compartilhados.
 - Restaurações grandes custam tempo e disco. Mitigação: verificação de disco antes, teto de 2 h e RTO registrado mesmo em falha.
 - A origem muda depois do backup e gera falsos positivos. Mitigação: só tabelas "comparáveis" pelos contadores de escrita (RNF-06).
 - Diferença de versão entre `pg_restore` e o servidor (documentada em `docs/ops.md`). Mitigação: o `pg_restore` roda dentro da imagem escolhida.
 - Container órfão por `kill -9` da CLI. Mitigação: rótulo por execução e varredura no início da próxima execução.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- O hash de amostra opt-in (**decisão padrão** nº 8) exige que o runner tenha DSN só leitura da produção. Isso contraria o espírito da **decisão padrão** nº 2 ("o runner nunca recebe a senha do banco", dita para a 01). A nº 2 vale também para a 08?
-- Com (c) desligado por padrão, o CA-01 ("executa as quatro verificações") só passa com o opt-in. E a spec trata "(c) não executada" como código 3. O plano considera "(c) desabilitada" como código 0. Confirmar.
-- O RF-03 pede recusa quando o destino coincide com um DSN de ambiente configurado, mas a CLI não tem esses DSNs. O plano usa fingerprints de host fornecidos pela API. Confirmar que expor esses hashes ao token é aceitável.
+- ~~DSN de origem no runner × D2.~~ **Resolvido por ADR-0001 D8 (emendada):** permitido só no opt-in, com DSN só leitura fornecido explicitamente pelo operator no runner. É a única exceção à D2.
+- ~~CA-01 × opt-in; código de "(c) desabilitada".~~ **Resolvido por ADR-0001 D8:** o CA-01 usa contagens (sem hash), "(c) desabilitada" não é parcial, e o hash tem CA próprio (CA-09, acrescentado à spec).
+- ~~Fingerprints de host expostos ao token.~~ **Resolvido por ADR-0001 D8:** aceitável. São sha256 de `host:porta/banco`, nunca DSNs.
+- **Pendente (fora do escopo de Q):** posição da área Restauração verificada (Ambientes ou Status), com a Trinity no lote 4.

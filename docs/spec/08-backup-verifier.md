@@ -23,12 +23,12 @@ Nada disso olha os backups dos **bancos auditados**. A regra `replication.archiv
   - runtime de container (Docker ou Podman);
   - imagem PostgreSQL da mesma major ou superior à origem.
 - **RF-02** Pré-validação: checksum (quando informado), legibilidade do arquivo e lista de objetos, antes de restaurar. Falha → evidência `succeeded=false` e nada restaurado (mesmo comportamento do #106).
-- **RF-03** Isolamento: recusar sem confirmação explícita de destino isolado, e recusar se o destino coincidir com qualquer DSN de ambiente configurado (padrão do `snapshot-restore-verify`). O container fica sem rede de saída e é destruído ao final, com sucesso ou falha.
+- **RF-03** Isolamento: recusar sem confirmação explícita de destino isolado, e recusar se o destino coincidir com qualquer alvo de ambiente configurado (padrão do `snapshot-restore-verify`). A comparação usa fingerprints (sha256 de `host:porta/banco`) fornecidos pela API ao token do ambiente, nunca DSNs (ADR-0001 D8). O container fica sem rede de saída e é destruído ao final, com sucesso ou falha.
 - **RF-04** Medir o RTO: do início da restauração até o banco aceitar conexões com todos os objetos restaurados. Registrar também o tempo da pré-validação e das verificações.
 - **RF-05** Verificações na cópia restaurada:
   - (a) inventário: executar os coletores existentes contra a cópia e comparar com a última coleta completa da origem (diff da 04 ou `internal/comparison`);
   - (b) contagens exatas por tabela na cópia, contra as linhas estimadas da origem, com tolerância;
-  - (c) checksums de amostra: hash de uma amostra determinística de linhas por tabela, calculado nos dois lados;
+  - (c) checksums de amostra, **opt-in**: hash de uma amostra determinística de linhas por tabela, calculado nos dois lados. Só roda com `--sample-hash` e com um DSN só leitura da origem fornecido explicitamente pelo operator no runner (`AUDITOR_RESTORE_VERIFY_SOURCE_DSN` ou `_FILE`, nunca em argumento). Sem opt-in, (c) fica "desabilitada" e não conta como execução parcial (ADR-0001 D8);
   - (d) integridade física de índices B-tree e heap com a extensão de verificação do PostgreSQL, **na cópia**.
 - **RF-06** Evidência estruturada: `kind=target_restore_drill`, ambiente, sha256 do artefato, RTO, resultado por verificação, divergências (tabela, tipo, contagens) e versão da CLI. Enviada à API do auditor com credencial de escopo do ambiente.
 - **RF-07** Na UI, em Ambientes ou Status, área **Restauração verificada**: histórico de ensaios, último sucesso, RTO e tendência, divergências.
@@ -38,7 +38,7 @@ Nada disso olha os backups dos **bancos auditados**. A regra `replication.archiv
 ## 2. Requisitos não funcionais
 
 - **RNF-01 Segurança e só leitura.**
-  - A origem só é lida pela conexão só leitura (para os checksums de amostra).
+  - A origem só é lida no opt-in de (c), pela conexão só leitura (conta sem escrita, allowlist, TLS), com o DSN que o operator forneceu no runner. É a única exceção ao "runner sem DSN" (ADR-0001 D2, D8).
   - Toda escrita acontece no container efêmero.
   - **A API do auditor nunca recebe acesso ao socket de container.** O runtime só existe no host onde a CLI roda (runner de CI ou máquina de operação).
   - Credenciais da imagem restaurada são geradas por execução e descartadas.
@@ -80,18 +80,21 @@ Nada disso olha os backups dos **bancos auditados**. A regra `replication.archiv
   - runtime de container ausente: código 2;
   - disco insuficiente: código 2, sem iniciar;
   - major da imagem menor que a da origem: código 2;
-  - origem inacessível para os checksums: verificação (c) "não executada" e código 3.
+  - `--sample-hash` sem DSN de origem: código 2, sem iniciar;
+  - DSN de origem com conta que tem escrita: código 4;
+  - origem inacessível para os checksums (com opt-in): verificação (c) "não executada" e código 3.
 
 ## 5. Critérios de aceite
 
-- **CA-01** Dado um dump válido e confirmação de isolamento, quando a CLI roda, então restaura no container, mede o RTO, executa as quatro verificações, destrói o container e sai com 0 se não houver divergência.
+- **CA-01** Dado um dump válido e confirmação de isolamento, sem opt-in de hash, quando a CLI roda, então restaura no container, mede o RTO, executa inventário, contagens e integridade física, informa (c) como "desabilitada", destrói o container e sai com 0 se não houver divergência.
 - **CA-02** Dado um dump com 1 byte alterado e checksum informado, quando a CLI roda, então a evidência tem `succeeded=false`, nada é restaurado e o código é 1 (achado crítico).
 - **CA-03** Dado a ausência da confirmação de isolamento, quando a CLI roda, então recusa com código 4 sem criar container.
-- **CA-04** Dado um destino que coincide com o DSN de um ambiente configurado, quando a CLI roda, então recusa com código 4.
-- **CA-05** Dado uma tabela sem escrita desde o backup cuja amostra difere entre origem e cópia, quando verificada, então surge `backup.restore_divergence` alta, com a tabela e as contagens, sem nenhum valor de linha.
+- **CA-04** Dado um destino que coincide com o alvo de um ambiente configurado (pelo fingerprint fornecido pela API), quando a CLI roda, então recusa com código 4.
+- **CA-05** Dado o opt-in `--sample-hash` e uma tabela sem escrita desde o backup cuja amostra difere entre origem e cópia, quando verificada, então surge `backup.restore_divergence` alta, com a tabela e as contagens, sem nenhum valor de linha.
 - **CA-06** Dado um RTO-alvo de 10 min e um RTO medido de 14 min, quando a evidência chega, então surge `backup.rto_exceeded` alta.
 - **CA-07** Dado 31 dias sem ensaio bem-sucedido, quando a análise do ambiente roda, então surge `backup.drill_overdue` média.
 - **CA-08** Dado uma falha no meio da restauração, quando a CLI termina, então nenhum container ou volume da execução permanece no host.
+- **CA-09** Dado `--sample-hash` com um DSN só leitura da origem fornecido pelo operator, quando a CLI roda, então as quatro verificações executam e o hash agregado por tabela é comparado nas tabelas comparáveis. Sem o DSN, a CLI sai com código 2 antes de restaurar. Com o DSN de uma conta com escrita, sai com código 4. Com a origem inacessível, (c) fica "não executada" e o código é 3.
 
 ## 6. Dependências, reaproveitamento, riscos e perguntas em aberto
 
@@ -104,7 +107,7 @@ Nada disso olha os backups dos **bancos auditados**. A regra `replication.archiv
 
 **Novo.**
 - o subcomando CLI e a orquestração de container;
-- os checksums de amostra;
+- os checksums de amostra (opt-in);
 - a verificação física;
 - a evidência `target_restore_drill` por ambiente (separada da evidência do snapshot store, que continua alimentando só a retenção);
 - RTO-alvo, prazo e as regras `backup.*`.
@@ -116,7 +119,7 @@ Nada disso olha os backups dos **bancos auditados**. A regra `replication.archiv
 - Restaurações grandes custam tempo e disco.
 - Comparar uma origem que muda gera falsos positivos. Mitigação: tabelas "comparáveis" pelo contador de escrita.
 
-**Perguntas em aberto.**
-- P-01: quem executa o ensaio — só a CLI em runner externo (recomendado), ou também um worker gerenciado pelo auditor com acesso a container?
-- P-02: formatos no MVP — só `pg_dump`, ou já pgBackRest e WAL-G (restauração física, que exige outra imagem e outro fluxo)?
-- P-03: os checksums de amostra leem linhas da produção (só hash agregado sai da memória). Isso é aceitável, ou ficamos só com contagens e inventário?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md), D8).
+- P-01: quem executa o ensaio? **Resolvida:** só a CLI, em runner externo.
+- P-02: formatos no MVP? **Resolvida:** só `pg_dump` (custom ou diretório).
+- P-03: checksums de amostra leem a produção? **Resolvida:** sim, mas só por opt-in, com DSN só leitura fornecido explicitamente pelo operator no runner. O padrão é contagens, inventário e integridade física.

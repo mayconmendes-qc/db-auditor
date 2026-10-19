@@ -28,7 +28,7 @@
 - **RF-04** Execução por agenda (perfis existentes do agendador), sob demanda na UI e em modo CLI para CI, com gate por severidade.
 - **RF-05** Amostragem por páginas com limite configurável por contrato. Frescor e volume usam agregado ou estatística, sem amostra.
 - **RF-06** Resultado por checagem: aprovado, violado ou não executado (com motivo), contagens observadas, tamanho da amostra e método.
-- **RF-07** Violação gera achado (`quality.contract_violation`) com dedup por contrato, checagem e versão. Violação persistente em duas execuções completas entra na regressão (AN-11) e na notificação existente.
+- **RF-07** Violação gera achado (`quality.contract_violation`) com dedup por contrato, checagem e versão. Violação persistente em duas execuções completas entra na dedup e na notificação de achados existentes (`NotifyFindings`/`ClaimAlert`, regra de lacuna AN-11), sem categoria nova em `regression_alert` (ADR-0001 D13).
 - **RF-08** Histórico e tendência por checagem (série de % e contagens) na UI.
 - **RF-09** Relatório Markdown (CLI e download) e seção no PDF técnico.
 
@@ -36,7 +36,7 @@
 
 - **RNF-01 Segurança e só leitura.** Mesmo pré-requisito do diagnóstico atual: recurso habilitado pelo operator (`AUDITOR_DATA_QUALITY_ENABLED`) e conta de leitura sem escrita. Toda leitura em transação só leitura, com timeout por checagem.
 - **RNF-02 LGPD.** Persistir só contagens, proporções, tamanho da amostra e a idade em horas do frescor (nunca o valor máximo em si). Valores de linha nunca saem da memória do processo. A lista de domínio é escrita pelo usuário no contrato e é tratada como metadado, mas aparece só para auditor ou acima.
-- **RNF-03 Desempenho e limites.** Amostra padrão de 10 000 linhas, máximo de 100 000 por checagem (**valor inicial, calibrar**). Timeout de 30 s por checagem. No máximo 50 checagens por contrato e 4 checagens simultâneas por ambiente. Tabelas acima de 1 GB exigem amostragem por páginas.
+- **RNF-03 Desempenho e limites.** Amostra padrão de 10 000 linhas por checagem. Acima disso, até 100 000, só por opt-in do operator (teto do processo `AUDITOR_DATA_QUALITY_MAX_SAMPLE`, padrão 10 000, máximo 100 000), e o contrato declara `sample_limit` dentro do teto (ADR-0001 D4; **valor inicial, calibrar**). O diagnóstico sob demanda existente (`quality-scans`) mantém o teto de 1000. Timeout de 30 s por checagem. No máximo 50 checagens por contrato e 4 checagens simultâneas por ambiente. Tabelas acima de 1 GB exigem amostragem por páginas.
 - **RNF-04 Multi-tenant.** Contratos, execuções e achados pertencem ao ambiente. Viewer lê, auditor cria, aprova e executa, operator habilita o recurso.
 - **RNF-05 Observabilidade.** Métricas de checagens por resultado e duração. Log sem valores de linha.
 - **RNF-06 Honestidade estatística.** Toda contagem amostral mostra o tamanho da amostra e o aviso de margem de erro desconhecida, mesmo padrão do diagnóstico atual.
@@ -76,7 +76,7 @@ Gate de CI padrão: bloqueia a partir de alta.
 - **CA-04** Dado uma checagem de frescor com máximo de 24 h e o último registro de 30 h atrás, quando executa, então o resultado guarda "30 h" e não o carimbo de data.
 - **CA-05** Dado a CLI com gate em alta e uma violação de unicidade, quando roda em CI, então sai com código 1 e o Markdown lista a violação.
 - **CA-06** Dado uma checagem que excede o timeout, quando a execução termina, então ela aparece "não executada — timeout" e a CLI sai com código 3.
-- **CA-07** Dado a mesma violação em duas execuções completas seguidas, quando a regressão é avaliada, então um único alerta é criado (dedup existente).
+- **CA-07** Dado a mesma violação em duas execuções completas seguidas, quando a notificação de achados é avaliada, então um único alerta é criado (dedup existente).
 - **CA-08** Dado um viewer, quando ele tenta aprovar um contrato, então recebe 403.
 
 ## 6. Dependências, reaproveitamento, riscos e perguntas em aberto
@@ -85,7 +85,7 @@ Gate de CI padrão: bloqueia a partir de alta.
 - `internal/quality`: checagens null, duplicate, orphan, date_range e distribuição, os textos de plano, as tabelas `quality_scan`, `quality_issue` e `quality_issue_event`, e as rotas `quality-scans` (papel auditor);
 - a flag `AUDITOR_DATA_QUALITY_ENABLED`;
 - `column_snapshot`, `constraint_snapshot`, `table_snapshot` (linhas estimadas para volume) e `column_stat_snapshot` (`null_fraction` de `pg_stats`, como pré-checagem de nulos sem ler linhas);
-- `internal/scheduler`, regressão e notificação (AN-11, `internal/notify`);
+- `internal/scheduler`, dedup e notificação de achados (AN-11, `internal/notify`);
 - ações assistidas e medições, para validar correções;
 - o PDF.
 
@@ -93,7 +93,7 @@ Gate de CI padrão: bloqueia a partir de alta.
 - entidade contrato versionada;
 - checagens de domínio, frescor e volume;
 - geração de proposta;
-- limite de amostra configurável acima de 1000;
+- limite de amostra dos contratos (padrão 10 000, opt-in até 100 000);
 - execução agendada;
 - modo CLI com gate;
 - tendência.
@@ -105,6 +105,6 @@ Gate de CI padrão: bloqueia a partir de alta.
 - Carga de leitura em produção.
 - Contrato desatualizado após migration. Mitigação: alerta de coluna ausente, com a timeline da 04.
 
-**Perguntas em aberto.**
-- P-01: o limite atual de 1000 linhas sobe para até 100 000 por contrato, ou contratos ficam com o mesmo teto?
-- P-02: o contrato canônico fica no auditor (UI) ou no repositório da aplicação (YAML no Git, importado pela CLI)?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md)).
+- P-01: limite de amostra? **Resolvida (D4):** contratos com padrão de 10 000 e opt-in até 100 000. O diagnóstico existente continua com 1000.
+- P-02: onde fica o contrato canônico? **Resolvida (D13):** no auditor. O YAML importado vira versão proposta. O YAML passado à CLI é execução *ad hoc* registrada, que não cria nem aprova versão.

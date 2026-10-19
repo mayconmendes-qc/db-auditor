@@ -3,17 +3,19 @@
 - **Spec:** [../spec/09-timescale-retention-advisor.md](../spec/09-timescale-retention-advisor.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 8ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 5 lotes, **18 d**, 1 lote com gate R2, Trinity necessária (1 lote)
 
 ## 0. Resumo
 
 Um motor de simulação puro sobre `chunk_snapshot` (intervalos, `is_compressed`, `total_size_bytes`, `before_compression_bytes`/`after_compression_bytes`), `policy_snapshot`, `job_snapshot` e `continuous_aggregate_snapshot`. Ele calcula economia de retenção e compressão por hypertable, cenários combinados, projeção e riscos de CAGG. Entram também contadores de varredura por chunk, como proxy de "chunk sem consulta", e cenários salvos com achados `timescale.*`.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 9):** **chunks nunca consultados entram no v1**, usando os **contadores de varredura como proxy**, **rotulados como aproximados** ("aproximado — contadores zeram com reset"). Responde à P-01.
-- **decisão padrão (Q, nº 3, via 02):** a conversão para moeda usa a tabela de preços do ambiente, com **uma moeda por ambiente**. Sem preço, só GB.
-- **decisão padrão (Q, nº 11):** tenant = ambiente. Cenários salvos pertencem ao ambiente.
+- **ADR-0001 D9:** **chunks nunca consultados entram no v1**, usando os **contadores de varredura como proxy**, **rotulados como aproximados** ("aproximado — contadores zeram com reset"). Responde à P-01.
+- **ADR-0001 D9:** o achado de cenário do CA-04 é criado **no salvamento do cenário**, vinculado à última coleta completa.
+- **ADR-0001 D3 (via 02):** a conversão para moeda usa a tabela de preços do ambiente, com **uma moeda por ambiente**. Sem preço, só GB.
+- **ADR-0001 D11:** tenant = ambiente. Cenários salvos pertencem ao ambiente.
 
 ### Dependências
 
@@ -53,7 +55,7 @@ Os números supõem 26–36 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `GET /api/v1/environments/{id}/runs/{run}/.../hypertables/{hypertable}/unscanned-chunks` | viewer | chunks possivelmente sem consulta (aproximado) |
 | `GET /api/v1/environments/{id}/timescale-scenarios/export?format=csv` | viewer | uma linha por hypertable × cenário, com `# export_complete` |
 
-**Tela (Trinity necessária).** No painel da hypertable (`HypertableAssessmentPanel`), uma nova seção **Simulação** com a tabela de cenários (GB atuais, GB após, economia em GB e em moeda, riscos, confiança), gráfico de projeção 30/90/180 dias, faixas de idade e a separação hipótese / ganho previsto / ganho medido (RNF-06, BA-21). A spec cita o painel "Tabelas temporais", rótulo usado em `DashboardKpis` e no Inventário. A Trinity confirma o lugar.
+**Tela (Trinity necessária).** No painel da hypertable (`HypertableAssessmentPanel`), uma nova seção **Simulação** com a tabela de cenários (GB atuais, GB após, economia em GB e em moeda, riscos, confiança), gráfico de projeção 30/90/180 dias, faixas de idade e a separação hipótese / ganho previsto / ganho medido (RNF-06, BA-21). A spec cita o painel "Tabelas temporais", rótulo usado em `DashboardKpis` e no Inventário. A posição fica adiada para o lote 4, quando Q chamará a Trinity (ADR-0001, Pendente). Este plano não decide o lugar.
 
 ## 4. Lotes
 
@@ -77,7 +79,7 @@ Os números supõem 26–36 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(tsretention): simulação via API (viewer), cenários salvos (auditor), achados timescale.* e conversão para moeda (RF-05, RF-08)`
 
-**Descrição.** Migration `37_retention_scenarios.sql` (provisória). Simulação por GET (viewer, sem gravar). Salvar exige auditor, o que pede uma regra em `authorizeRequest` para `/timescale-scenarios`. Regras com os limiares da §3 (**valor inicial, calibrar**): `retention_missing` (baixa), `compression_missing` (média), `retention_cagg_conflict` (alta, avaliada contra a política vigente e **no momento em que o cenário é salvo**, vinculada à última coleta completa) e `compression_ratio_low` (baixa). Nenhuma recomendação sugere exclusão automática, e o texto BA-21 continua: retenção exige aprovação de negócio e backup restaurável. Conversão para moeda pela tabela de preços vigente (plano 02), com a vigência. Ambiente sem Timescale: "não aplicável". Métricas de simulações e de hypertables sem taxa observada (RNF-05).
+**Descrição.** Migration `37_retention_scenarios.sql` (provisória). Simulação por GET (viewer, sem gravar). Salvar exige auditor, o que pede uma regra em `authorizeRequest` para `/timescale-scenarios`. Regras com os limiares da §3 (**valor inicial, calibrar**): `retention_missing` (baixa), `compression_missing` (média), `retention_cagg_conflict` (alta, avaliada contra a política vigente e **no momento em que o cenário é salvo**, vinculada à última coleta completa) e `compression_ratio_low` (baixa). O achado no salvamento segue a ADR-0001 D9. Nenhuma recomendação sugere exclusão automática, e o texto BA-21 continua: retenção exige aprovação de negócio e backup restaurável. Conversão para moeda pela tabela de preços vigente (plano 02), com a vigência. Ambiente sem Timescale: "não aplicável". Métricas de simulações e de hypertables sem taxa observada (RNF-05).
 
 **Critérios de aceite.**
 - [ ] CA-04: CAGG com refresh de 120 dias e cenário de 90 dias salvo gera `timescale.retention_cagg_conflict` alta.
@@ -94,7 +96,7 @@ Os números supõem 26–36 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(collector): contadores de varredura e escrita por chunk e lista de chunks possivelmente sem consulta, rotulada aproximada (RF-07)`
 
-**Descrição.** Migration `38_chunk_scan_counters.sql` (provisória). `chunks.sql` faz junção com `pg_stat_all_tables` pelo relid do chunk (pela conexão só leitura, dentro do orçamento de 120 s local já usado para chunks em `docs/ops.md`). Chunk sem varredura entre duas coletas completas e comparáveis (sem `stats_reset`, regra AN-11) vira "possivelmente sem consulta", **sempre** como hipótese **aproximada** (**decisão padrão** nº 9). Contadores zerados por reset invalidam a janela daquele chunk. Também alimenta o risco (c) do lote 1 (chunk recente com escrita).
+**Descrição.** Migration `38_chunk_scan_counters.sql` (provisória). `chunks.sql` faz junção com `pg_stat_all_tables` pelo relid do chunk (pela conexão só leitura, dentro do orçamento de 120 s local já usado para chunks em `docs/ops.md`). Chunk sem varredura entre duas coletas completas e comparáveis (sem `stats_reset`, regra AN-11) vira "possivelmente sem consulta", **sempre** como hipótese **aproximada** (ADR-0001 D9). Contadores zerados por reset invalidam a janela daquele chunk. Também alimenta o risco (c) do lote 1 (chunk recente com escrita).
 
 **Critérios de aceite.**
 - [ ] CA-05: ambiente PostgreSQL sem Timescale não faz nenhum coletor falhar. A regressão do #125 continua verde (`TestFullCollectionWithTimescaleIsCompleteIntegration` nos jobs PG 16–18 com TimescaleDB 2.30.2; em PG 14/15 o teste só de Timescale é pulado, como hoje).
@@ -146,7 +148,7 @@ Os números supõem 26–36 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `TestViewerCannotSaveScenario` | API com `authMiddleware` | CA-07 |
 | `TestSimulationBudget10kChunks` | benchmark | RNF-03 |
 | `TestTruncatedInventoryPartial`, `TestIntegerDimensionNotApplicable`, `TestInvalidScenario400` | unitário/API | §4 Erros |
-| `TestUnscannedChunksApproximateAndResetAware` | integração | RF-07, decisão padrão nº 9 |
+| `TestUnscannedChunksApproximateAndResetAware` | integração | RF-07, ADR-0001 D9 |
 
 ## 6. Gates
 
@@ -161,10 +163,11 @@ Os números supõem 26–36 já mergeados. Lembrar `ci.yml`, `migrations/README.
 ## 7. Riscos
 
 - A taxa de compressão muda com o tempo (cardinalidade). Mitigação: mostrar a taxa e a quantidade de chunks que a sustentam.
-- Contadores por chunk zeram com reset, então "sem consulta" é fraco. Mitigação: rótulo "aproximado" (**decisão padrão**) e invalidação por reset.
+- Contadores por chunk zeram com reset, então "sem consulta" é fraco. Mitigação: rótulo "aproximado" (ADR-0001 D9) e invalidação por reset.
 - Retenção é decisão de compliance. Mitigação: texto BA-21 e nenhuma recomendação de exclusão automática.
 - TimescaleDB sem imagem 2.30.2 para PG 14/15: os testes só de Timescale são pulados nessas versões (comportamento atual da matriz).
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- O CA-04 pede o achado "quando o cenário é salvo", mas achados hoje nascem da análise de uma coleta. O plano cria o achado no momento do salvamento, vinculado à última coleta completa. Confirmar.
+- ~~Achado no salvamento do cenário (CA-04).~~ **Resolvido por ADR-0001 D9:** criado no salvamento, vinculado à última coleta completa. O CA-04 da spec foi ajustado.
+- **Pendente (fora do escopo de Q):** posição da seção Simulação (painel da hypertable ou "Tabelas temporais"), com a Trinity no lote 4.

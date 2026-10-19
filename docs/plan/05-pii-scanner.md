@@ -3,17 +3,22 @@
 - **Spec:** [../spec/05-pii-scanner.md](../spec/05-pii-scanner.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 6ª
-- **Total:** 6 lotes, **24 d**, 4 lotes com gate R2, Trinity necessária (1 lote)
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
+- **Total:** 6 lotes, **25 d**, 4 lotes com gate R2, Trinity necessária (1 lote)
 
 ## 0. Resumo
 
 A classificação acontece em duas etapas. Na etapa 1, só metadados: nome e tipo de coluna, com dicionário editável. Na etapa 2, opcional e restrita, há validação de conteúdo em memória com detectores brasileiros (CPF, CNPJ, e-mail, telefone, CEP, PIX). O resultado é cruzado com a matriz de privilégio efetivo da 07. Nenhum valor amostrado é persistido, logado ou exportado: nem mascarado, nem com hash (RNF-02). Este plano também endurece a amostragem por páginas de `internal/quality`, que a 03 reaproveita.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 4):** a etapa 2 de conteúdo tem **flag própria, mais restrita** que a do diagnóstico de qualidade: `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` no processo, **mais** habilitação explícita por ambiente feita pelo operator. `AUDITOR_DATA_QUALITY_ENABLED` não basta. Responde à P-01.
-- **decisão padrão (Q, nº 11):** tenant = ambiente. O mapa pertence ao ambiente e é informação sensível. Ver exige viewer, e baixar exige auditor (RNF-04).
-- Fora do v1 (P-02 sem decisão; já fora de escopo no MVP pela spec): JSONB e texto livre.
+- **ADR-0001 D4:** a etapa 2 de conteúdo tem **flag própria, mais restrita** que a do diagnóstico de qualidade. São exigidas as duas coisas:
+  - `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` no processo;
+  - habilitação explícita por ambiente, feita pelo operator.
+
+  `AUDITOR_DATA_QUALITY_ENABLED` não basta. A amostra continua em 1000 linhas por tabela, independente do teto de 10 000 dos contratos da 03. Responde à P-01.
+- **ADR-0001 D14:** CNPJ **numérico e alfanumérico** (Receita Federal, desde julho de 2026). Dicionário editado pelo **operator**. JSONB e texto livre **fora do v1** (P-02).
+- **ADR-0001 D11:** tenant = ambiente. O mapa pertence ao ambiente e é informação sensível. Ver exige viewer, e baixar exige auditor (RNF-04).
 
 ### Dependências
 
@@ -54,7 +59,7 @@ Os números supõem 26–34 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `PUT /api/v1/environments/{id}/pii-settings` | operator | liga ou desliga a etapa 2 no ambiente |
 | `GET /api/v1/environments/{id}/pii-map/export/download?format=csv` | auditor | — |
 
-**Tela (Trinity necessária).** A spec diz "nova aba Dados pessoais em Segurança". Não há seção Segurança na navegação, então a Trinity define o lugar. A tela tem mapa por tabela/coluna (categoria, confiança, método, contas com leitura, RLS), filtros, confirmar/descartar com justificativa, o estado "não aplicável a este mecanismo" (MongoDB) e uma indicação clara de que a etapa 2 está desligada.
+**Tela (Trinity necessária).** A spec diz "nova aba Dados pessoais em Segurança". Não há seção Segurança na navegação. A posição fica adiada para o lote 5, quando Q chamará a Trinity (ADR-0001, Pendente). Este plano não decide o lugar. A tela tem mapa por tabela/coluna (categoria, confiança, método, contas com leitura, RLS), filtros, confirmar/descartar com justificativa, o estado "não aplicável a este mecanismo" (MongoDB) e uma indicação clara de que a etapa 2 está desligada.
 
 ## 4. Lotes
 
@@ -77,21 +82,22 @@ Os números supõem 26–34 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(pii): detectores CPF/CNPJ com dígito verificador, e-mail, telefone BR, CEP e chave PIX, com regra de confiança (spec 05 RF-02, §3)`
 
-**Descrição.** Funções puras: CPF (DV, rejeita sequências repetidas), CNPJ (DV; o formato alfanumérico da Receita Federal é ponto aberto, ver §8), e-mail, telefone BR fixo e celular com ou sem DDI, CEP, PIX (CPF, CNPJ, e-mail, telefone ou chave aleatória UUID). A confiança segue a §3: alta com ≥ 90% válidos e ≥ 50 não nulos, média de 50 a 90%, baixa abaixo de 50 não nulos. As funções nunca devolvem nem logam o valor, só `bool`/contadores.
+**Descrição.** Funções puras: CPF (DV, rejeita sequências repetidas), CNPJ nos dois formatos (numérico e alfanumérico da Receita Federal, cada um com o seu cálculo de DV; ADR-0001 D14), e-mail, telefone BR fixo e celular com ou sem DDI, CEP, PIX (CPF, CNPJ, e-mail, telefone ou chave aleatória UUID). A confiança segue a §3: alta com ≥ 90% válidos e ≥ 50 não nulos, média de 50 a 90%, baixa abaixo de 50 não nulos. As funções nunca devolvem nem logam o valor, só `bool`/contadores.
 
 **Critérios de aceite.**
 - [ ] CA-03: coluna `cpf` com 80% sem DV válido fica com confiança média, não alta.
+- [ ] CNPJ alfanumérico válido é aceito, e um com DV errado é recusado (casos da especificação da Receita Federal).
 - [ ] Testes de tabela com casos válidos, inválidos e de borda por detector, mais fuzz curto.
 - [ ] Nenhuma função exporta o valor, o que é verificado por revisão de assinatura e teste de que o erro não contém a entrada.
 
 **Arquivos.** `internal/pii/detect_*.go`, `internal/pii/confidence.go`, testes.
-**Estimativa:** 3 d. **Gate:** CI verde (funções puras, sem dado real). **Depende de:** —
+**Estimativa:** 4 d. **Gate:** CI verde (funções puras, sem dado real). **Depende de:** —
 
 ### Lote 3 — Etapa 2: validação de conteúdo com amostragem segura
 
 **Issue:** `feat(pii): validação de conteúdo opt-in com flag própria, amostragem por páginas e garantia de que nenhum valor sai da memória (spec 05 RF-02, RNF-01–RNF-03, RNF-05)`
 
-**Descrição.** Implementa a **decisão padrão** nº 4: `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` **e** `pii_environment_setting.content_scan_enabled = true`, senão 409. Endurecer `internal/quality` com uma API de amostragem compartilhada (`quality/sample.go`): por páginas em tabela grande, transação `READ ONLY`, timeout por coluna, conta de leitura sem escrita (mesma verificação do diagnóstico atual) e valores processados em *streaming* pelo detector e descartados. Limites: 1000 linhas por tabela, 50 colunas candidatas, 200 tabelas, 10 min por execução (**valor inicial, calibrar**). Ao atingir o teto, a execução fica `partial_success`, com o que faltou. Sem SELECT na tabela, a coluna fica "não verificada — sem permissão", com cobertura parcial. Métricas de colunas por método e de execuções interrompidas.
+**Descrição.** Implementa a ADR-0001 D4: `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` **e** `pii_environment_setting.content_scan_enabled = true`, senão 409. Endurecer `internal/quality` com uma API de amostragem compartilhada (`quality/sample.go`): por páginas em tabela grande, transação `READ ONLY`, timeout por coluna, conta de leitura sem escrita (mesma verificação do diagnóstico atual) e valores processados em *streaming* pelo detector e descartados. Limites: 1000 linhas por tabela, 50 colunas candidatas, 200 tabelas, 10 min por execução (**valor inicial, calibrar**). Ao atingir o teto, a execução fica `partial_success`, com o que faltou. Sem SELECT na tabela, a coluna fica "não verificada — sem permissão", com cobertura parcial. Métricas de colunas por método e de execuções interrompidas.
 
 **Critérios de aceite.**
 - [ ] CA-01: coluna `documento` com 95% de CPFs válidos em 500 não nulos fica CPF, confiança alta, método "conteúdo".
@@ -155,12 +161,13 @@ Os números supõem 26–34 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `TestNoSampledValueAnywhere` (store, logs, evidência, CSV, PDF, erros, `/metrics`; completo, mascarado, hash) | integração (padrão dos testes de redação de `internal/quality`) | CA-02, RNF-02, RNF-05 |
 | `TestCPFWithoutValidDVIsMedium` | unitário | CA-03 |
 | `TestBroadReadAccessSevenLogins` | integração (com o lote 1 do plano 07) | CA-04 |
-| `TestContentStageDisabled409` (flag de processo e ambiente) | API | CA-05, decisão padrão nº 4 |
+| `TestContentStageDisabled409` (flag de processo e ambiente) | API | CA-05, ADR-0001 D4 |
 | `TestPIIMongoNotApplicable` | API + componente | CA-06 |
 | `TestDiscardPersistsAcrossScans` | integração | CA-07, RF-06 |
 | `TestPIIScanCeilingPartialSuccess` | integração | RNF-03, §4 Erros |
 | `TestPIIScanRequiresAuditor`, `TestPIIExportRequiresAuditor` | API com `authMiddleware` | RNF-04 |
 | `FuzzBrazilianDetectors` | fuzz | RF-02 |
+| `TestCNPJAlphanumericDV` | unitário | RF-02, ADR-0001 D14 |
 
 ## 6. Gates
 
@@ -181,8 +188,9 @@ Os números supõem 26–34 já mergeados. Lembrar `ci.yml`, `migrations/README.
 - Carga de leitura em produção. Mitigação: amostragem por páginas, tetos e timeouts.
 - Uma regressão na amostragem compartilhada pode afetar o diagnóstico de qualidade atual. Os testes existentes de `internal/quality` são gate.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- O RF-02 fala em "CNPJ com dígito verificador". O CNPJ **alfanumérico** da Receita Federal (em vigor a partir de julho de 2026) muda o cálculo do DV. Suportar os dois formatos no v1?
-- A spec não diz quem edita o dicionário. O plano atribui ao operator. Confirmar.
-- A habilitação por ambiente, além da flag de processo, é a leitura do plano para "flag mais restrita" (**decisão padrão** nº 4). Confirmar se basta a flag de processo.
+- ~~CNPJ alfanumérico.~~ **Resolvido por ADR-0001 D14:** os dois formatos no v1 (+1 d no lote 2).
+- ~~Quem edita o dicionário.~~ **Resolvido por ADR-0001 D14:** o operator.
+- ~~Flag de processo × habilitação por ambiente.~~ **Resolvido por ADR-0001 D4:** as duas são exigidas.
+- **Pendente (fora do escopo de Q):** posição da aba Dados pessoais, com a Trinity no lote 5.

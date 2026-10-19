@@ -3,17 +3,19 @@
 - **Spec:** [../spec/02-cost-lens.md](../spec/02-cost-lens.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 4ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 6 lotes, **21 d**, 0 lote com gate R2, Trinity necessária (1 lote)
 
 ## 0. Resumo
 
 O plano traduz tamanhos, índices sem uso, bloat estimado e workload em custo mensal estimado. Tudo é calculado sobre o snapshot store, sem nova sessão no alvo (RNF-01, RNF-03), a partir de uma tabela de preços versionada por ambiente. O custo por consulta reaproveita o motor de janela da spec 06 (`internal/digest`).
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 3):** **uma moeda por ambiente**, com preço configurável. A moeda é fixada na primeira versão da tabela de preços do ambiente, e não existe câmbio (a §3 já exclui conversão automática). Responde à P-01.
-- **decisão padrão (Q, nº 3):** **bloat só por estimativa**, sem extensão de medição física no alvo. **O bloat exato fica para depois.** Responde à P-02.
-- **decisão padrão (Q, nº 11):** tenant = ambiente. Preços, ranking e série pertencem ao ambiente.
+- **ADR-0001 D3:** **uma moeda por ambiente** (`BRL` ou `USD`), com preço configurável. A moeda fica **travada depois da primeira versão** da tabela de preços do ambiente, e não existe câmbio. Responde à P-01.
+- **ADR-0001 D3:** **bloat só por estimativa**, sem extensão de medição física no alvo. **O bloat exato fica para depois.** Responde à P-02.
+- **ADR-0001 D3:** modelos iniciais só RDS PostgreSQL, Cloud SQL e self-hosted. Responde à P-03.
+- **ADR-0001 D11:** tenant = ambiente. Preços, ranking e série pertencem ao ambiente.
 
 ### Dependências
 
@@ -53,7 +55,7 @@ Os números supõem 26–30 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `GET /api/v1/environments/{id}/cost/series?from=&to=` | viewer | teto de 90 dias, com lacunas |
 | `GET /api/v1/environments/{id}/cost/ranking/export?format=csv` | viewer | uma linha por item, com moeda e vigência, terminando em `# export_complete` |
 
-**Telas (Trinity necessária).** Aba **Custo** no Dashboard (ranking com tipo, objeto, valor/mês, base de cálculo, confiança, link para o achado; série; estados "não estimado — preço não configurado" e "janela inválida"). Coluna de custo no Inventário. Edição da tabela de preços em Ambientes (operator). Rótulos "estimado/mês" e "estimativa" em todo valor (RNF-06).
+**Telas (Trinity necessária).** Aba **Custo** no Dashboard (ranking com tipo, objeto, valor/mês, base de cálculo, confiança, link para o achado; série; estados "não estimado — preço não configurado" e "janela inválida"). Coluna de custo no Inventário. Edição da tabela de preços em Ambientes (operator). Rótulos "estimado/mês" e "estimativa" em todo valor (RNF-06). A posição na navegação citada aqui é a da spec. A decisão final fica adiada para o lote de tela, quando Q chamará a Trinity (ADR-0001, Pendente).
 
 ## 4. Lotes
 
@@ -61,7 +63,7 @@ Os números supõem 26–30 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(cost): tabela de preços por ambiente, versionada, uma moeda por ambiente, com modelos RDS/Cloud SQL/self-hosted`
 
-**Descrição.** Migration `31_cost_price_table.sql` (provisória). Validação: números ≥ 0, moeda `BRL` ou `USD` e igual à da primeira versão (**decisão padrão** nº 3), vigência obrigatória. Os modelos iniciais são presets editáveis, **sem** busca online de preço (fora de escopo). Leitura para viewer, escrita para operator.
+**Descrição.** Migration `31_cost_price_table.sql` (provisória). Validação: números ≥ 0, moeda `BRL` ou `USD` e igual à da primeira versão (ADR-0001 D3), vigência obrigatória. Os modelos iniciais são presets editáveis, **sem** busca online de preço (fora de escopo). Leitura para viewer, escrita para operator.
 
 **Critérios de aceite.**
 - [ ] CA-05: viewer e auditor recebem 403 no `PUT`. Operator grava uma nova versão.
@@ -76,7 +78,7 @@ Os números supõem 26–30 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 **Issue:** `feat(cost): custo de armazenamento, desperdício de índice sem uso e bloat recuperável estimado (RF-02–RF-04, RF-07)`
 
-**Descrição.** Armazenamento = `total_size_bytes` do último snapshot completo × preço por GB/mês (RF-02). Desperdício de índice = índices com `index.unused` aberto × tamanho × preço, respeitando a janela de estatísticas ≥ 14 dias sem reset (RF-03). Bloat estimado por método estatístico sobre catálogo e estatísticas, sem ler linhas: largura média de `column_stat_snapshot.average_width` e `null_fraction`, mais linhas estimadas e tamanho de `table_snapshot`. É **sempre** rotulado "estimativa", com confiança no máximo média (**decisão padrão**: só estimativa). As regras `cost.unused_index_waste` e `cost.bloat_recoverable` (limiares da §3, **valor inicial, calibrar**) entram em `analyzer/cost.go`, com textos e consulta de confirmação em `actions/catalog.go`. Nunca recomendam `DROP` automático. Sem preço, o valor é "não estimado — preço não configurado", e bytes e tempo continuam visíveis.
+**Descrição.** Armazenamento = `total_size_bytes` do último snapshot completo × preço por GB/mês (RF-02). Desperdício de índice = índices com `index.unused` aberto × tamanho × preço, respeitando a janela de estatísticas ≥ 14 dias sem reset (RF-03). Bloat estimado por método estatístico sobre catálogo e estatísticas, sem ler linhas: largura média de `column_stat_snapshot.average_width` e `null_fraction`, mais linhas estimadas e tamanho de `table_snapshot`. É **sempre** rotulado "estimativa", com confiança no máximo média (ADR-0001 D3: só estimativa). As regras `cost.unused_index_waste` e `cost.bloat_recoverable` (limiares da §3, **valor inicial, calibrar**) entram em `analyzer/cost.go`, com textos e consulta de confirmação em `actions/catalog.go`. Nunca recomendam `DROP` automático. Sem preço, o valor é "não estimado — preço não configurado", e bytes e tempo continuam visíveis.
 
 **Critérios de aceite.**
 - [ ] CA-01: índice de 2 GB com `index.unused` aberto e R$ 0,50/GB-mês resulta em R$ 1,00/mês, com fórmula e vigência.
@@ -160,7 +162,7 @@ Os números supõem 26–30 já mergeados. Lembrar `ci.yml`, `migrations/README.
 | `TestPriceTableRequiresOperator` | API com `authMiddleware` | CA-05 |
 | `TestCostSectionStrictRedaction` | golden do relatório | CA-06 |
 | `TestCostCSVCompleteMarkerNoSQL` | API | CA-07 |
-| `TestPriceValidation` (negativo, moeda inválida, troca de moeda) | unitário/API | §4 Erros, decisão padrão nº 3 |
+| `TestPriceValidation` (negativo, moeda inválida, troca de moeda) | unitário/API | §4 Erros, ADR-0001 D3 |
 | `TestCostRankingScaleBudget` (5000 tabelas < 2 s) | escala | RNF-03 |
 | `TestCostSeriesGapsOnPartialRuns` | integração | RF-09 |
 
@@ -171,11 +173,12 @@ Nenhum lote exige R2: só metadados e valores monetários, com rotas por ambient
 ## 7. Riscos
 
 - Preço público ≠ fatura real (descontos, reservas). Mitigação: rótulo "estimado/mês", vigência e modelo de origem visíveis.
-- O bloat estatístico erra com tipos de largura variável (TOAST, `text`, `jsonb`). Mitigação: confiança no máximo média, e bloat exato fica para depois (**decisão padrão**).
+- O bloat estatístico erra com tipos de largura variável (TOAST, `text`, `jsonb`). Mitigação: confiança no máximo média, e bloat exato fica para depois (ADR-0001 D3).
 - A gestão pode ler a estimativa como promessa. Mitigação: faixa de confiança e separação hipótese/ganho (BA-21).
 - Mudar a moeda depois de criar a série quebraria a comparabilidade. Por isso a moeda fica travada por ambiente.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- A **decisão padrão** nº 3 fixa uma moeda por ambiente, mas não diz se o operator pode trocá-la. O plano trava a moeda depois da primeira versão. Uma troca exigiria procedimento manual e cortaria a série. Confirmar.
-- A P-03 (provedores além de RDS, Cloud SQL e self-hosted) não foi decidida. O plano entrega só os três.
+- ~~Troca de moeda.~~ **Resolvido por ADR-0001 D3:** a moeda fica travada depois da primeira versão. Uma troca exige procedimento manual documentado em `docs/ops.md` e corta a série.
+- ~~Provedores (P-03).~~ **Resolvido por ADR-0001 D3:** só RDS PostgreSQL, Cloud SQL e self-hosted no v1.
+- **Pendente (fora do escopo de Q):** posição da aba Custo e do cartão de preços, com a Trinity no lote 5.

@@ -20,17 +20,17 @@
   - top 5 melhoras.
 
   Cada item traz o fingerprint resumido, os objetos referenciados, os números das duas janelas, a variação e o link para o achado correlato.
-- **RF-05** Sugestões de índice: anexar `index.candidate` e `performance.workload_scan` já existentes que referenciem as mesmas tabelas. Com HypoPG disponível e permitido (pergunta em aberto), anexar a estimativa de custo hipotética, rotulada "hipotético".
+- **RF-05** Sugestões de índice: anexar `index.candidate` e `performance.workload_scan` já existentes que referenciem as mesmas tabelas. Sem HypoPG no v1 (ADR-0001 D6).
 - **RF-06** Agendamento: gerar o digest após a última coleta completa da janela, pelo agendador existente. Também sob demanda.
-- **RF-07** Entrega: e-mail e webhook pelos canais de alerta existentes. Digest em Markdown (corpo) e na UI (histórico de digests por ambiente).
+- **RF-07** Entrega por e-mail e webhook para os **destinatários do ambiente**, configurados pelo operator. Cada webhook tem o seu formato, genérico ou Slack (ADR-0001 D15). Sem destinatário configurado, o digest vai para os canais de alerta globais existentes (fallback, ADR-0001 D6). Digest em Markdown (corpo) e na UI (histórico de digests por ambiente).
 - **RF-08** Regressões do digest não criam um alerta novo se já houver alerta `workload` aberto para o mesmo fingerprint (dedup existente). O digest só referencia.
 
 ## 2. Requisitos não funcionais
 
-- **RNF-01 Segurança e só leitura.** Nenhuma sessão nova no alvo: tudo vem do snapshot store. A eventual chamada a HypoPG é uma sessão só leitura com índices hipotéticos de sessão, sem efeito persistente, e só se o operator permitir.
+- **RNF-01 Segurança e só leitura.** Nenhuma sessão nova no alvo: tudo vem do snapshot store. HypoPG fica fora do v1 (ADR-0001 D6).
 - **RNF-02 LGPD.** Só fingerprint normalizado sem literais (normalização atual do coletor) e números agregados. Nunca o texto original de `pg_stat_statements`.
 - **RNF-03 Desempenho.** Digest de um ambiente com 500 fingerprints por coleta × 42 coletas por janela em menos de 3 s. Corpo do e-mail ≤ 100 KB.
-- **RNF-04 Multi-tenant.** Digest por ambiente. Destinatários configurados por ambiente pelo operator. Um digest nunca mistura ambientes.
+- **RNF-04 Multi-tenant.** Digest por ambiente. Destinatários configurados por ambiente pelo operator, com fallback nos canais globais (ADR-0001 D6). Um digest nunca mistura ambientes. Os destinatários de um ambiente nunca recebem o digest de outro.
 - **RNF-05 Observabilidade.** Métricas de digests gerados, sem janela comparável e entregas falhas. Falha de entrega é nova: hoje `internal/notify` ignora o erro e `alert_delivery` só registra entregas, para dedup.
 - **RNF-06 Cobertura honesta.** Como o coletor guarda só o top N por tempo total (`AUDITOR_WORKLOAD_LIMIT`, padrão 500), o digest informa N. Uma consulta "nova" pode só ter entrado no top N. Isso aparece como ressalva.
 
@@ -82,8 +82,7 @@ Todos os limiares são **valor inicial, calibrar**, por ambiente. A calibração
 - classificação regressão, nova, sumiu, melhora;
 - entidade digest com histórico;
 - aba Digest;
-- destinatários por ambiente (hoje os canais de alerta são globais, por variável de ambiente);
-- integração opcional com HypoPG.
+- destinatários por ambiente, com formato por webhook e fallback nos canais globais (hoje os canais de alerta são globais, por variável de ambiente).
 
 **Dependências.** Nenhuma. É base da 02 (custo por consulta).
 
@@ -92,6 +91,6 @@ Todos os limiares são **valor inicial, calibrar**, por ambiente. A calibração
 - Fingerprint muda com uma refatoração do SQL e vira "sumiu + nova".
 - Cadência de coleta baixa gera janelas pobres.
 
-**Perguntas em aberto.**
-- P-01: permitir HypoPG (índice hipotético na sessão) como opt-in, ou ficar só nas sugestões `index.candidate` existentes?
-- P-02: destinatários por ambiente (novo) ou os canais globais atuais?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md), D6).
+- P-01: HypoPG? **Resolvida:** não no v1. Só as sugestões existentes.
+- P-02: destinatários por ambiente ou canais globais? **Resolvida:** destinatários por ambiente, com fallback nos canais globais quando nenhum estiver configurado.

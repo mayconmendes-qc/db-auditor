@@ -15,7 +15,7 @@
 - **RF-03** Considerar a versão major do PostgreSQL do alvo (14 a 18, mesma matriz da CI), porque o comportamento de lock muda entre versões. Origem da versão: snapshot do ambiente ou parâmetro explícito.
 - **RF-04** Contexto, em três modos, nesta ordem de preferência:
   - (a) **snapshot**: última coleta completa de um ambiente, lida pela API do auditor, sem DSN no CI;
-  - (b) **conexão direta só leitura**;
+  - (b) **conexão direta só leitura**, só para uso local do operador, nunca no runner de CI (ADR-0001 D2);
   - (c) **sem contexto**: só a análise estática.
 - **RF-05** Com contexto, estimar por tabela afetada: tamanho total, linhas estimadas, taxa de escrita (delta entre duas coletas completas) e duração estimada da reescrita ou varredura.
 - **RF-06** Para cada risco, sugerir a alternativa segura em texto (por exemplo: índice concorrente, constraint criada como não validada e validada depois, `lock_timeout` explícito, separar em etapas).
@@ -26,8 +26,8 @@
 
 ## 2. Requisitos não funcionais
 
-- **RNF-01 Segurança e só leitura.** O modo (b) usa a conexão só leitura existente, com allowlist de host e TLS. O modo (a) usa credencial de API com escopo de um ambiente e papel mínimo viewer. A CLI nunca executa o conteúdo da migration.
-- **RNF-02 LGPD.** Migrations podem ter literais (seed, atualização de dados). Saída e histórico mostram tipo de operação, objeto, arquivo e linha. Nunca mostram literais nem o texto completo do comando. O texto é normalizado sem literais, como já faz a normalização de consultas do coletor de workload e `internal/fingerprint`.
+- **RNF-01 Segurança e só leitura.** O modo (b) usa a conexão só leitura existente, com allowlist de host e TLS. O modo (a) usa o token por ambiente com escopo mínimo (ADR-0001 D1). A GitHub Action só oferece o modo (a): o runner de CI nunca recebe DSN nem senha do banco (ADR-0001 D2). A CLI nunca executa o conteúdo da migration.
+- **RNF-02 LGPD.** Migrations podem ter literais (seed, atualização de dados). Saída e histórico mostram tipo de operação, objeto, arquivo e linha. Nunca mostram literais nem o texto completo do comando. O texto é normalizado sem literais, como já faz a normalização de consultas do coletor de workload (`NormalizeQuery` em `collectors/postgres/stats_workload.go`). Essa normalização será extraída para `internal/fingerprint`, porque hoje `fingerprint.NormalizeSQL` não remove literais (ADR-0001 D16).
 - **RNF-03 Desempenho.** Análise estática de 200 arquivos ou 2 MB em menos de 10 s. Com contexto, uma única leitura de metadados por tabela afetada. Limite de 500 operações por execução, com aviso de truncamento.
 - **RNF-04 Multi-tenant.** O histórico no auditor pertence a um ambiente e segue as concessões por ambiente. A credencial de CI não lê outros ambientes.
 - **RNF-05 Observabilidade.** Métricas de análises por resultado e erros de parse no `/metrics` existente. Log sem DSN, token nem SQL bruto (sanitização de `config`).
@@ -75,22 +75,22 @@
 - **CA-03** Dado uma migration com um literal de e-mail num comando de atualização de dados, quando a saída é gerada, então nem o Markdown, nem o JSON, nem o histórico contêm o literal.
 - **CA-04** Dado um PR com comentário anterior do auditor, quando há novo push, então o comentário existente é atualizado e não surge um segundo comentário.
 - **CA-05** Dado um snapshot `partial_success` como contexto, quando a CLI roda, então o código é 3 e a saída diz que o contexto é parcial.
-- **CA-06** Dado a conexão direta com uma conta com privilégio de escrita, quando a CLI tenta o modo (b), então recusa com código 4 sem ler nada.
+- **CA-06** Dado a conexão direta (uso local do operador) com uma conta com privilégio de escrita, quando a CLI tenta o modo (b), então recusa com código 4 sem ler nada.
 - **CA-07** Dado uma supressão por linha com justificativa, quando a regra dispara, então a operação aparece como "suprimida", com a justificativa, e não conta para o gate.
-- **CA-08** Dado PostgreSQL 14 e 16 como versão alvo, quando a mesma operação de lock tem comportamento diferente entre versões, então a saída de cada versão segue a documentação daquela versão (teste nas versões da matriz da CI).
+- **CA-08** Dado uma migration que torna uma coluna existente obrigatória (MR-04), quando a CLI roda com versão alvo 14, 15, 16, 17 e 18, então a saída de cada versão segue a documentação daquela versão: no PG 18, a alternativa segura sugerida é `NOT NULL ... NOT VALID`; no PG 14–17, é `CHECK (... IS NOT NULL) NOT VALID` seguida de `VALIDATE` (ADR-0001 D12; teste nas versões da matriz da CI).
 
 ## 6. Dependências, reaproveitamento, riscos e perguntas em aberto
 
 **Reaproveita.**
 - `table_snapshot` (tamanho, linhas estimadas, contadores de escrita) e a regra de comparabilidade de duas coletas completas de `maintenance.growth_trend`, para a taxa de escrita;
 - conexão só leitura e sanitização de DSN (`collectors/postgres`, `config`);
-- normalização sem literais (`internal/fingerprint`, coletor de workload);
+- normalização sem literais do coletor de workload, extraída para `internal/fingerprint` (ADR-0001 D16);
 - catálogo de regras versionado e esquema de impacto AN-03;
 - matriz PostgreSQL 14–18 da CI (#134).
 
 **Novo.**
 - modo CLI e subcomando;
-- parser de DDL PostgreSQL (hoje não existe parser SQL no repositório);
+- parser de DDL PostgreSQL em Go puro (hoje não existe parser SQL no repositório, e a imagem é `CGO_ENABLED=0`; ADR-0001 D16);
 - catálogo de regras MR-*;
 - integração GitHub Action;
 - credencial de CI com escopo de ambiente;
@@ -103,7 +103,7 @@
 - Parser divergente da versão do servidor.
 - Falsa sensação de segurança quando falta contexto. Mitigação: confiança e motivo explícitos.
 
-**Perguntas em aberto.**
-- P-01: como o CI se autentica no auditor? Token por ambiente (novo) ou reutilizar `AUDITOR_REPORT_API_TOKEN`?
-- P-02: permitir o modo (b), DSN de produção no runner de CI, ou só o modo (a), snapshot via API?
-- P-03: além do Markdown, publicar SARIF (aba de code scanning do GitHub)?
+**Perguntas resolvidas** ([ADR-0001](../adr/0001-decisoes-v1-features.md)).
+- P-01: como o CI se autentica no auditor? **Resolvida (D1):** token novo por ambiente, com escopo mínimo. `AUDITOR_REPORT_API_TOKEN` não é reutilizado.
+- P-02: permitir o modo (b), DSN de produção no runner de CI, ou só o modo (a)? **Resolvida (D2):** CI só no modo (a). O modo (b) é só para uso local do operador.
+- P-03: publicar SARIF? **Resolvida (D12):** fora do v1.

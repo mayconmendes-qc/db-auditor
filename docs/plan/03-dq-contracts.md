@@ -3,19 +3,25 @@
 - **Spec:** [../spec/03-dq-contracts.md](../spec/03-dq-contracts.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 7ª
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
 - **Total:** 7 lotes, **27 d**, 3 lotes com gate R2, Trinity necessária (1 lote)
 
 ## 0. Resumo
 
 O plano estende o diagnóstico de qualidade sob demanda que já existe (`internal/quality`, `POST .../quality-scans`, tabelas `quality_scan`, `quality_issue` e `quality_issue_event`, flag `AUDITOR_DATA_QUALITY_ENABLED`). Entram contratos versionados por tabela (YAML ou UI), seis tipos de checagem, proposta gerada do schema, execução por agenda, sob demanda e pela CLI de CI, achados `quality.contract_violation` com dedup e tendência. Só contagens são persistidas.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 4):** a **amostra padrão continua em 1000 linhas** (teto atual de `quality.Request.Validate`). Ela é **configurável até 100 000 por opt-in**: o operator sobe o teto do processo com `AUDITOR_DATA_QUALITY_MAX_SAMPLE` (padrão 1000, máximo 100 000), e cada contrato declara o próprio `sample_limit` dentro desse teto. Responde à P-01.
-- **decisão padrão (Q, nº 4):** a varredura de PII (spec 05) tem **flag própria, mais restrita**. Aqui continua valendo `AUDITOR_DATA_QUALITY_ENABLED`.
-- **decisão padrão (Q, nº 1):** a CLI usa o **token por ambiente** (plano 01, lote 3), com o novo escopo `quality-contract:run`.
-- **decisão padrão (Q, nº 2, por analogia):** a CLI de CI **não recebe DSN**. Ela pede a execução à API, e quem se conecta ao alvo é a API, com a conta só leitura que já existe.
-- **decisão padrão (Q, nº 11):** tenant = ambiente.
+- **ADR-0001 D4 (emendada):** a **amostra padrão dos contratos é de 10 000 linhas** por checagem (o RNF-03 da spec prevalece). Ela vai **até 100 000 por opt-in**:
+  - o operator sobe o teto do processo com `AUDITOR_DATA_QUALITY_MAX_SAMPLE` (padrão 10 000, máximo 100 000);
+  - cada contrato declara o próprio `sample_limit` dentro desse teto.
+
+  O diagnóstico sob demanda existente (`POST .../quality-scans`, `quality.Request.Validate`) **mantém o teto de 1000**. Responde à P-01.
+- **ADR-0001 D4:** a varredura de PII (spec 05) tem **flag própria, mais restrita**, e amostra própria. Aqui continua valendo `AUDITOR_DATA_QUALITY_ENABLED`.
+- **ADR-0001 D13:** o **contrato canônico fica no auditor**. O YAML importado cria uma versão `proposed`. O YAML passado à CLI é **execução ad hoc** registrada como `cli`, que não cria nem aprova versão. Violação persistente usa a **dedup e a notificação de achados**, sem categoria nova em `regression_alert`. Responde à P-02.
+- **ADR-0001 D1:** a CLI usa o **token por ambiente** (plano 01, lote 3), com o novo escopo `quality-contract:run`.
+- **ADR-0001 D2 (por analogia):** a CLI de CI **não recebe DSN**. Ela pede a execução à API, e quem se conecta ao alvo é a API, com a conta só leitura que já existe.
+- **ADR-0001 D11:** tenant = ambiente.
 
 ### Dependências
 
@@ -62,7 +68,7 @@ Os números supõem 26–35 já mergeados. Lembrar `ci.yml`, `migrations/README.
 
 Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para viewer omite o campo.
 
-**Tela (Trinity necessária).** Em Ações assistidas → Qualidade (`AssistedActionsPage`/`AssistedScanResults`): lista de contratos por tabela com o estado da última execução, tendência, botão "gerar proposta", diff entre versões e aprovação.
+**Tela (Trinity necessária).** Em Ações assistidas → Qualidade (`AssistedActionsPage`/`AssistedScanResults`): lista de contratos por tabela com o estado da última execução, tendência, botão "gerar proposta", diff entre versões e aprovação. A posição na navegação citada aqui é a da spec. A decisão final fica adiada para o lote de tela, quando Q chamará a Trinity (ADR-0001, Pendente).
 
 ## 4. Lotes
 
@@ -97,9 +103,9 @@ Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para v
 
 ### Lote 3 — Execução das seis checagens com amostragem segura
 
-**Issue:** `feat(dq-contracts): executor de nulos, unicidade, FK órfã, domínio, frescor e volume com amostra 1000 por padrão e opt-in até 100 000 (RF-02, RF-05–RF-07)`
+**Issue:** `feat(dq-contracts): executor de nulos, unicidade, FK órfã, domínio, frescor e volume com amostra 10 000 por padrão e opt-in até 100 000 (RF-02, RF-05–RF-07)`
 
-**Descrição.** Usa a amostragem compartilhada do plano 05 (`quality/sample.go`): transação só leitura, conta sem escrita, páginas obrigatórias em tabelas acima de 1 GB, 30 s de timeout por checagem e no máximo 4 checagens simultâneas por ambiente. Amostra padrão de 1000, com opt-in até 100 000 (**decisão padrão** nº 4; `AUDITOR_DATA_QUALITY_MAX_SAMPLE`). Nulos: pré-checagem por `column_stat_snapshot.null_fraction` e confirmação na amostra. Frescor: `max(coluna)` agregado no alvo, e o processo guarda **só a idade em horas**, nunca o carimbo (RNF-02). Volume: variação de `table_snapshot` (linhas estimadas) entre coletas, ±50%, com confiança baixa. Domínio: lista ou intervalo, com tolerância. O resultado é `passed`/`violated`/`not_executed` com motivo (timeout, sem permissão, tabela ou coluna ausente). Toda contagem amostral traz o tamanho da amostra e o aviso de margem de erro (RNF-06). Violação gera `quality.contract_violation`, com dedup por contrato + checagem + versão e severidades da §3. A violação persistente entra no fluxo de notificação de achados existente (`NotifyFindings`/`ClaimAlert`, regra de lacuna AN-11). Recurso desligado: 409.
+**Descrição.** Usa a amostragem compartilhada do plano 05 (`quality/sample.go`): transação só leitura, conta sem escrita, páginas obrigatórias em tabelas acima de 1 GB, 30 s de timeout por checagem e no máximo 4 checagens simultâneas por ambiente. Amostra padrão de 10 000, com opt-in até 100 000 (ADR-0001 D4; `AUDITOR_DATA_QUALITY_MAX_SAMPLE`, padrão 10 000). O teto de 1000 de `quality.Request.Validate` continua valendo para `quality-scans`: a amostragem compartilhada recebe o teto do chamador. Nulos: pré-checagem por `column_stat_snapshot.null_fraction` e confirmação na amostra. Frescor: `max(coluna)` agregado no alvo, e o processo guarda **só a idade em horas**, nunca o carimbo (RNF-02). Volume: variação de `table_snapshot` (linhas estimadas) entre coletas, ±50%, com confiança baixa. Domínio: lista ou intervalo, com tolerância. O resultado é `passed`/`violated`/`not_executed` com motivo (timeout, sem permissão, tabela ou coluna ausente). Toda contagem amostral traz o tamanho da amostra e o aviso de margem de erro (RNF-06). Violação gera `quality.contract_violation`, com dedup por contrato + checagem + versão e severidades da §3. A violação persistente entra no fluxo de dedup e notificação de achados existente (`NotifyFindings`/`ClaimAlert`, regra de lacuna AN-11), sem categoria nova em `regression_alert` (ADR-0001 D13). Recurso desligado: 409.
 
 **Critérios de aceite.**
 - [ ] CA-02: máximo de 1%, amostra com 3% de nulos. Grava 3%, a amostra e um achado médio. Nenhum valor de linha é persistido (varredura do store como no plano 05).
@@ -107,7 +113,7 @@ Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para v
 - [ ] CA-04: frescor de 24 h com último registro de 30 h guarda "30 h", e o carimbo não está no store nem nos logs.
 - [ ] CA-06: checagem que estoura o timeout fica "não executada — timeout".
 - [ ] CA-07: a mesma violação em duas execuções completas seguidas cria um único alerta (dedup existente).
-- [ ] `sample_limit` acima do teto do processo recebe 400. Sem opt-in, o teto é 1000.
+- [ ] `sample_limit` acima do teto do processo recebe 400. Sem opt-in, o teto é 10 000. `quality-scans` continua recusando mais de 1000 (testes existentes verdes).
 - [ ] RNF-05: `auditor_quality_contract_checks_total{result}` e duração. Logs sem valores.
 
 **Arquivos.** `internal/dqcontract/checks.go`, `internal/dqcontract/run.go`, `internal/quality/sample.go`, `internal/quality/probe.go`, `internal/analyzer/quality_contract.go`, `internal/actions/catalog.go`, `internal/repository/quality_contract.go`, `internal/repository/alerts.go`, `internal/observability/metrics.go`, `docs/rules.md`.
@@ -131,7 +137,7 @@ Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para v
 
 **Issue:** `feat(cli): auditor dq-contracts run com gate por severidade, saída Markdown/JSON e códigos 0–4 (RF-04, RF-09)`
 
-**Descrição.** `auditor dq-contracts run --environment <id> (--contract <id> | --file c.yaml | --dir contracts/) --fail-on high --format md|json`. Autentica com o token por ambiente (escopo `quality-contract:run`, adicionado à lista fechada do plano 01). A CLI **não** se conecta ao alvo: pede a execução à API e acompanha o resultado. Com `--file`/`--dir`, o YAML vai como execução *ad hoc* de uma versão não aprovada, registrada como `cli` (ver §8, P-02). Códigos: 1 a partir de alta, 2 para recurso desabilitado (409) ou YAML inválido, 3 para checagem não executada.
+**Descrição.** `auditor dq-contracts run --environment <id> (--contract <id> | --file c.yaml | --dir contracts/) --fail-on high --format md|json`. Autentica com o token por ambiente (escopo `quality-contract:run`, adicionado à lista fechada do plano 01). A CLI **não** se conecta ao alvo: pede a execução à API e acompanha o resultado. Com `--file`/`--dir`, o YAML vai como execução *ad hoc* de uma versão não aprovada, registrada como `cli` (ADR-0001 D13). Códigos: 1 a partir de alta, 2 para recurso desabilitado (409) ou YAML inválido, 3 para checagem não executada.
 
 **Critérios de aceite.**
 - [ ] CA-03 (CLI): recurso desabilitado sai com código 2.
@@ -183,7 +189,8 @@ Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para v
 | `TestPersistentViolationSingleAlert` | integração (duas execuções completas) | CA-07 |
 | `TestViewerCannotApprove` | API com `authMiddleware` | CA-08 |
 | `TestYAMLErrorsLineAndField` | unitário | §4 Erros, RF-01 |
-| `TestSampleLimitOptIn` (1000 padrão; 100 000 só com o teto do processo) | unitário/API | decisão padrão nº 4, RNF-03 |
+| `TestSampleLimitOptIn` (10 000 padrão; 100 000 só com o teto do processo; `quality-scans` mantém 1000) | unitário/API | ADR-0001 D4, RNF-03 |
+| `TestCLIAdHocYAMLDoesNotCreateOrApproveVersion` | API + CLI | ADR-0001 D13 |
 | `TestConcurrentChecksPerEnvironmentCap` | integração | RNF-03 |
 | Testes existentes de `internal/quality` | regressão | RNF-01 |
 
@@ -201,13 +208,14 @@ Lista de domínio (RNF-02): só aparece para auditor ou acima. A resposta para v
 
 ## 7. Riscos
 
-- Amostra pequena (padrão 1000 pela **decisão padrão**) gera falso "aprovado", principalmente em unicidade. Mitigação: texto "sem duplicata na amostra", tamanho da amostra sempre visível e opt-in de amostra maior.
-- Carga de leitura em produção com amostras de até 100 000. Mitigação: opt-in do operator, páginas, timeouts e limite de concorrência.
+- Amostra ainda limitada (10 000 por padrão) gera falso "aprovado", principalmente em unicidade. Mitigação: texto "sem duplicata na amostra", tamanho da amostra sempre visível e opt-in de amostra maior.
+- Carga de leitura em produção: o padrão de 10 000 (ADR-0001 D4) já é 10× o diagnóstico atual, e o opt-in vai até 100 000. Mitigação: páginas obrigatórias acima de 1 GB, timeout de 30 s por checagem, 4 checagens simultâneas por ambiente e opt-in do operator acima de 10 000.
 - Contrato desatualizado depois de uma migration. Mitigação: checagem "não executada — coluna ausente" e, com a 04, um alerta pela timeline.
 - A nova dependência YAML aumenta a superfície (parser de entrada não confiável vinda da CLI). Mitigação: limites de tamanho (1 MiB da API) e de profundidade.
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- **Conflito:** o RNF-03 da spec diz "amostra padrão de 10 000 linhas, máximo de 100 000". A **decisão padrão** nº 4 mantém o padrão em 1000. O plano segue a decisão. Atualizar a spec?
-- P-02 sem decisão: o contrato canônico fica no auditor (UI) ou no Git (YAML importado pela CLI)? O plano trata o auditor como canônico e o YAML via CLI como execução *ad hoc* registrada, que não aprova versão. Confirmar.
-- O RF-07 fala em "entra na regressão (AN-11)". `regression_alert` só tem as categorias `findings`, `structure` e `workload`. O plano usa a dedup e a notificação de achados. Confirmar se é preciso uma categoria `quality` nova.
+- ~~Amostra padrão 10 000 (spec) × 1000 (decisão).~~ **Resolvido por ADR-0001 D4 (emendada):** vale a spec, com 10 000 de padrão e opt-in até 100 000.
+- ~~Contrato canônico (P-02).~~ **Resolvido por ADR-0001 D13:** auditor canônico, YAML via CLI como execução *ad hoc*.
+- ~~Categoria `quality` em `regression_alert`.~~ **Resolvido por ADR-0001 D13:** não. Dedup e notificação de achados. RF-07 e CA-07 da spec foram ajustados.
+- **Pendente (fora do escopo de Q):** posição da tela de contratos (a spec sugere Ações assistidas → Qualidade), com a Trinity no lote 6.

@@ -3,23 +3,25 @@
 - **Spec:** [../spec/10-log-anomaly.md](../spec/10-log-anomaly.md)
 - **Base lida:** `main` em `b1a93cf`
 - **Posição na ordem de implementação:** 10ª (última)
-- **Total:** 4 lotes no v1, **14 d**, mais 1 lote condicional (6 d). 2 lotes com gate R2 no v1 (+1 condicional). Trinity: não necessária no v1 (só CLI); necessária no lote condicional
+- **Decisões:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18)
+- **Total:** 5 lotes, **16 d**, 3 lotes com gate R2. Trinity não necessária (só CLI; a exibição do último login fica na tela do plano 07)
 
 ## 0. Resumo
 
-Um subcomando da CLI lê logs JSON por linha (arquivo, vários arquivos ou stdin), mascara as partes variáveis, agrupa em templates com id estável (estilo Drain), conta por janela e nível, calcula a linha de base e o z-score, e aponta anomalias. Tudo **local** no v1: nada vai para a API.
+Um subcomando da CLI lê logs JSON por linha (arquivo, vários arquivos ou stdin), mascara as partes variáveis, agrupa em templates com id estável (estilo Drain), conta por janela e nível, calcula a linha de base e o z-score, e aponta anomalias. Tudo é **local** no v1. A **única exceção** é o agregado de último login por role (só role e horário), que a CLI pode enviar ao ambiente (lote 5) para a revisão de acessos da 07.
 
-### Decisões padrão aplicadas
+### Decisões aplicadas (ADR-0001)
 
-- **decisão padrão (Q, nº 10):** **logs do PostgreSQL** (perfil `postgres-jsonlog`, PG 15+) **e JSON genérico** (perfil `generico` com mapeamento de horário, nível e mensagem). Responde à P-01.
-- **decisão padrão (Q, nº 10):** **processamento só local no início**. RF-07 (envio ao auditor e lista "Anomalias de log" na UI) e CA-06 ficam no **lote 5 condicional**, fora do v1. Responde à P-02.
-- **decisão padrão (Q, nº 7):** o insumo de último login para a 07 é **gerado localmente** no v1 (lote 4). O consumo pelo auditor depende do lote 5 condicional e do lote 6 condicional do plano 07.
-- **decisão padrão (Q, nº 1):** quando o envio existir (lote 5), ele usará o **token por ambiente** do plano 01, escopo `log-aggregate:write`.
-- **decisão padrão (Q, nº 11):** tenant = ambiente (só no lote 5).
+- **ADR-0001 D10:** **logs do PostgreSQL** (perfil `postgres-jsonlog`, PG 15+) **e JSON genérico** (perfil `generico` com mapeamento de horário, nível e mensagem). Responde à P-01.
+- **ADR-0001 D10 (emendada):** **processamento local**. Templates, contagens e anomalias **não** sobem à API no v1, e a lista "Anomalias de log" na UI fica fora do v1 (RF-07). **Única exceção:** o agregado de último login por role (role e horário mais recente, nada mais) sobe ao ambiente no lote 5. Responde à P-02.
+- **ADR-0001 D7:** o agregado alimenta a revisão de acessos (plano 07, lote 6, que tem a rota e a tabela).
+- **ADR-0001 D1:** o envio usa o **token por ambiente** do plano 01, escopo `last-login:write`.
+- **ADR-0001 D11:** tenant = ambiente. O envio só escreve no ambiente do token (CA-06, RNF-04).
+- **ADR-0001 D16:** o mascaramento parte de `internal/fingerprint/literals.go`, extraído no plano 01, lote 2.
 
 ### Dependências
 
-Plano 01, lote 1 (modo CLI e códigos). O lote 5 condicional também depende do plano 01, lote 3 (token).
+Plano 01, lote 1 (modo CLI e códigos). O lote 5 também depende do plano 01, lote 3 (token) e do plano 07, lote 6 (rota que recebe o último login). Os dois lotes (10 L5 e 07 L6) são implementados em sequência, depois do lote 4 deste plano.
 
 ## 1. Módulos e arquivos afetados
 
@@ -32,31 +34,26 @@ Plano 01, lote 1 (modo CLI e códigos). O lote 5 condicional também depende do 
 | Último login | `loganomaly/lastlogin.go` | — |
 | CLI | `backend/cmd/auditor/main.go` | `auditor log-anomaly` |
 | Sanitização | `backend/internal/config/sanitize.go` | reuso para as mensagens de erro |
-| Condicional (lote 5) | `backend/internal/api/log_anomalies.go`, `backend/internal/repository/log_anomalies.go`, `backend/internal/api/auth.go` (escopo `log-aggregate:write`), `frontend/src/pages/LogAnomaliesPage.tsx` | — |
-| Docs | novo `docs/log-anomaly.md` (perfis, mapeamento genérico, limites, garantias LGPD), `docs/guia-do-usuario.md` (só no lote 5) | — |
+| Envio do último login (lote 5) | novo `loganomaly/submit.go`, `backend/internal/cli/apiclient.go` (plano 01) | `--submit-last-login` para `POST .../account-last-logins` (rota do plano 07, lote 6) |
+| Docs | novo `docs/log-anomaly.md` (perfis, mapeamento genérico, limites, garantias LGPD, envio do último login) | — |
 
 ## 2. Migrations (provisórias)
 
 | Nº provisório | Arquivo | Lote | Conteúdo |
 |---|---|---|---|
-| — | — | 1–4 | **nenhuma no v1** (processamento local) |
-| 40 (condicional) | `backend/migrations/40_log_anomaly.sql` | 5 | `log_aggregate_batch` (ambiente, id do token, período, versão do esquema, linhas lidas/descartadas/inválidas), `log_template` (ambiente, id do template, template mascarado, nível), `log_window_count`, `log_anomaly`. **Sem linhas brutas nem exemplos** |
+| — | — | 1–5 | **nenhuma** (processamento local; a tabela do último login é a `40_account_last_login.sql` do plano 07, lote 6) |
 
-O 40 segue o 39 do plano 08. O 41 (plano 07, condicional) vem depois.
+Tabelas de agregados de anomalia (`log_template`, `log_anomaly` etc.) ficam fora do v1 (ADR-0001 D10).
 
 ## 3. Endpoints e telas
 
-v1: **nenhum endpoint e nenhuma tela** (só CLI). **Trinity não é necessária no v1.**
-
-Condicional (lote 5):
+Este plano **não cria endpoint nem tela**. A CLI consome uma rota criada no plano 07, lote 6:
 
 | Método e rota | Quem | Observação |
 |---|---|---|
-| `POST /api/v1/environments/{id}/log-aggregates` | token `log-aggregate:write` | token de outro ambiente: 403 (CA-06). Tamanho limitado |
-| `GET /api/v1/environments/{id}/log-anomalies`, `GET .../log-templates` | viewer | — |
-| `POST /api/v1/environments/{id}/account-last-logins` | token `log-aggregate:write` | só role e horário, para o plano 07 (lote 6) |
+| `POST /api/v1/environments/{id}/account-last-logins` | token `last-login:write` | só `role` e `last_login_at`. Token de outro ambiente: 403 (CA-06). Campo extra: 400. Tamanho limitado |
 
-Tela condicional: lista "Anomalias de log" por ambiente (Trinity).
+**Trinity não é necessária.** O último login aparece na matriz da revisão de acessos (plano 07, lote 5). Fora do v1 (ADR-0001 D10): envio de templates e anomalias e lista "Anomalias de log".
 
 ## 4. Lotes
 
@@ -109,7 +106,7 @@ Tela condicional: lista "Anomalias de log" por ambiente (Trinity).
 
 **Issue:** `feat(log-anomaly): arquivo local de último login por role (só role e horário) a partir de eventos de conexão do postgres-jsonlog (RF-08)`
 
-**Descrição.** `--last-login-out ultimo-login.json`. Dos eventos de conexão autorizada do perfil `postgres-jsonlog`, extrair **só** o nome da role e o horário mais recente, sem IP, banco de origem nem aplicação. Arquivo local, com `schema_version`. Pela **decisão padrão** nº 10, não é enviado no v1.
+**Descrição.** `--last-login-out ultimo-login.json`. Dos eventos de conexão autorizada do perfil `postgres-jsonlog`, extrair **só** o nome da role e o horário mais recente, sem IP, banco de origem nem aplicação. Arquivo local, com `schema_version`, no mesmo formato que o lote 5 envia (ADR-0001 D10).
 
 **Critérios de aceite.**
 - [ ] CA-07: o insumo contém só a role e o horário mais recente, sem IP nem banco (teste inspeciona o JSON).
@@ -118,18 +115,20 @@ Tela condicional: lista "Anomalias de log" por ambiente (Trinity).
 **Arquivos.** `internal/loganomaly/lastlogin.go`, `docs/log-anomaly.md`.
 **Estimativa:** 2 d. **Gate:** **R2** (dado pessoal: nome de role e horário de autenticação). **Depende de:** lote 2.
 
-### Lote 5 (condicional, fora do v1) — Envio de agregados ao auditor e UI
+### Lote 5 — Envio do agregado de último login ao ambiente
 
-**Issue:** `feat(log-anomaly): envio opcional de agregados e de último login ao ambiente, lista Anomalias de log na UI (RF-07, CA-06)`
+**Issue:** `feat(log-anomaly): --submit-last-login envia ao ambiente só role e horário mais recente, com token last-login:write (RF-08, CA-06, ADR-0001 D10)`
 
-**Descrição.** Só depois que Q revogar ou ajustar a **decisão padrão** nº 10. Migration `40_log_anomaly.sql` (provisória). `--submit` com o token `log-aggregate:write`: só templates mascarados, ids, contagens por janela e anomalias. Envio rejeitado (credencial, escopo, tamanho) sai com código 2, e a saída local é preservada. A API recusa campos fora do contrato e revalida no servidor que nenhum template contém padrão de e-mail ou IP (defesa em profundidade). UI "Anomalias de log" (Trinity). Endpoint de último login para o lote 6 do plano 07. Métricas de lotes recebidos e rejeitados (RNF-05).
+**Descrição.** `--submit-last-login --environment <id>` envia o conteúdo do arquivo do lote 4 (só `role` e `last_login_at`) para `POST .../account-last-logins` (plano 07, lote 6). Autenticação: token do ambiente em `AUDITOR_CLI_TOKEN`/`_FILE`, escopo `last-login:write`. **Nada mais sai da máquina:** a CLI monta o corpo a partir de uma struct fechada, sem templates, contagens, IP, banco ou aplicação. Envio rejeitado (credencial, escopo, tamanho) sai com código 2, e a saída local é preservada. Só para o perfil `postgres-jsonlog`.
 
 **Critérios de aceite.**
 - [ ] CA-06: credencial de outro ambiente: 403 na API e código 2 na CLI.
-- [ ] CA-02 aplicado ao lote enviado: nenhum valor no corpo nem no store.
-- [ ] Layout aprovado pela Trinity.
+- [ ] CA-02 e CA-07 aplicados ao envio: o corpo capturado num servidor falso tem só `role` e `last_login_at`, e nenhum e-mail, IP ou parâmetro do corpus aparece.
+- [ ] A CLI não faz nenhuma outra chamada de rede além desse POST (teste com servidor falso que conta requisições).
+- [ ] Sem `--submit-last-login`, nenhuma conexão de rede (RNF-01 continua valendo).
 
-**Estimativa:** 6 d. **Gate:** **R2** (escrita por token, dado derivado de log). **Depende de:** lotes 1–4 e plano 01 lote 3.
+**Arquivos.** `internal/loganomaly/submit.go`, `internal/cli/apiclient.go`, `cmd/auditor/main.go`, `docs/log-anomaly.md`.
+**Estimativa:** 2 d. **Gate:** **R2** (dado pessoal de autenticação sai da máquina; uso de token). **Depende de:** lote 4, plano 01 lote 3 e plano 07 lote 6.
 
 ## 5. Estratégia de testes
 
@@ -140,7 +139,8 @@ Tela condicional: lista "Anomalias de log" por ambiente (Trinity).
 | `TestNewErrorTemplateMedium` | unitário | CA-03 |
 | `TestInvalidLinesExit3` (20% não JSON) | CLI | CA-04 |
 | `TestDeterministicJSONOutput` | golden | CA-05, RNF-06 |
-| `TestSubmitOtherEnvironment403Exit2` | API + CLI (**lote 5 condicional**) | CA-06 |
+| `TestSubmitLastLoginOtherEnvironment403Exit2` | API + CLI (lote 5, com a rota do plano 07 lote 6) | CA-06 |
+| `TestSubmitLastLoginBodyOnlyRoleAndTime` (servidor falso inspeciona o corpo e conta requisições) | CLI | CA-02, CA-07, ADR-0001 D10 |
 | `TestLastLoginOnlyRoleAndTime` | unitário | CA-07, RF-08 |
 | `TestReaderThroughputAndMemory` | benchmark | RNF-03 |
 | `TestTemplateCapOthers` (10 000) | unitário | RNF-03 |
@@ -154,15 +154,16 @@ Tela condicional: lista "Anomalias de log" por ambiente (Trinity).
 | 2 | **R2** | mascaramento (LGPD crítico) |
 | 3 | CI verde | estatística sobre templates mascarados |
 | 4 | **R2** | último login (dado pessoal) |
-| 5 (cond.) | **R2** | envio por token |
+| 5 | **R2** | dado pessoal sai da máquina por token |
 
 ## 7. Riscos
 
 - Mascaramento incompleto vaza dado pessoal. Mitigação: padrões testados, fuzz, regra "não classificável" e gate R2.
 - É a feature menos alinhada ao foco em banco e pode competir por esforço. Mitigação: última na ordem e v1 só CLI.
 - Os templates do PostgreSQL mudam entre versões (14–18). Mitigação: golden por versão das mensagens de conexão mais comuns.
-- O perfil genérico aceita logs de aplicação com dado pessoal arbitrário. Mitigação: o mesmo mascarador e a mesma regra "não classificável", e nada sai da máquina no v1.
+- O perfil genérico aceita logs de aplicação com dado pessoal arbitrário. Mitigação: o mesmo mascarador e a mesma regra "não classificável", e nada do perfil genérico sai da máquina no v1.
+- O envio do último login é o único caminho de saída e pode crescer por pressão de escopo. Mitigação: corpo de struct fechada, recusa de campos extras no servidor e gate R2 (ADR-0001 D10).
 
-## 8. Pontos para Q
+## 8. Pontos para Q (resolvidos)
 
-- A **decisão padrão** nº 10 ("só local no início") tira do v1 o RF-07, o CA-06, o RNF-04 e a parte de API/UI do §4, e impede que o último login chegue à 07 (**decisão padrão** nº 7). Decidir se o v1 inclui pelo menos o envio do último login (só role e horário) ou se tudo espera o lote 5.
+- ~~Envio mínimo do último login × "só local".~~ **Resolvido por ADR-0001 D10 (emendada):** no v1 sobe só o agregado de role e horário (lote 5, não mais condicional). O RF-07 (envio de anomalias e UI) fica fora do v1. O CA-06 e o RNF-04 da spec passam a valer para o envio do último login.
