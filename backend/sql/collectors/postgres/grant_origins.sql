@@ -1,6 +1,4 @@
 -- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
--- Effective privileges for LOGIN roles × table/view/sequence/function/schema.
--- Origin is resolved in Go from ACL + membership rows (same connection).
 SELECT current_database(), r.rolname,
   CASE c.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'view' WHEN 'S' THEN 'sequence' ELSE 'table' END,
   n.nspname || '.' || c.relname, p.priv

@@ -1,5 +1,4 @@
 -- Executed by internal/collectors/postgres. Keep byte-for-byte SQL aligned with the Go collector.
--- Raw column ACL entries. PUBLIC is returned as grantee '' (empty). Expansion to LOGIN is in Go.
 SELECT current_database(), n.nspname, c.relname, a.attname,
   CASE WHEN acl.grantee = 0 THEN '' ELSE g.rolname END AS grantee,
   acl.privilege_type

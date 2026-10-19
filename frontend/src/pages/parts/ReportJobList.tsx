@@ -15,6 +15,7 @@ const reportTypeLabels: Record<ReportJob["report_type"], string> = {
   technical: "Técnico",
   table: "Tabela",
   architecture: "Análise completa e modelagem",
+  access_review: "Revisão de acessos",
 };
 
 export function ReportJobList({

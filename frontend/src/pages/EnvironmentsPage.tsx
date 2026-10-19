@@ -15,6 +15,7 @@ import { nextSort } from "../lib/sort";
 import { api } from "../services/api";
 import { CostPricesCard } from "./parts/CostPricesCard";
 import { EnvAPITokenCard } from "./parts/EnvAPITokenCard";
+import { RestoreDrillsCard } from "./parts/RestoreDrillsCard";
 import {
   type EnvironmentsPageProps,
   useEnvironmentsPage,
@@ -309,8 +310,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                 </div>
               </div>
             </div>
+            {selectedId ? <CostPricesCard environmentId={selectedId} /> : null}
             {selectedId ? (
-              <CostPricesCard environmentId={selectedId} />
+              <RestoreDrillsCard environmentId={selectedId} />
             ) : null}
             {api.hasRole("operator") && selectedId ? (
               <EnvAPITokenCard environmentId={selectedId} />

@@ -18,9 +18,9 @@ import type {
 } from "../types";
 import { DashboardAnalytics } from "./parts/DashboardAnalytics";
 import { DashboardConnections } from "./parts/DashboardConnections";
+import { DashboardCost } from "./parts/DashboardCost";
 import { DashboardKpis } from "./parts/DashboardKpis";
 import { DashboardPriorities } from "./parts/DashboardPriorities";
-import { DashboardCost } from "./parts/DashboardCost";
 
 export function DashboardPage() {
   const {

@@ -1184,7 +1184,8 @@
                       "executive",
                       "technical",
                       "table",
-                      "architecture"
+                      "architecture",
+                      "access_review"
                     ]
                   },
                   "format": {
@@ -1216,6 +1217,11 @@
                           "identifiers",
                           "strict"
                         ]
+                      },
+                      "campaign_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Campanha para report_type=access_review"
                       }
                     }
                   }
@@ -2698,6 +2704,144 @@
         "responses": {
           "200": {
             "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-review-owners": {
+      "get": {
+        "description": "Lista responsáveis da revisão de acessos (viewer).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "put": {
+        "description": "Substitui mapeamento role/conta → auditor (operator). Contato opcional é PII.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "400": {
+            "description": "responsável sem acesso"
+          },
+          "403": {
+            "description": "proibido"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews": {
+      "get": {
+        "description": "Lista campanhas de revisão de acessos.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      },
+      "post": {
+        "description": "Cria campanha a partir de coleta completa (operator). 409 se parcial.",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "403": {
+            "description": "proibido"
+          },
+          "409": {
+            "description": "coleta incompleta"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}": {
+      "get": {
+        "description": "Detalhe e progresso da campanha.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "404": {
+            "description": "não encontrado"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}/matrix": {
+      "get": {
+        "description": "Matriz congelada paginada (account, object, privilege, origin, highlight, pending, mine).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}/decisions": {
+      "post": {
+        "description": "Registra decisões imutáveis (auditor responsável da linha; operator em linhas sem responsável).",
+        "responses": {
+          "201": {
+            "description": "criado"
+          },
+          "400": {
+            "description": "manter sem justificativa"
+          },
+          "403": {
+            "description": "não é o responsável"
+          },
+          "409": {
+            "description": "campanha concluída"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}/close": {
+      "post": {
+        "description": "Encerra campanha (operator).",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "409": {
+            "description": "já concluída"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}/diff": {
+      "get": {
+        "description": "Diff com a campanha anterior.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/access-reviews/{campaign}/export/download": {
+      "get": {
+        "description": "CSV streaming com marcador # export_complete (auditor).",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "csv"
+          },
+          "403": {
+            "description": "proibido"
           }
         }
       }

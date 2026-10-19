@@ -84,6 +84,11 @@ const MigrationAnalysesPage = lazy(() =>
     default: m.MigrationAnalysesPage,
   })),
 );
+const AccessReviewPage = lazy(() =>
+  import("./pages/AccessReviewPage").then((m) => ({
+    default: m.AccessReviewPage,
+  })),
+);
 
 export { navigationSections };
 
@@ -104,6 +109,7 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     Digest: <QueryDigestPage />,
     Custo: <CostPage />,
     "Análises de migration": <MigrationAnalysesPage />,
+    "Revisão de acessos": <AccessReviewPage />,
     Status: <StatusPage />,
     Contas: <AccountsPage />,
     Acompanhamento: <MonitoringPage />,

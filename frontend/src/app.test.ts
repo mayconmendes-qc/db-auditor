@@ -18,6 +18,7 @@ describe("navigationSections", () => {
       "Digest",
       "Custo",
       "Análises de migration",
+      "Revisão de acessos",
       "Contas",
       "Acompanhamento",
       "Ações assistidas",

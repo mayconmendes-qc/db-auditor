@@ -33,6 +33,7 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   Digest: "digest",
   Custo: "cost",
   "Análises de migration": "migration-analyses",
+  "Revisão de acessos": "access-review",
   Contas: "accounts",
   Acompanhamento: "monitoring",
   "Ações assistidas": "assisted-actions",

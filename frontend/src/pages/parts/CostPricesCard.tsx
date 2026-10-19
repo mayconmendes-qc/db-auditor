@@ -65,63 +65,63 @@ export function CostPricesCard({ environmentId }: { environmentId: string }) {
             <p className="text-sm text-amber-200">Preço não configurado.</p>
           )}
           {canEdit ? (
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setSaving(true);
-              setError(null);
-              void api
-                .updateCostPrices(environmentId, {
-                  currency,
-                  storage_gb_month: Number(storage),
-                  model_origin: model,
-                  effective_from: new Date().toISOString(),
-                })
-                .then(() => reload())
-                .catch((err: unknown) =>
-                  setError(
-                    formatError(err, "Não foi possível gravar a versão"),
-                  ),
-                )
-                .finally(() => setSaving(false));
-            }}
-          >
-            <label className="text-xs text-slate-400">
-              Moeda
-              <select
-                className="mt-1 block rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-                value={currency}
-                disabled={locked}
-                onChange={(e) => setCurrency(e.target.value)}
-              >
-                <option value="BRL">BRL</option>
-                <option value="USD">USD</option>
-              </select>
-            </label>
-            <Input
-              label="Armazenamento / GB-mês"
-              value={storage}
-              onChange={(e) => setStorage(e.target.value)}
-              className="mt-1"
-            />
-            <label className="text-xs text-slate-400">
-              Modelo
-              <select
-                className="mt-1 block rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                <option value="rds_postgresql">RDS PostgreSQL</option>
-                <option value="cloud_sql">Cloud SQL</option>
-                <option value="self_hosted">Self-hosted</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <Button type="submit" disabled={saving}>
-              Nova versão
-            </Button>
-          </form>
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSaving(true);
+                setError(null);
+                void api
+                  .updateCostPrices(environmentId, {
+                    currency,
+                    storage_gb_month: Number(storage),
+                    model_origin: model,
+                    effective_from: new Date().toISOString(),
+                  })
+                  .then(() => reload())
+                  .catch((err: unknown) =>
+                    setError(
+                      formatError(err, "Não foi possível gravar a versão"),
+                    ),
+                  )
+                  .finally(() => setSaving(false));
+              }}
+            >
+              <label className="text-xs text-slate-400">
+                Moeda
+                <select
+                  className="mt-1 block rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                  value={currency}
+                  disabled={locked}
+                  onChange={(e) => setCurrency(e.target.value)}
+                >
+                  <option value="BRL">BRL</option>
+                  <option value="USD">USD</option>
+                </select>
+              </label>
+              <Input
+                label="Armazenamento / GB-mês"
+                value={storage}
+                onChange={(e) => setStorage(e.target.value)}
+                className="mt-1"
+              />
+              <label className="text-xs text-slate-400">
+                Modelo
+                <select
+                  className="mt-1 block rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  <option value="rds_postgresql">RDS PostgreSQL</option>
+                  <option value="cloud_sql">Cloud SQL</option>
+                  <option value="self_hosted">Self-hosted</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <Button type="submit" disabled={saving}>
+                Nova versão
+              </Button>
+            </form>
           ) : (
             <p className="text-sm text-slate-400">
               Somente operator pode criar novas versões de preço.

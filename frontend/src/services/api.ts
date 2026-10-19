@@ -81,6 +81,8 @@ import type {
   RelationshipGraph,
   ReportFilters,
   ReportJob,
+  RestoreDrill,
+  RestoreDrillPolicy,
   RetentionScenario,
   RLSPolicySnapshot,
   SchemaDiffResult,
@@ -294,7 +296,9 @@ async function delJSON<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function qs(params?: Record<string, string | number | undefined>): string {
+function qs(
+  params?: Record<string, string | number | boolean | undefined>,
+): string {
   if (!params) {
     return "";
   }
@@ -2121,4 +2125,23 @@ export const api = {
     if (!res.ok) throw await toApiError(res, "/access-reviews/export");
     return res.text();
   },
+
+  restoreDrills: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: RestoreDrill[]; total: number }>(
+      `/api/v1/environments/${environmentId}/restore-drills`,
+      signal,
+    ),
+  restoreDrillPolicy: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<RestoreDrillPolicy>(
+      `/api/v1/environments/${environmentId}/restore-drill-policy`,
+      signal,
+    ),
+  updateRestoreDrillPolicy: (
+    environmentId: string,
+    body: { rto_target_seconds: number; max_age_days: number },
+  ) =>
+    putJSON<RestoreDrillPolicy>(
+      `/api/v1/environments/${environmentId}/restore-drill-policy`,
+      body,
+    ),
 };

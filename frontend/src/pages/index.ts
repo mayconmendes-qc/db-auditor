@@ -1,7 +1,8 @@
+export { AccessReviewPage } from "./AccessReviewPage";
 export { AccountsPage } from "./AccountsPage";
-export { CostPage } from "./CostPage";
 export { AssistedActionsPage } from "./AssistedActionsPage";
 export { AuditRunsPage } from "./AuditRunsPage";
+export { CostPage } from "./CostPage";
 export { DashboardPage } from "./DashboardPage";
 export { DocsPage } from "./DocsPage";
 export { EnvironmentsPage } from "./EnvironmentsPage";

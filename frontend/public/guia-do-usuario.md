@@ -493,6 +493,31 @@ O Digest compara duas janelas de workload (padrão uma semana contra a anterior)
 - **Janela** — Intervalo entre a primeira e a última coleta completa usadas no cálculo.
 - **Subjanela** — Trecho contíguo sem `stats_reset`, usado quando houve reset no meio.
 
+### Revisão de acessos
+
+<!-- topic: access-review | abrir: Revisão de acessos -->
+
+Revisão de acessos congela a matriz de privilégios efetivos de uma coleta completa, com origem (direto, via role, PUBLIC, predefinida) e privilégios por coluna. O responsável da linha decide aprovar, revogar ou manter; manter pede justificativa.
+
+**Como usar**
+
+1. Operator mapeia responsáveis (role/conta do banco → conta do auditor com papel auditor+).
+2. Operator cria a campanha com coleta completa e prazo.
+3. Filtre a matriz ou use **Minhas pendências**.
+4. Registre a decisão. Revogar gera ação assistida; o auditor não executa REVOKE.
+5. Auditor exporta CSV ou solicita o PDF de evidência. Diff compara com a campanha anterior.
+
+**Vale saber**
+
+- Viewer lê; não vê controles de decisão.
+- Contato opcional do responsável é dado pessoal: não entra em log.
+- Coleta parcial impede criar campanha.
+
+**Termos desta tela**
+
+- **Origem** — De onde o privilégio veio na cadeia de membership.
+- **Matriz congelada** — Retrato da coleta de referência; coletas novas não a alteram.
+
 ### Acompanhamento
 
 <!-- topic: acompanhamento | abrir: Acompanhamento -->
@@ -637,4 +662,32 @@ Na seção **Custo** (Análise) o auditor mostra o ranking de desperdícios
 **estimado/mês**, com base na tabela de preços do ambiente. A edição da tabela
 de preços fica em **Ambientes** (papel operator). A moeda (BRL ou USD) trava
 depois da primeira versão.
+
+## Revisão de acessos
+
+<!-- topic: access-review | abrir: Revisão de acessos -->
+
+Na seção **Revisão de acessos** (Análise) o operator cria campanhas a partir de
+uma coleta **completa**. A matriz congela privilégios efetivos com origem
+(direto, via role, PUBLIC, predefinida) e privilégios por coluna. Responsáveis
+são contas do auditor com papel auditor ou acima no ambiente; o contato livre
+opcional aparece só na planilha e no PDF (dado pessoal).
+
+**Como usar**
+
+1. Operator mapeia responsáveis (role/conta do banco → conta do auditor).
+2. Operator cria a campanha escolhendo a coleta de referência e o prazo.
+3. Filtre a matriz (conta, objeto, privilégio, origem, destaque, pendente) ou
+   use **Minhas pendências**.
+4. O responsável da linha (ou o operator nas linhas sem responsável) registra
+   aprovar, revogar ou manter. Manter exige justificativa.
+5. Auditor exporta CSV (`# export_complete`) ou solicita o PDF de evidência.
+6. Diff mostra privilégios novos/removidos em relação à campanha anterior.
+
+**Vale saber**
+
+- Coleta parcial impede criar campanha (409).
+- Decisões são imutáveis; correção vira nova decisão com `supersedes_id`.
+- Revogar cria ação assistida; o auditor não executa REVOKE no banco.
+- Viewer lê a matriz; não vê controles de decisão.
 
