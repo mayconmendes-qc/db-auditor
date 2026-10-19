@@ -122,6 +122,9 @@ type SnapshotFacts struct {
 	AccessReviewCampaigns []AccessReviewCampaignFact
 	// Spec 05 — PII / personal-data map (optional; empty when no scan).
 	PIIColumns []PIIColumnFact
+	// Plan 08 — target restore drill evidence (optional).
+	LastRestoreDrill *RestoreDrillFact
+	RestorePolicy    *RestorePolicyFact
 }
 
 // CostPriceFact is the current price table version for monetary impact.

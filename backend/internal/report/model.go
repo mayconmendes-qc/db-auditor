@@ -50,6 +50,8 @@ type Document struct {
 	AccessReview *AccessReviewSummary
 	// Spec 05 — personal-data map (categories/counts only; no sample values).
 	PersonalData *PersonalDataSummary
+	// Plan 08 — target restore drill summary.
+	RestoreVerified *RestoreVerifiedSummary
 	// Plan 03 — quality contracts section in the technical PDF.
 	QualityContracts *QualityContractsSummary
 }
