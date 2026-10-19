@@ -1,4 +1,4 @@
-import { Badge, Card, Table } from "../../components/ui";
+import { Card, Table } from "../../components/ui";
 import type { QueryDigestItem } from "../../types";
 
 export function DigestSection({
