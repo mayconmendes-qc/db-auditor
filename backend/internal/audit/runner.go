@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -280,6 +281,13 @@ func (r *Runner) Run(ctx context.Context, environmentID, profile string) (RunRes
 	}); ok {
 		if err := evaluator.EvaluateRegressionAlerts(finalCtx, environmentID, auditRunID); err != nil {
 			return RunResult{AuditRunID: auditRunID, Status: status, Collectors: outcomes, Warnings: warnings, Errors: errs, Analysis: analysis}, fmt.Errorf("evaluate regressions: %w", err)
+		}
+	}
+	if digestEval, ok := r.store.(interface {
+		MaybeGenerateQueryDigestAfterRun(context.Context, string, string) error
+	}); ok {
+		if err := digestEval.MaybeGenerateQueryDigestAfterRun(finalCtx, environmentID, auditRunID); err != nil {
+			slog.Warn("query digest after run failed", "environment_id", environmentID, "audit_run_id", auditRunID, "error", config.SanitizeError(err))
 		}
 	}
 	if status == RunStatusFailed || status == RunStatusPartialSuccess {

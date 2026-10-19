@@ -27,6 +27,7 @@ O diretório contém o baseline, o seed local e migrações incrementais. O Post
 - `23_finding_env_last_seen_idx.sql`: índice `finding_env_last_seen_idx` (ambiente, `last_seen_at`, id) para as listas filtradas por categoria ou tipo. Também `CONCURRENTLY`. Se um índice ficar inválido após falha, `DROP INDEX CONCURRENTLY` e reinicie a API; o `IF NOT EXISTS` não recria índice inválido.
 - `24_report_limits_retention_governance.sql`: acrescenta `report_job.limit_note` (limite ou truncamento aplicado ao relatório), aprovação da política em `retention_policy` (`approved_by`, `approved_at`, `archive_note`) e a tabela `retention_evidence` (backup verificado e restauração de teste). Só adiciona; não altera nem remove linhas.
 - `25_role_attributes_regression_workload.sql`: guarda `is_superuser`, `bypass_rls`, `replication`, `create_role` e `inherited_privileges` (poder herdado por membership, `privilégio:role de origem`) em `account_role_snapshot`, para `security.powerful_role` cobrir toda role com login, e permite a categoria `workload` em `regression_alert` (consultas lentas). Só adiciona; snapshots antigos ficam com os atributos em `false`.
+- `26_query_digest.sql`: digest periódico de regressões de consultas (`query_digest`, itens, entregas, configuração por ambiente) e destinatários por ambiente (`notification_destination`). Só `CREATE … IF NOT EXISTS`.
 
 Não reintroduza arquivos `.down.sql`: o entrypoint executaria todos os `.sql`.
 
@@ -59,3 +60,5 @@ Os ambientes iniciais não ficam numa migration. A API, logo depois de aplicar a
 | `00000000-0000-0000-0000-000000000002` | Demo Datacenter |
 
 Host, porta, database, usuário e senha ficam em `AUDITOR_TARGET_N_*` no `.env`. O nome da empresa na tela é `AUDITOR_COMPANY_NAME`. Um volume existente não perde ambientes antigos. A API atualiza o nome quando o id é o mesmo.
+- `29_environment_api_token.sql`: tokens de API por ambiente (sha256, escopos fechados, validade obrigatória, revogação). Nunca guarda o segredo em claro (ADR-0001 D1).
+- `30_migration_analysis.sql`: histórico de análises de migration por ambiente (cabeçalho + itens sem SQL/literais).

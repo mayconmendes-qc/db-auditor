@@ -448,6 +448,31 @@ O relatório em PDF é uma leitura para compartilhar: resumo executivo, detalhe 
 - **Fila** — A lista de pedidos. O PDF não sai no instante do clique. A tela avisa quando ele fica pronto.
 - **Redação** — Uma opção de esconder identificadores no PDF, para compartilhar o conteúdo com menos contexto interno.
 
+### Digest
+
+<!-- topic: digest | abrir: Digest -->
+
+O Digest compara duas janelas de workload (padrão uma semana contra a anterior) e lista regressões, consultas novas, consultas que sumiram e melhoras. Tudo a partir do que já foi coletado — sem literais SQL e sem nova sessão no banco auditado.
+
+**Como usar**
+
+1. Escolha o ambiente.
+2. Abra um digest na lista. Veja o estado: ok, sem janela comparável ou não aplicável (MongoDB ou sem `pg_stat_statements`).
+3. Nas quatro seções, confira variação de média e os objetos referenciados. Um link leva ao achado ou ao alerta de regressão já aberto, sem criar alerta novo.
+4. Leia as ressalvas: o coletor guarda só o top N; uma “nova” pode apenas ter entrado no ranking.
+5. Se você for operador, pode gerar agora, ajustar a janela e cadastrar destinatários (e-mail e webhook). Sem destinatário, o digest usa os canais globais.
+
+**Vale saber**
+
+- Viewer não vê os controles de configuração nem de destinatários.
+- A URL completa do webhook nunca aparece na tela.
+- Uma refatoração de SQL pode mudar o fingerprint e parecer “sumiu” + “nova”.
+
+**Termos desta tela**
+
+- **Janela** — Intervalo entre a primeira e a última coleta completa usadas no cálculo.
+- **Subjanela** — Trecho contíguo sem `stats_reset`, usado quando houve reset no meio.
+
 ### Acompanhamento
 
 <!-- topic: acompanhamento | abrir: Acompanhamento -->
@@ -571,3 +596,16 @@ Antes de concluir que o banco piorou, ou que a tela quebrou, confira se você es
 - **Filtro** — Uma restrição da lista, como gravidade ou esquema. Limpar o filtro mostra de novo o conjunto inteiro daquela execução.
 
 <!-- ajuda-por-tela:fim -->
+
+## Tokens de API (Ambientes)
+
+Operadores criam tokens por ambiente na tela **Ambientes**, no cartão **Tokens de API**.
+Escolha escopos mínimos (leitura de contexto de snapshot, envio de análise de migration,
+anotação de deploy). O valor secreto aparece **uma única vez** — copie para o GitHub Secret
+`AUDITOR_CLI_TOKEN`. Revogue tokens comprometidos ou expirados pela mesma tela.
+
+## Análises de migration
+
+A seção **Análises de migration** lista resultados enviados pela CLI (`auditor migration-risk --submit`).
+Cada linha mostra repositório, PR, maior severidade e data. O detalhe repete a tabela de riscos
+sem SQL nem literais. Qualquer papel com concessão ao ambiente pode ler.

@@ -9,6 +9,8 @@ export type NavigationSection =
   | "Desvio de schema"
   | "Comparar"
   | "Findings"
+  | "Digest"
+  | "Análises de migration"
   | "Contas"
   | "Acompanhamento"
   | "Ações assistidas"
@@ -305,6 +307,95 @@ export interface RegressionAlert {
   status: "open" | "acknowledged";
   reason: string;
   created_at: string;
+}
+
+export interface QueryDigestItem {
+  id: string;
+  digest_id: string;
+  classification: "regressao" | "nova" | "sumiu" | "melhora" | "estavel";
+  severity: string;
+  fingerprint: string;
+  query_id: string;
+  database_name: string;
+  referenced_objects: string[];
+  prior_calls: number;
+  current_calls: number;
+  prior_mean_ms: number;
+  current_mean_ms: number;
+  prior_total_ms: number;
+  current_total_ms: number;
+  mean_change_pct: number;
+  total_change_pct: number;
+  prior_share: number;
+  current_share: number;
+  finding_id?: string | null;
+  regression_alert_id?: string | null;
+  related_finding_ids: string[];
+  sort_rank: number;
+}
+
+export interface QueryDigestDelivery {
+  id: string;
+  digest_id: string;
+  destination_id?: string | null;
+  channel: string;
+  target_masked: string;
+  status: "pending" | "sent" | "failed";
+  attempt: number;
+  error_sanitized: string;
+  attempted_at: string;
+}
+
+export interface QueryDigest {
+  id: string;
+  environment_id: string;
+  state: "ok" | "no_comparable_window" | "not_applicable";
+  reason: string;
+  window_days: number;
+  prior_from?: string | null;
+  prior_to?: string | null;
+  current_from?: string | null;
+  current_to?: string | null;
+  workload_limit_n: number;
+  subwindow_note: string;
+  coverage_notes: string[];
+  calculation_version: string;
+  markdown?: string;
+  regression_count: number;
+  new_count: number;
+  gone_count: number;
+  improvement_count: number;
+  created_at: string;
+  items?: QueryDigestItem[];
+  deliveries?: QueryDigestDelivery[];
+}
+
+export interface QueryDigestConfig {
+  environment_id: string;
+  window_days: number;
+  thresholds: Record<string, unknown>;
+  delivery_enabled: boolean;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface NotificationDestination {
+  id: string;
+  environment_id: string;
+  channel: "email" | "webhook";
+  target_masked: string;
+  format: "generic" | "slack";
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationDestinationInput {
+  channel: "email" | "webhook";
+  target: string;
+  format: "generic" | "slack";
+  active: boolean;
 }
 
 export interface JobHealthItem {
@@ -1117,3 +1208,46 @@ export type InventoryObjectKind =
   | "views"
   | "functions"
   | "caggs";
+
+export interface EnvAPIToken {
+  id: string;
+  environment_id: string;
+  name: string;
+  public_prefix: string;
+  scopes: string[];
+  created_by?: string | null;
+  created_at: string;
+  expires_at: string;
+  revoked_at?: string | null;
+  last_used_at?: string | null;
+}
+
+export interface MigrationAnalysis {
+  id: string;
+  environment_id: string;
+  repository: string;
+  pr: string;
+  commit: string;
+  highest_severity: string;
+  rules_version: string;
+  pg_version: number;
+  context_mode: string;
+  audit_run_id?: string | null;
+  created_at: string;
+}
+
+export interface MigrationAnalysisItem {
+  file: string;
+  line: number;
+  code: string;
+  operation: string;
+  object: string;
+  lock: string;
+  rewrite_or_scan: string;
+  size_bytes?: number | null;
+  duration_estimate?: string;
+  severity: string;
+  confidence: string;
+  suppressed: boolean;
+  justification?: string;
+}

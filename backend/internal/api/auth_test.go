@@ -76,6 +76,11 @@ func TestAuthMiddlewareRoleAndEnvironment(t *testing.T) {
 		{"auditor_pdf", "auditor", "GET", "/api/v1/environments/" + allowed + "/reports/" + resource + "/download", "", 200},
 		{"mapping_query_cannot_bypass_scope", "viewer", "GET", "/api/v1/mappings?environment_id=" + allowed, "", 403},
 		{"status_query_cannot_bypass_scope", "viewer", "GET", "/api/v1/status?environment_id=" + allowed, "", 403},
+		{"viewer_notification_destinations_get", "viewer", "GET", "/api/v1/environments/" + allowed + "/notification-destinations", "", 403},
+		{"auditor_notification_destinations_get", "auditor", "GET", "/api/v1/environments/" + allowed + "/notification-destinations", "", 403},
+		{"operator_notification_destinations_get", "operator", "GET", "/api/v1/environments/" + allowed + "/notification-destinations", "", 200},
+		{"viewer_digest_config_put", "viewer", "PUT", "/api/v1/environments/" + allowed + "/query-digest-config", "", 403},
+		{"operator_digest_config_put", "operator", "PUT", "/api/v1/environments/" + allowed + "/query-digest-config", "", 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := fakeAuthStore{user: &repository.AuditorUser{Role: tc.role, Environments: []string{allowed}}, environment: tc.resourceEnv}

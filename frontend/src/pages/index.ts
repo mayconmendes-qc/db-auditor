@@ -7,6 +7,7 @@ export { EnvironmentsPage } from "./EnvironmentsPage";
 export { FindingsPage } from "./FindingsPage";
 export { InventoryPage } from "./InventoryPage";
 export { MappingsPage } from "./MappingsPage";
+export { MigrationAnalysesPage } from "./MigrationAnalysesPage";
 export { MonitoringPage } from "./MonitoringPage";
 export { ReportsPage } from "./ReportsPage";
 export { SchemaDriftPage } from "./SchemaDriftPage";

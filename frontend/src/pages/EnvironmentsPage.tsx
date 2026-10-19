@@ -13,6 +13,7 @@ import { formatBytes } from "../lib/format";
 import { labels } from "../lib/labels";
 import { nextSort } from "../lib/sort";
 import { api } from "../services/api";
+import { EnvAPITokenCard } from "./parts/EnvAPITokenCard";
 import {
   type EnvironmentsPageProps,
   useEnvironmentsPage,
@@ -281,6 +282,9 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                 </div>
               </div>
             </div>
+            {api.hasRole("operator") && selectedId ? (
+              <EnvAPITokenCard environmentId={selectedId} />
+            ) : null}
           </section>
         ) : null}
       </div>

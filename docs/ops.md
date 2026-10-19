@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `25_role_attributes_regression_workload.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
+O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `30_migration_analysis.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
 
 Antes de atualizar uma instalação persistente, faça backup do snapshot store e confira a restauração. A migração `12_view_detail.sql` acrescenta campos sem apagar visões existentes. Depois do deploy, execute uma nova coleta de PostgreSQL para preencher colunas e opções de segurança: execuções antigas mostram esses campos como não coletados. Para voltar à versão anterior, pare a API nova e restaure o backup ou use a versão anterior do aplicativo; não remova as novas colunas manualmente.
 
@@ -349,6 +349,13 @@ Registre cardinalidade, tempo e pico de memória (`Maximum resident set size`) e
 
 Com pelo menos 10 coletas completas reais de um ambiente: liste os motivos de silêncio no log (`regression silenced`, nível debug) e os alertas criados em `regression_alert`; confira manualmente cada alerta (verdadeiro/falso positivo). Se a taxa de falso positivo passar de 1 em 10, ajuste `AUDITOR_REGRESSION_MAX_GAP` ao intervalo real do agendamento e anexe a tabela de calibração na issue #104.
 
+Os limiares do digest de consultas (média +50%, +10 ms, ≥100 chamadas, etc.)
+começam como valor inicial calibrável por ambiente em
+`PUT .../query-digest-config` (`thresholds` jsonb). Use o mesmo procedimento
+BA-15: após algumas janelas reais, registre falso positivo e ajuste. Sem
+destinatário por ambiente, o digest cai nos canais globais `AUDITOR_ALERT_*`;
+configure `notification-destinations` por ambiente em instalações multi-time.
+
 ## Recuperar o acesso de operador
 
 Se todos os operadores perderem acesso, não apague `auditor_user`. Confirme um backup recente e restaurável do snapshot store e execute em terminal interativo na VPS:
@@ -358,3 +365,16 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod exec -it api /au
 ```
 
 O comando pede a nova senha sem eco, aceita somente um operador ativo já existente, revoga suas sessões e registra o evento `operator.password_recovery` sem guardar a senha. Teste o login e mantenha o registro do incidente. Nunca informe a senha em argumento, variável de ambiente, ticket ou log. Se não houver operador ativo, restaure o backup em ambiente isolado e investigue antes de modificar dados manualmente.
+
+## Tokens de API por ambiente (CLI)
+
+Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (ADR-0001 D1):
+`snapshot-context:read`, `migration-analysis:write`, `deploy-annotation:write`, e os reservados
+`quality-contract:run`, `restore-evidence:write`, `last-login:write`.
+
+- O segredo (`dba_<prefixo>_<segredo>`) aparece **uma vez** na criação. Guarde no GitHub Secrets (`AUDITOR_CLI_TOKEN`) ou em um gerenciador de segredos.
+- Rotação: crie um token novo, atualize o secret no CI, revogue o antigo (DELETE na API ou na UI).
+- Validade obrigatória (padrão 90 dias). Expirado ou revogado → HTTP 401; a CLI sai com código 2.
+- Um token pertence a um único ambiente; uso cruzado → 403 (registrado em `auditor_operation_log` com o id do token, nunca o segredo).
+- `AUDITOR_REPORT_API_TOKEN` **não** autentica rotas de CLI/contexto/análises.
+

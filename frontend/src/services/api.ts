@@ -26,6 +26,7 @@ import type {
   DependencySnapshot,
   DimensionSnapshot,
   EffectiveRule,
+  EnvAPIToken,
   EnvironmentCapabilities,
   EnvironmentsResponse,
   Finding,
@@ -48,12 +49,18 @@ import type {
   JobHealthResponse,
   JobSnapshot,
   MappingCandidate,
+  MigrationAnalysis,
+  MigrationAnalysisItem,
+  NotificationDestination,
+  NotificationDestinationInput,
   ObjectMapping,
   PagedResponse,
   PolicySnapshot,
   PrioritiesResponse,
   QualityRequest,
   QualityScan,
+  QueryDigest,
+  QueryDigestConfig,
   RegressionAlert,
   RelationshipGraph,
   ReportFilters,
@@ -237,6 +244,24 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...authHeaders("PATCH") },
       body: JSON.stringify(body),
+      credentials: "include",
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function delJSON<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      headers: { ...authHeaders("DELETE") },
       credentials: "include",
     });
   } catch (cause) {
@@ -1428,6 +1453,94 @@ export const api = {
     postJSON<{ status: string }>(
       `/api/v1/environments/${environmentId}/regressions/${id}/acknowledge`,
       { reason },
+    ),
+  queryDigests: (
+    environmentId: string,
+    params?: { limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<PagedResponse<QueryDigest>>(
+      `/api/v1/environments/${environmentId}/query-digests${qs(params)}`,
+      signal,
+    ),
+  queryDigest: (environmentId: string, id: string, signal?: AbortSignal) =>
+    getJSON<QueryDigest>(
+      `/api/v1/environments/${environmentId}/query-digests/${id}`,
+      signal,
+    ),
+  generateQueryDigest: (environmentId: string, reference?: string) =>
+    postJSON<QueryDigest>(
+      `/api/v1/environments/${environmentId}/query-digests`,
+      reference ? { reference } : {},
+    ),
+  queryDigestConfig: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<QueryDigestConfig>(
+      `/api/v1/environments/${environmentId}/query-digest-config`,
+      signal,
+    ),
+  updateQueryDigestConfig: (
+    environmentId: string,
+    body: {
+      window_days: number;
+      thresholds?: Record<string, unknown>;
+      delivery_enabled: boolean;
+    },
+  ) =>
+    putJSON<QueryDigestConfig>(
+      `/api/v1/environments/${environmentId}/query-digest-config`,
+      body,
+    ),
+  notificationDestinations: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{
+      items: NotificationDestination[];
+      using_global_fallback: boolean;
+    }>(
+      `/api/v1/environments/${environmentId}/notification-destinations`,
+      signal,
+    ),
+  replaceNotificationDestinations: (
+    environmentId: string,
+    items: NotificationDestinationInput[],
+  ) =>
+    putJSON<{
+      items: NotificationDestination[];
+      using_global_fallback: boolean;
+    }>(`/api/v1/environments/${environmentId}/notification-destinations`, {
+      items,
+    }),
+  listEnvAPITokens: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<EnvAPIToken>>(
+      `/api/v1/environments/${environmentId}/api-tokens`,
+      signal,
+    ),
+  createEnvAPIToken: (
+    environmentId: string,
+    body: { name: string; scopes: string[]; expires_at?: string },
+  ) =>
+    postJSON<{ token: EnvAPIToken; plaintext: string }>(
+      `/api/v1/environments/${environmentId}/api-tokens`,
+      body,
+    ),
+  revokeEnvAPIToken: (environmentId: string, tokenId: string) =>
+    delJSON<{ status: string }>(
+      `/api/v1/environments/${environmentId}/api-tokens/${tokenId}`,
+    ),
+  listMigrationAnalyses: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<MigrationAnalysis>>(
+      `/api/v1/environments/${environmentId}/migration-analyses`,
+      signal,
+    ),
+  getMigrationAnalysis: (
+    environmentId: string,
+    analysisId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<{
+      analysis: MigrationAnalysis;
+      items: MigrationAnalysisItem[];
+    }>(
+      `/api/v1/environments/${environmentId}/migration-analyses/${analysisId}`,
+      signal,
     ),
   scopeScore: (
     environmentId: string,

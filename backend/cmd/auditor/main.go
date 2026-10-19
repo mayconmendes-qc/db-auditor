@@ -14,6 +14,7 @@ import (
 	"github.com/osmendes/db-auditor/internal/api"
 	"github.com/osmendes/db-auditor/internal/audit"
 	"github.com/osmendes/db-auditor/internal/buildinfo"
+	"github.com/osmendes/db-auditor/internal/cli"
 	"github.com/osmendes/db-auditor/internal/config"
 	"github.com/osmendes/db-auditor/internal/database"
 	"github.com/osmendes/db-auditor/internal/migrate"
@@ -24,13 +25,16 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "recover-operator" {
-		if err := recoverOperator(os.Args[2:]); err != nil {
-			// Connection errors may contain the snapshot-store DSN.
-			_, _ = os.Stderr.WriteString("Recuperação não concluída. Verifique a conta, a conexão e o backup; consulte os logs do banco.\n")
-			os.Exit(1)
+	if len(os.Args) > 1 && cli.IsCLICommand(os.Args[1]) {
+		if os.Args[1] == "recover-operator" {
+			if err := recoverOperator(os.Args[2:]); err != nil {
+				// Connection errors may contain the snapshot-store DSN.
+				_, _ = os.Stderr.WriteString("Recuperação não concluída. Verifique a conta, a conexão e o backup; consulte os logs do banco.\n")
+				os.Exit(1)
+			}
+			return
 		}
-		return
+		os.Exit(cli.Run(os.Args[1:]))
 	}
 	observability.SetupLogging()
 

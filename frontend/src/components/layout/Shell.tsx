@@ -20,6 +20,8 @@ export const navigationSections: NavigationSection[] = [
   "Desvio de schema",
   "Comparar",
   "Findings",
+  "Digest",
+  "Análises de migration",
   "Contas",
   "Acompanhamento",
   "Ações assistidas",
@@ -40,7 +42,13 @@ const navGroups: Array<{ label: string; items: NavigationSection[] }> = [
   },
   {
     label: "Análise",
-    items: ["Desvio de schema", "Comparar", "Findings"],
+    items: [
+      "Desvio de schema",
+      "Comparar",
+      "Findings",
+      "Digest",
+      "Análises de migration",
+    ],
   },
   {
     label: "Sistema",

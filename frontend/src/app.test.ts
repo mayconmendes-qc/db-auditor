@@ -14,6 +14,8 @@ describe("navigationSections", () => {
       "Desvio de schema",
       "Comparar",
       "Findings",
+      "Digest",
+      "Análises de migration",
       "Contas",
       "Acompanhamento",
       "Ações assistidas",

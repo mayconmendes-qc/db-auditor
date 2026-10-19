@@ -139,6 +139,24 @@ Calibração (BA-15): o limiar padrão vem de coletas sintéticas nos testes
 `TestRegressionNoiseControlIntegration`. Registre a calibração com coletas
 reais seguindo o procedimento em [ops.md](ops.md#calibração-de-regressões-ba-15).
 
+## Digest de consultas (spec 06)
+
+O digest compara duas janelas consecutivas de `workload_snapshot` (padrão
+7 + 7 dias). Só coletas `success` com cobertura completa e análise concluída
+servem de extremo; `partial_success` nunca fecha janela. Um `stats_reset`
+(incluindo NULL→valor) invalida a janela e o cálculo usa a maior subjanela
+contígua sem reset. O digest classifica fingerprints como regressão, nova,
+sumiu, melhora ou estável; não cria alerta novo se já houver `regression_alert`
+`workload` aberto para o mesmo fingerprint.
+
+**Limitação de fingerprint.** A normalização remove literais, mas uma
+refatoração do SQL (renomear coluna, trocar JOIN, reordenar predicados) muda
+o fingerprint. Nesse caso o digest pode listar a consulta antiga como
+"sumiu" e a nova como "nova". Quando `query_id` de `pg_stat_statements` for
+estável entre coletas, o item o preserva para ajudar a correlação humana. O
+top N do coletor (`AUDITOR_WORKLOAD_LIMIT`) também limita a cobertura: uma
+"nova" pode só ter entrado no top N.
+
 ## Tendência e manutenção (BA-21)
 
 `maintenance.growth_trend` usa só duas coletas completas e comparáveis com no
@@ -203,3 +221,25 @@ nunca recomenda DROP automaticamente; a remoção exige revisão humana.").
 Achados já gravados mantêm o texto antigo em inglês (o histórico não é
 reescrito). A assinatura de descarte trata os dois textos como iguais, então
 um achado descartado não reabre só por causa da tradução.
+
+## Catálogo MR-* (risco de migration)
+
+Regras do modo CLI `auditor migration-risk` (plano 01). Não geram findings no snapshot store;
+a saída é Markdown/JSON e, opcionalmente, `migration_analysis` / `migration_analysis_item`.
+
+| ID | Operação | Severidade base |
+|---|---|---|
+| MR-01 | `CREATE INDEX` sem `CONCURRENTLY` | média (eleva com tamanho) |
+| MR-02 | `ADD COLUMN ... DEFAULT` volátil | alta |
+| MR-03 | `ALTER COLUMN TYPE` com reescrita | alta |
+| MR-04 | `SET NOT NULL` sem validação prévia | média (alt. PG18: `NOT NULL NOT VALID`) |
+| MR-05 | FK validada imediatamente | média |
+| MR-06 | CHECK validado imediatamente | média |
+| MR-07 | PK/UNIQUE sem `USING INDEX` | alta |
+| MR-08 | DROP/RENAME | média |
+| MR-09 | VACUUM FULL / CLUSTER / REFRESH sem CONCURRENTLY | alta |
+| MR-10 | lock forte sem `lock_timeout` | baixa |
+| MR-11 | operação não transacional dentro de `BEGIN` | alta |
+
+Supressão inline: `-- db-auditor:ignore MR-XX motivo: <texto>` (justificativa obrigatória).
+Guia de uso: [migration-risk.md](migration-risk.md).

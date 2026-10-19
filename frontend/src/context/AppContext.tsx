@@ -29,6 +29,8 @@ const SECTION_SLUGS: Record<NavigationSection, string> = {
   "Desvio de schema": "schema-drift",
   Comparar: "compare",
   Findings: "findings",
+  Digest: "digest",
+  "Análises de migration": "migration-analyses",
   Contas: "accounts",
   Acompanhamento: "monitoring",
   "Ações assistidas": "assisted-actions",

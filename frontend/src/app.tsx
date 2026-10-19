@@ -50,6 +50,11 @@ const MappingsPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import("./pages/MonitoringPage").then((m) => ({ default: m.MonitoringPage })),
 );
+const QueryDigestPage = lazy(() =>
+  import("./pages/QueryDigestPage").then((m) => ({
+    default: m.QueryDigestPage,
+  })),
+);
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
 );
@@ -65,6 +70,11 @@ const ServerComparePage = lazy(() =>
 );
 const StatusPage = lazy(() =>
   import("./pages/StatusPage").then((m) => ({ default: m.StatusPage })),
+);
+const MigrationAnalysesPage = lazy(() =>
+  import("./pages/MigrationAnalysesPage").then((m) => ({
+    default: m.MigrationAnalysesPage,
+  })),
 );
 
 export { navigationSections };
@@ -82,6 +92,8 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     "Desvio de schema": <SchemaDriftPage />,
     Comparar: <ServerComparePage />,
     Findings: <FindingsPage />,
+    Digest: <QueryDigestPage />,
+    "Análises de migration": <MigrationAnalysesPage />,
     Status: <StatusPage />,
     Contas: <AccountsPage />,
     Acompanhamento: <MonitoringPage />,
