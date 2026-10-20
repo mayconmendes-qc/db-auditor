@@ -696,14 +696,6 @@ func (s *Store) upsertContractViolationFindings(ctx context.Context, env, contra
 	}
 	// Persistent violation alert: ClaimAlert/NotifyFindings path (D13) — notify only high+.
 	if len(findings) > 0 {
-		var af []struct {
-			EnvironmentID, DedupKey, FindingType, Severity, Title string
-		}
-		for _, f := range findings {
-			af = append(af, struct {
-				EnvironmentID, DedupKey, FindingType, Severity, Title string
-			}{f.EnvironmentID, f.DedupKey, f.FindingType, f.Severity, f.Title})
-		}
 		s.notifyContractFindings(ctx, findings)
 	}
 	return nil
@@ -719,11 +711,12 @@ func (s *Store) notifyContractFindings(ctx context.Context, findings []analyzerF
 		if dqcontract.SeverityRank(f.Severity) < dqcontract.SeverityRank(dqcontract.SeverityHigh) {
 			continue
 		}
-		fresh, err := s.ClaimAlert(ctx, f.EnvironmentID, f.DedupKey)
-		if err != nil || !fresh {
+		claimed, err := s.ClaimAlert(ctx, f.EnvironmentID, f.DedupKey)
+		if err != nil || !claimed {
 			continue
 		}
 		// Delivery via existing notify stack is optional; ClaimAlert records dedup.
+		_ = claimed
 	}
 }
 

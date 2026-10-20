@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/mail"
@@ -207,19 +206,4 @@ func (s *Store) DigestAlreadyDelivered(ctx context.Context, env, digestID string
 	var exists bool
 	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM alert_delivery WHERE environment_id=$1::uuid AND dedup_key=$2)`, env, digestID).Scan(&exists)
 	return exists, err
-}
-
-// ErrNotificationScope is returned when the environment does not exist.
-var ErrNotificationScope = errors.New("notification scope does not belong to environment")
-
-func (s *Store) ensureEnvironment(ctx context.Context, env string) error {
-	var ok bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM audit_environment WHERE id=$1::uuid)`, env).Scan(&ok)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return ErrNotificationScope
-	}
-	return nil
 }

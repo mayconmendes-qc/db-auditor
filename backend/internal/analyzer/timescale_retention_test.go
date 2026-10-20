@@ -1,6 +1,9 @@
 package analyzer
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestRetentionMissingAndCompressionMissing(t *testing.T) {
 	facts := SnapshotFacts{
@@ -11,7 +14,7 @@ func TestRetentionMissingAndCompressionMissing(t *testing.T) {
 			UncompressedOldBytes: 8 * 1024 * 1024 * 1024, CompressionEnabled: false,
 		}},
 	}
-	got, err := (TimescaleRetentionAnalyzer{}).Analyze(nil, facts)
+	got, err := (TimescaleRetentionAnalyzer{}).Analyze(context.TODO(), facts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +34,7 @@ func TestCompressionRatioLow(t *testing.T) {
 			CompressedChunkCount: 5, ObservedCompressionRatio: 1.5,
 		}},
 	}
-	got, err := (TimescaleRetentionAnalyzer{}).Analyze(nil, facts)
+	got, err := (TimescaleRetentionAnalyzer{}).Analyze(context.TODO(), facts)
 	if err != nil {
 		t.Fatal(err)
 	}

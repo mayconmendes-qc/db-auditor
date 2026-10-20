@@ -530,11 +530,8 @@ ORDER BY r.started_at DESC LIMIT 5)`, env).Scan(&missingExt)
 		}
 		subNote += "anterior: " + priorWin.SubwindowNote
 	}
-	notes := []string{
-		fmt.Sprintf("Top N do coletor: %d (AUDITOR_WORKLOAD_LIMIT).", workloadLimitN()),
-	}
-	if subNote != "" {
-		notes = append(notes, subNote)
+	if subNote == "" {
+		subNote = fmt.Sprintf("Top N do coletor: %d (AUDITOR_WORKLOAD_LIMIT).", workloadLimitN())
 	}
 	return s.persistDigest(ctx, env, envName, cfg, priorWin, currWin, sections, "ok", "", subNote, related)
 }

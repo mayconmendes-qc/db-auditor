@@ -141,9 +141,9 @@ func (TimescaleRetentionAnalyzer) Analyze(_ context.Context, facts SnapshotFacts
 			for _, cagg := range caggBySource[key] {
 				window := cagg.RefreshWindowDays
 				if window == 0 && cagg.HasRefreshPolicy {
-					window = intervalDays(cagg.Lag) // fallback unused usually
+					window = intervalDays(cagg.Lag)
 				}
-				if cagg.HasRefreshPolicy && cagg.RefreshWindowDays > 0 && days < cagg.RefreshWindowDays {
+				if cagg.HasRefreshPolicy && window > 0 && days < window {
 					title := fmt.Sprintf("Retenção conflita com CAGG %s.%s", cagg.Schema, cagg.ViewName)
 					out = append(out, Finding{
 						EnvironmentID: facts.EnvironmentID,
@@ -152,7 +152,7 @@ func (TimescaleRetentionAnalyzer) Analyze(_ context.Context, facts SnapshotFacts
 						Severity:      SeverityHigh,
 						Status:        StatusOpen,
 						Title:         title,
-						Summary:       fmt.Sprintf("Retenção vigente de %d dias é menor que a janela de refresh de %d dias do CAGG dependente.", days, cagg.RefreshWindowDays),
+						Summary:       fmt.Sprintf("Retenção vigente de %d dias é menor que a janela de refresh de %d dias do CAGG dependente.", days, window),
 						ObjectType:    "hypertable",
 						ObjectKey:     key,
 						DatabaseName:  ht.Database,
@@ -161,7 +161,7 @@ func (TimescaleRetentionAnalyzer) Analyze(_ context.Context, facts SnapshotFacts
 						Evidence: map[string]any{
 							"retention_days":      days,
 							"cagg":                fmt.Sprintf("%s.%s", cagg.Schema, cagg.ViewName),
-							"refresh_window_days": cagg.RefreshWindowDays,
+							"refresh_window_days": window,
 						},
 						DedupKey: DedupKey("timescale.retention_cagg_conflict", key+":"+cagg.ViewName, title),
 					})
