@@ -45,6 +45,38 @@ func TestResolveOriginViaGroupRole(t *testing.T) {
 	}
 }
 
+func TestExpandReachablePrivilegesIncludesSetOnlyPath(t *testing.T) {
+	t.Parallel()
+	// CA-08: NOINHERIT / INHERIT FALSE + SET TRUE is absent from has_*_privilege.
+	acls := map[aclKey][]aclGrant{
+		{objectType: "table", objectName: "vendas.pedido", privilege: "SELECT"}: {
+			{grantee: "g_leitura", owner: "app_owner"},
+		},
+	}
+	reach := map[string][]reachEdge{
+		"app_noinherit": {{granted: "g_leitura", setOK: true, inherit: false}},
+		"app_report":    {{granted: "g_leitura", setOK: true, inherit: true}},
+	}
+	eff := []effRow{{
+		DatabaseName: "db", AccountName: "app_report",
+		ObjectType: "table", ObjectName: "vendas.pedido", Privilege: "SELECT",
+	}}
+	got := expandReachablePrivileges(eff, acls, reach, "db")
+	var found bool
+	for _, e := range got {
+		if e.AccountName == "app_noinherit" && e.ObjectName == "vendas.pedido" && e.Privilege == "SELECT" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("SET-only member missing from expansion: %+v", got)
+	}
+	kind, via, inherit, setOK := resolveOrigin("app_noinherit", "table", "vendas.pedido", "SELECT", acls, reach, true)
+	if kind != "role" || len(via) != 1 || via[0] != "g_leitura" || inherit || !setOK {
+		t.Fatalf("SET-only origin kind=%s via=%v inherit=%v set=%v", kind, via, inherit, setOK)
+	}
+}
+
 func TestResolveOriginDirectPublicPredefined(t *testing.T) {
 	t.Parallel()
 	acls := map[aclKey][]aclGrant{

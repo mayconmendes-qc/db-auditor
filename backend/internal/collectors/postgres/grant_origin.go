@@ -220,6 +220,14 @@ func CollectGrantOrigins(ctx context.Context, conn *pgx.Conn, scope config.Scope
 		return nil, nil, err
 	}
 
+	var database string
+	if err := conn.QueryRow(ctx, `SELECT current_database()`).Scan(&database); err != nil {
+		return nil, nil, fmt.Errorf("database atual: %w", err)
+	}
+	// has_*_privilege only sees currently inherited privileges. CA-08 also
+	// requires SET/MEMBER paths (NOINHERIT, INHERIT FALSE + SET TRUE).
+	eff = expandReachablePrivileges(eff, acls, reach, database)
+
 	out := make([]GrantOriginFacts, 0, len(eff))
 	for _, e := range eff {
 		kind, via, inherit, setOK := resolveOrigin(e.AccountName, e.ObjectType, e.ObjectName, e.Privilege, acls, reach, pg16)
@@ -310,6 +318,46 @@ func queryMembershipReach(ctx context.Context, conn *pgx.Conn, setMode, inheritM
 		out[login] = append(out[login], reachEdge{granted: granted, setOK: setOK, inherit: inheritOK, adminOK: adminOK})
 	}
 	return out, rows.Err()
+}
+
+// expandReachablePrivileges adds privileges available via SET/MEMBER/ADMIN
+// membership to an ACL grantee that has_*_privilege does not report.
+func expandReachablePrivileges(eff []effRow, acls map[aclKey][]aclGrant, reach map[string][]reachEdge, database string) []effRow {
+	seen := make(map[string]struct{}, len(eff))
+	keyOf := func(account, objectType, objectName, privilege string) string {
+		return account + "\x00" + objectType + "\x00" + objectName + "\x00" + privilege
+	}
+	for _, e := range eff {
+		seen[keyOf(e.AccountName, e.ObjectType, e.ObjectName, e.Privilege)] = struct{}{}
+	}
+	out := append([]effRow(nil), eff...)
+	for k, grants := range acls {
+		for _, g := range grants {
+			if g.grantee == "" {
+				continue // PUBLIC already surfaces through has_*_privilege
+			}
+			for login, edges := range reach {
+				for _, e := range edges {
+					if e.granted != g.grantee || !(e.setOK || e.inherit || e.adminOK) {
+						continue
+					}
+					sk := keyOf(login, k.objectType, k.objectName, k.privilege)
+					if _, ok := seen[sk]; ok {
+						continue
+					}
+					seen[sk] = struct{}{}
+					out = append(out, effRow{
+						DatabaseName: database,
+						AccountName:  login,
+						ObjectType:   k.objectType,
+						ObjectName:   k.objectName,
+						Privilege:    k.privilege,
+					})
+				}
+			}
+		}
+	}
+	return out
 }
 
 func resolveOrigin(account, objectType, objectName, privilege string, acls map[aclKey][]aclGrant, reach map[string][]reachEdge, pg16 bool) (kind string, via []string, inherit, setOK bool) {
