@@ -637,7 +637,7 @@ func (s *Store) ListQualityContractTrend(ctx context.Context, env, contractID st
 	rows, err := s.pool.Query(ctx, `SELECT r.id::text,r.started_at,r.coverage,c.check_key,c.check_type,c.result,c.observed_pct,c.observed_count,c.sample_size
 FROM quality_contract_run r
 JOIN quality_contract_check_result c ON c.run_id=r.id
-WHERE r.environment_id=$1::uuid AND r.contract_id=$2::uuid AND r.started_at >= now() - ($3::text || ' days')::interval
+WHERE r.environment_id=$1::uuid AND r.contract_id=$2::uuid AND r.started_at >= now() - make_interval(days => $3)
 ORDER BY c.check_key, r.started_at`, env, contractID, days)
 	if err != nil {
 		return nil, err

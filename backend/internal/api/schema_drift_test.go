@@ -110,6 +110,18 @@ func TestSchemaDiffMechanismMismatch400(t *testing.T) {
 	}
 }
 
+func TestSchemaDiffMissingCompleteRun400(t *testing.T) {
+	env := "00000000-0000-0000-0000-000000000001"
+	store := &fakeSchemaDriftStore{diffErr: repository.ErrMissingCompleteRun}
+	mux := http.NewServeMux()
+	registerSchemaDriftRoutes(mux, store)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/environments/"+env+"/schema-diff", nil))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status %d want 400 body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestSchemaDiffPartialFlag(t *testing.T) {
 	env := "00000000-0000-0000-0000-000000000001"
 	store := &fakeSchemaDriftStore{diff: &repository.SchemaDiffResult{

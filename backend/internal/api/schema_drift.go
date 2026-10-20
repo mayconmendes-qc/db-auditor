@@ -76,6 +76,10 @@ func registerSchemaDriftRoutes(mux *http.ServeMux, store InventoryStore) {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Mecanismos de banco diferentes não podem ser comparados.")
 			return
 		}
+		if errors.Is(err, repository.ErrMissingCompleteRun) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Não há execução completa para comparar.")
+			return
+		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, CodeInternal, "Falha ao calcular o diff de schema.")
 			return
@@ -112,6 +116,10 @@ func registerSchemaDriftRoutes(mux *http.ServeMux, store InventoryStore) {
 		})
 		if errors.Is(err, schemadiff.ErrMechanismMismatch) {
 			writeError(w, http.StatusBadRequest, CodeValidation, "Mecanismos de banco diferentes não podem ser comparados.")
+			return
+		}
+		if errors.Is(err, repository.ErrMissingCompleteRun) {
+			writeError(w, http.StatusBadRequest, CodeValidation, "Não há execução completa para comparar.")
 			return
 		}
 		if err != nil {

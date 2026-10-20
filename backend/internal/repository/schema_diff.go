@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,9 @@ import (
 	"github.com/osmendes/db-auditor/internal/comparison"
 	"github.com/osmendes/db-auditor/internal/schemadiff"
 )
+
+// ErrMissingCompleteRun is returned when schema diff has no complete audit run to compare.
+var ErrMissingCompleteRun = errors.New("missing complete audit run")
 
 // latestCompleteRunID returns the newest successful complete analyzed run.
 func (s *Store) latestCompleteRunID(ctx context.Context, environmentID string) (string, time.Time, error) {
@@ -89,7 +93,7 @@ func (s *Store) ResolveSchemaDiffRuns(ctx context.Context, req SchemaDiffRequest
 		}
 	}
 	if sourceRun == "" || targetRun == "" {
-		return sourceRun, targetRun, false, fmt.Errorf("missing complete audit run")
+		return sourceRun, targetRun, false, ErrMissingCompleteRun
 	}
 	srcCov, err := s.GetSnapshotCompleteness(ctx, req.SourceEnv, sourceRun)
 	if err != nil {
