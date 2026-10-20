@@ -38,14 +38,14 @@ func RenderMarkdown(in MarkdownInput) string {
 		fmt.Fprintf(&b, "- **Motivo:** %s\n", sanitizeText(in.Reason))
 	}
 	if in.State == "ok" {
-		b.WriteString(fmt.Sprintf("- **Janela anterior:** %s → %s (coletas `%s` … `%s`)\n",
-			fmtTime(in.PriorFrom), fmtTime(in.PriorTo), shortID(in.PriorFirstRun), shortID(in.PriorLastRun)))
-		b.WriteString(fmt.Sprintf("- **Janela atual:** %s → %s (coletas `%s` … `%s`)\n",
-			fmtTime(in.CurrentFrom), fmtTime(in.CurrentTo), shortID(in.CurrentFirstRun), shortID(in.CurrentLastRun)))
+		fmt.Fprintf(&b, "- **Janela anterior:** %s → %s (coletas `%s` … `%s`)\n",
+			fmtTime(in.PriorFrom), fmtTime(in.PriorTo), shortID(in.PriorFirstRun), shortID(in.PriorLastRun))
+		fmt.Fprintf(&b, "- **Janela atual:** %s → %s (coletas `%s` … `%s`)\n",
+			fmtTime(in.CurrentFrom), fmtTime(in.CurrentTo), shortID(in.CurrentFirstRun), shortID(in.CurrentLastRun))
 		if in.SubwindowNote != "" {
-			b.WriteString(fmt.Sprintf("- **Subjanela:** %s\n", sanitizeText(in.SubwindowNote)))
+			fmt.Fprintf(&b, "- **Subjanela:** %s\n", sanitizeText(in.SubwindowNote))
 		}
-		b.WriteString(fmt.Sprintf("- **Top N coletado:** %d\n", in.WorkloadLimitN))
+		fmt.Fprintf(&b, "- **Top N coletado:** %d\n", in.WorkloadLimitN)
 	}
 	b.WriteString("\n")
 
@@ -60,7 +60,7 @@ func RenderMarkdown(in MarkdownInput) string {
 	writeSection(&b, "Melhoras", in.Sections.Improvements, true)
 
 	b.WriteString("## Ressalvas\n\n")
-	b.WriteString(fmt.Sprintf("- O coletor guarda só o top %d por tempo total; uma consulta \"nova\" pode apenas ter entrado no top N.\n", in.WorkloadLimitN))
+	fmt.Fprintf(&b, "- O coletor guarda só o top %d por tempo total; uma consulta \"nova\" pode apenas ter entrado no top N.\n", in.WorkloadLimitN)
 	b.WriteString("- Fingerprints sem literais; o texto original de `pg_stat_statements` nunca entra no digest.\n")
 	b.WriteString("- Uma refatoração de SQL pode mudar o fingerprint e aparecer como \"sumiu\" + \"nova\".\n")
 	for _, note := range in.CoverageNotes {
