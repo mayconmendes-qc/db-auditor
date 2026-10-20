@@ -8,6 +8,72 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccessReviewCampaign struct {
+	ID              pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	Name            string
+	Scope           []byte
+	ReferenceRunID  pgtype.UUID
+	DueAt           pgtype.Timestamptz
+	Status          string
+	CreatedBy       string
+	CreatedByUserID pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
+	ClosedAt        pgtype.Timestamptz
+	ClosedBy        string
+}
+
+type AccessReviewDecision struct {
+	ID              pgtype.UUID
+	CampaignID      pgtype.UUID
+	ItemID          pgtype.UUID
+	Decision        string
+	RevokeDueAt     pgtype.Timestamptz
+	Justification   string
+	DecidedBy       string
+	DecidedByUserID pgtype.UUID
+	DecidedAt       pgtype.Timestamptz
+	SupersedesID    pgtype.UUID
+	FindingActionID pgtype.UUID
+}
+
+type AccessReviewItem struct {
+	ID            pgtype.UUID
+	CampaignID    pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	AccountName   string
+	ObjectType    string
+	ObjectName    string
+	ColumnName    string
+	Privilege     string
+	OriginKind    string
+	ViaChain      []string
+	OriginLabel   string
+	Highlights    []string
+	OwnerUserID   pgtype.UUID
+}
+
+type AccessReviewOwner struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	TargetRole    string
+	OwnerUserID   pgtype.UUID
+	ContactName   string
+	ContactEmail  string
+	UpdatedAt     pgtype.Timestamptz
+	UpdatedBy     string
+}
+
+type AccountLastLoginObservation struct {
+	EnvironmentID pgtype.UUID
+	RoleName      string
+	LastLoginAt   pgtype.Timestamptz
+	Source        string
+	TokenID       pgtype.UUID
+	ReceivedAt    pgtype.Timestamptz
+}
+
 type AccountRoleSnapshot struct {
 	AuditRunID          pgtype.UUID
 	EnvironmentID       pgtype.UUID
@@ -103,6 +169,7 @@ type AuditEnvironment struct {
 	UpdatedAt      pgtype.Timestamptz
 	ExpectsReplica bool
 	Engine         string
+	IsProduction   bool
 }
 
 type AuditRun struct {
@@ -268,6 +335,12 @@ type ChunkSnapshot struct {
 	CollectedAt            pgtype.Timestamptz
 	BeforeCompressionBytes int64
 	AfterCompressionBytes  int64
+	SeqScan                pgtype.Int8
+	IdxScan                pgtype.Int8
+	NTupIns                pgtype.Int8
+	NTupUpd                pgtype.Int8
+	NTupDel                pgtype.Int8
+	StatsReset             pgtype.Timestamptz
 }
 
 type ChunkVacuumSample struct {
@@ -297,6 +370,23 @@ type CollectorRun struct {
 	RowsCollected    int64
 	Warning          pgtype.Text
 	Error            pgtype.Text
+}
+
+type ColumnGrantSnapshot struct {
+	ID            pgtype.UUID
+	AuditRunID    pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	SchemaName    string
+	TableName     string
+	ColumnName    string
+	AccountName   string
+	Privilege     string
+	OriginKind    string
+	ViaChain      []string
+	InheritPath   pgtype.Bool
+	SetPath       pgtype.Bool
+	CollectedAt   pgtype.Timestamptz
 }
 
 type ColumnSnapshot struct {
@@ -380,6 +470,38 @@ type ContinuousAggregateSnapshot struct {
 	BucketInterval            pgtype.Text
 }
 
+type CostEstimateSnapshot struct {
+	ID               pgtype.UUID
+	EnvironmentID    pgtype.UUID
+	AuditRunID       pgtype.UUID
+	PriceVersionID   pgtype.UUID
+	Currency         string
+	StorageMonth     pgtype.Numeric
+	UnusedIndexMonth pgtype.Numeric
+	BloatMonth       pgtype.Numeric
+	QueryMonth       pgtype.Numeric
+	Priced           bool
+	Confidence       string
+	Reason           string
+	CollectedAt      pgtype.Timestamptz
+}
+
+type CostPriceVersion struct {
+	ID              pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	Version         int32
+	Currency        string
+	StorageGbMonth  pgtype.Numeric
+	IoPerMillion    pgtype.Numeric
+	IoPerGbRead     pgtype.Numeric
+	ComputeVcpuHour pgtype.Numeric
+	InstanceMonth   pgtype.Numeric
+	ModelOrigin     string
+	EffectiveFrom   pgtype.Timestamptz
+	CreatedBy       string
+	CreatedAt       pgtype.Timestamptz
+}
+
 type DatabaseSnapshot struct {
 	ID               pgtype.UUID
 	AuditRunID       pgtype.UUID
@@ -413,6 +535,31 @@ type DimensionSnapshot struct {
 	NumSlices        pgtype.Int4
 	PartitioningFunc pgtype.Text
 	CollectedAt      pgtype.Timestamptz
+}
+
+type EnvironmentApiToken struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	Name          string
+	PublicPrefix  string
+	TokenSha256   []byte
+	Scopes        []string
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	ExpiresAt     pgtype.Timestamptz
+	RevokedAt     pgtype.Timestamptz
+	LastUsedAt    pgtype.Timestamptz
+}
+
+type EnvironmentMigrationRegistry struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	Tool          string
+	SchemaName    string
+	TableName     string
+	Enabled       bool
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type ExtensionSnapshot struct {
@@ -560,6 +707,22 @@ type FunctionSnapshot struct {
 	StatsObserved      pgtype.Bool
 }
 
+type GrantOriginSnapshot struct {
+	ID            pgtype.UUID
+	AuditRunID    pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	AccountName   string
+	ObjectType    string
+	ObjectName    string
+	Privilege     string
+	OriginKind    string
+	ViaChain      []string
+	InheritPath   pgtype.Bool
+	SetPath       pgtype.Bool
+	CollectedAt   pgtype.Timestamptz
+}
+
 type GrantSnapshot struct {
 	ID            pgtype.UUID
 	AuditRunID    pgtype.UUID
@@ -646,6 +809,63 @@ type JobSnapshot struct {
 	MaxBackgroundWorkers int32
 }
 
+type MigrationAnalysis struct {
+	ID              pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	Repository      string
+	Pr              string
+	CommitSha       string
+	HighestSeverity string
+	RulesVersion    string
+	PgVersion       int32
+	ContextMode     string
+	AuditRunID      pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
+	CreatedByToken  pgtype.UUID
+}
+
+type MigrationAnalysisItem struct {
+	ID               int64
+	AnalysisID       pgtype.UUID
+	FilePath         string
+	LineNo           int32
+	Code             string
+	Operation        string
+	ObjectName       string
+	LockMode         string
+	RewriteOrScan    string
+	SizeBytes        pgtype.Int8
+	DurationEstimate string
+	Severity         string
+	Confidence       string
+	Suppressed       bool
+	Justification    string
+}
+
+type MigrationRegistrySnapshot struct {
+	ID            pgtype.UUID
+	AuditRunID    pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	Tool          string
+	LatestVersion string
+	AppliedAt     pgtype.Timestamptz
+	AccessState   string
+	CollectedAt   pgtype.Timestamptz
+}
+
+type NotificationDestination struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	Channel       string
+	Target        string
+	Format        string
+	Active        bool
+	CreatedBy     string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type ObjectDependencySnapshot struct {
 	ID            pgtype.UUID
 	AuditRunID    pgtype.UUID
@@ -683,6 +903,79 @@ type ObjectMapping struct {
 	UpdatedAt            pgtype.Timestamptz
 }
 
+type PiiClassificationReview struct {
+	ID             pgtype.UUID
+	EnvironmentID  pgtype.UUID
+	DatabaseName   string
+	SchemaName     string
+	TableName      string
+	ColumnName     string
+	Decision       string
+	Justification  string
+	EvidenceSha256 string
+	DecidedBy      string
+	DecidedAt      pgtype.Timestamptz
+}
+
+type PiiColumnResult struct {
+	ID               pgtype.UUID
+	ScanID           pgtype.UUID
+	EnvironmentID    pgtype.UUID
+	DatabaseName     string
+	SchemaName       string
+	TableName        string
+	ColumnName       string
+	DataType         string
+	Category         string
+	Confidence       string
+	Method           string
+	SampleSize       int32
+	ValidCount       int32
+	NonNullCount     int32
+	ValidPercent     float64
+	NullFraction     pgtype.Float8
+	ReadAccounts     int32
+	ReadAccountNames []string
+	HasRls           bool
+	AccessLevel      string
+	CoverageNote     string
+}
+
+type PiiDictionaryEntry struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	NamePattern   string
+	Category      string
+	Active        bool
+	UpdatedAt     pgtype.Timestamptz
+	UpdatedBy     string
+}
+
+type PiiEnvironmentSetting struct {
+	EnvironmentID      pgtype.UUID
+	ContentScanEnabled bool
+	EnabledBy          string
+	EnabledAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type PiiScan struct {
+	ID              pgtype.UUID
+	EnvironmentID   pgtype.UUID
+	AuditRunID      pgtype.UUID
+	Stages          []int32
+	Status          string
+	CoverageNote    string
+	MissingObjects  []string
+	ColumnsAnalyzed int32
+	TablesAnalyzed  int32
+	ContentColumns  int32
+	Actor           string
+	StartedAt       pgtype.Timestamptz
+	FinishedAt      pgtype.Timestamptz
+	Error           string
+}
+
 type PolicySnapshot struct {
 	ID               pgtype.UUID
 	AuditRunID       pgtype.UUID
@@ -700,6 +993,66 @@ type PolicySnapshot struct {
 	NextStart        pgtype.Timestamptz
 	OwnerName        pgtype.Text
 	CollectedAt      pgtype.Timestamptz
+}
+
+type QualityContract struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	DatabaseName  string
+	SchemaName    string
+	TableName     string
+	CreatedBy     string
+	CreatedAt     pgtype.Timestamptz
+}
+
+type QualityContractCheckResult struct {
+	ID                pgtype.UUID
+	RunID             pgtype.UUID
+	CheckKey          string
+	CheckType         string
+	ColumnName        string
+	Result            string
+	Reason            string
+	Severity          string
+	ObservedCount     pgtype.Int4
+	ObservedPct       pgtype.Float8
+	SampleSize        pgtype.Int4
+	SampleMethod      string
+	FreshnessAgeHours pgtype.Float8
+	Evidence          []byte
+}
+
+type QualityContractRun struct {
+	ID            pgtype.UUID
+	EnvironmentID pgtype.UUID
+	ContractID    pgtype.UUID
+	VersionID     pgtype.UUID
+	Mode          string
+	Status        string
+	Coverage      string
+	SkipReason    string
+	SampleLimit   int32
+	TokenID       pgtype.UUID
+	AuditRunID    pgtype.UUID
+	Actor         string
+	StartedAt     pgtype.Timestamptz
+	FinishedAt    pgtype.Timestamptz
+	Document      []byte
+}
+
+type QualityContractVersion struct {
+	ID              pgtype.UUID
+	ContractID      pgtype.UUID
+	VersionNumber   int32
+	Document        []byte
+	SourceYaml      string
+	SampleLimit     int32
+	ScheduleProfile string
+	Status          string
+	AuthoredBy      string
+	AuthoredAt      pgtype.Timestamptz
+	ApprovedBy      pgtype.Text
+	ApprovedAt      pgtype.Timestamptz
 }
 
 type QualityIssue struct {
@@ -742,6 +1095,78 @@ type QualityScan struct {
 	SampleMethod  string
 	Actor         string
 	CreatedAt     pgtype.Timestamptz
+}
+
+type QueryDigest struct {
+	ID                 pgtype.UUID
+	EnvironmentID      pgtype.UUID
+	State              string
+	Reason             string
+	WindowDays         int32
+	PriorFrom          pgtype.Timestamptz
+	PriorTo            pgtype.Timestamptz
+	CurrentFrom        pgtype.Timestamptz
+	CurrentTo          pgtype.Timestamptz
+	PriorFirstRunID    pgtype.UUID
+	PriorLastRunID     pgtype.UUID
+	CurrentFirstRunID  pgtype.UUID
+	CurrentLastRunID   pgtype.UUID
+	WorkloadLimitN     int32
+	SubwindowNote      string
+	CoverageNotes      []string
+	CalculationVersion string
+	Markdown           string
+	RegressionCount    int32
+	NewCount           int32
+	GoneCount          int32
+	ImprovementCount   int32
+	CreatedAt          pgtype.Timestamptz
+}
+
+type QueryDigestConfig struct {
+	EnvironmentID   pgtype.UUID
+	WindowDays      int32
+	Thresholds      []byte
+	DeliveryEnabled bool
+	UpdatedAt       pgtype.Timestamptz
+	UpdatedBy       string
+}
+
+type QueryDigestDelivery struct {
+	ID             pgtype.UUID
+	DigestID       pgtype.UUID
+	DestinationID  pgtype.UUID
+	Channel        string
+	TargetMasked   string
+	Status         string
+	Attempt        int32
+	ErrorSanitized string
+	AttemptedAt    pgtype.Timestamptz
+}
+
+type QueryDigestItem struct {
+	ID                pgtype.UUID
+	DigestID          pgtype.UUID
+	Classification    string
+	Severity          string
+	Fingerprint       string
+	QueryID           string
+	DatabaseName      string
+	ReferencedObjects []string
+	PriorCalls        int64
+	CurrentCalls      int64
+	PriorMeanMs       float64
+	CurrentMeanMs     float64
+	PriorTotalMs      float64
+	CurrentTotalMs    float64
+	MeanChangePct     float64
+	TotalChangePct    float64
+	PriorShare        float64
+	CurrentShare      float64
+	FindingID         pgtype.UUID
+	RegressionAlertID pgtype.UUID
+	RelatedFindingIds []pgtype.UUID
+	SortRank          int32
 }
 
 type RegressionAlert struct {
@@ -832,6 +1257,32 @@ type RetentionPolicy struct {
 	ArchiveNote            string
 }
 
+type RetentionScenario struct {
+	ID                 pgtype.UUID
+	EnvironmentID      pgtype.UUID
+	DatabaseName       string
+	SchemaName         string
+	HypertableName     string
+	Label              string
+	RetentionDays      int32
+	CompressAfterDays  int32
+	AuditRunID         pgtype.UUID
+	CurrentBytes       int64
+	BytesAfter         int64
+	BytesSaved         int64
+	GbSaved            pgtype.Numeric
+	Currency           string
+	MoneySaved         pgtype.Numeric
+	PriceVersionID     pgtype.UUID
+	PriceEffectiveFrom pgtype.Timestamptz
+	Risks              []byte
+	RatioConfidenceLow bool
+	ObservedRatio      pgtype.Numeric
+	Partial            bool
+	SavedBy            string
+	SavedAt            pgtype.Timestamptz
+}
+
 type RlsPolicySnapshot struct {
 	ID            pgtype.UUID
 	AuditRunID    pgtype.UUID
@@ -881,6 +1332,24 @@ type ScheduledReport struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type SchemaChangeEvent struct {
+	ID                 pgtype.UUID
+	EnvironmentID      pgtype.UUID
+	PriorAuditRunID    pgtype.UUID
+	CurrentAuditRunID  pgtype.UUID
+	DetectedAt         pgtype.Timestamptz
+	ObjectType         string
+	ObjectKey          string
+	ChangeKind         string
+	PriorFingerprint   string
+	CurrentFingerprint string
+	ChangedFields      []string
+	Correlation        string
+	AnnotationID       pgtype.UUID
+	RegistryVersion    string
+	Confidence         string
+}
+
 type SchemaSnapshot struct {
 	ID                    pgtype.UUID
 	AuditRunID            pgtype.UUID
@@ -896,6 +1365,17 @@ type SchemaSnapshot struct {
 	SizeBytes             int64
 	CollectedAt           pgtype.Timestamptz
 	Nspacl                string
+}
+
+type SchemaTimelineGap struct {
+	ID                pgtype.UUID
+	EnvironmentID     pgtype.UUID
+	PriorAuditRunID   pgtype.UUID
+	CurrentAuditRunID pgtype.UUID
+	GapFrom           pgtype.Timestamptz
+	GapTo             pgtype.Timestamptz
+	Reason            string
+	CreatedAt         pgtype.Timestamptz
 }
 
 type SequenceSnapshot struct {
@@ -973,6 +1453,32 @@ type TableSnapshot struct {
 	Relforcerowsecurity pgtype.Bool
 	TableComment        pgtype.Text
 	StorageParameters   []string
+}
+
+type TargetRestoreDrill struct {
+	ID                 pgtype.UUID
+	EnvironmentID      pgtype.UUID
+	Kind               string
+	ArtifactSha256     string
+	Succeeded          bool
+	RtoSeconds         pgtype.Int4
+	PrevalidateSeconds pgtype.Int4
+	VerifySeconds      pgtype.Int4
+	Checks             []byte
+	Divergences        []byte
+	CliVersion         string
+	Note               string
+	TokenID            pgtype.UUID
+	PerformedAt        pgtype.Timestamptz
+	RecordedAt         pgtype.Timestamptz
+}
+
+type TargetRestorePolicy struct {
+	EnvironmentID    pgtype.UUID
+	RtoTargetSeconds int32
+	MaxAgeDays       int32
+	UpdatedBy        string
+	UpdatedAt        pgtype.Timestamptz
 }
 
 type TimescaleVersionSnapshot struct {

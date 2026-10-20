@@ -14,7 +14,7 @@ import (
 const createEnvironment = `-- name: CreateEnvironment :one
 INSERT INTO audit_environment (name, type, discovery_mode, active)
 VALUES ($1, $2, $3, $4)
-RETURNING id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine
+RETURNING id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine, is_production
 `
 
 type CreateEnvironmentParams struct {
@@ -42,12 +42,13 @@ func (q *Queries) CreateEnvironment(ctx context.Context, arg CreateEnvironmentPa
 		&i.UpdatedAt,
 		&i.ExpectsReplica,
 		&i.Engine,
+		&i.IsProduction,
 	)
 	return i, err
 }
 
 const getEnvironmentByID = `-- name: GetEnvironmentByID :one
-SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine
+SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine, is_production
 FROM audit_environment
 WHERE id = $1
 `
@@ -65,12 +66,13 @@ func (q *Queries) GetEnvironmentByID(ctx context.Context, id pgtype.UUID) (Audit
 		&i.UpdatedAt,
 		&i.ExpectsReplica,
 		&i.Engine,
+		&i.IsProduction,
 	)
 	return i, err
 }
 
 const listActiveEnvironments = `-- name: ListActiveEnvironments :many
-SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine
+SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine, is_production
 FROM audit_environment
 WHERE active = true
 ORDER BY name
@@ -95,6 +97,7 @@ func (q *Queries) ListActiveEnvironments(ctx context.Context) ([]AuditEnvironmen
 			&i.UpdatedAt,
 			&i.ExpectsReplica,
 			&i.Engine,
+			&i.IsProduction,
 		); err != nil {
 			return nil, err
 		}
@@ -107,7 +110,7 @@ func (q *Queries) ListActiveEnvironments(ctx context.Context) ([]AuditEnvironmen
 }
 
 const listEnvironments = `-- name: ListEnvironments :many
-SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine
+SELECT id, name, type, discovery_mode, active, created_at, updated_at, expects_replica, engine, is_production
 FROM audit_environment
 ORDER BY name
 `
@@ -131,6 +134,7 @@ func (q *Queries) ListEnvironments(ctx context.Context) ([]AuditEnvironment, err
 			&i.UpdatedAt,
 			&i.ExpectsReplica,
 			&i.Engine,
+			&i.IsProduction,
 		); err != nil {
 			return nil, err
 		}
