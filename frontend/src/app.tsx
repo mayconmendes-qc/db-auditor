@@ -50,12 +50,25 @@ const MappingsPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import("./pages/MonitoringPage").then((m) => ({ default: m.MonitoringPage })),
 );
+const QueryDigestPage = lazy(() =>
+  import("./pages/QueryDigestPage").then((m) => ({
+    default: m.QueryDigestPage,
+  })),
+);
+const CostPage = lazy(() =>
+  import("./pages/CostPage").then((m) => ({ default: m.CostPage })),
+);
 const ReportsPage = lazy(() =>
   import("./pages/ReportsPage").then((m) => ({ default: m.ReportsPage })),
 );
 const SchemaDriftPage = lazy(() =>
   import("./pages/SchemaDriftPage").then((m) => ({
     default: m.SchemaDriftPage,
+  })),
+);
+const SchemaTimelinePage = lazy(() =>
+  import("./pages/SchemaTimelinePage").then((m) => ({
+    default: m.SchemaTimelinePage,
   })),
 );
 const ServerComparePage = lazy(() =>
@@ -65,6 +78,21 @@ const ServerComparePage = lazy(() =>
 );
 const StatusPage = lazy(() =>
   import("./pages/StatusPage").then((m) => ({ default: m.StatusPage })),
+);
+const MigrationAnalysesPage = lazy(() =>
+  import("./pages/MigrationAnalysesPage").then((m) => ({
+    default: m.MigrationAnalysesPage,
+  })),
+);
+const PersonalDataPage = lazy(() =>
+  import("./pages/PersonalDataPage").then((m) => ({
+    default: m.PersonalDataPage,
+  })),
+);
+const AccessReviewPage = lazy(() =>
+  import("./pages/AccessReviewPage").then((m) => ({
+    default: m.AccessReviewPage,
+  })),
 );
 
 export { navigationSections };
@@ -80,8 +108,14 @@ function AppRoutes({ onLogout }: { onLogout: () => void }) {
     Relatórios: <ReportsPage />,
     Mapeamentos: <MappingsPage />,
     "Desvio de schema": <SchemaDriftPage />,
+    "Linha do tempo": <SchemaTimelinePage />,
     Comparar: <ServerComparePage />,
     Findings: <FindingsPage />,
+    Digest: <QueryDigestPage />,
+    Custo: <CostPage />,
+    "Análises de migration": <MigrationAnalysesPage />,
+    "Revisão de acessos": <AccessReviewPage />,
+    "Dados pessoais": <PersonalDataPage />,
     Status: <StatusPage />,
     Contas: <AccountsPage />,
     Acompanhamento: <MonitoringPage />,

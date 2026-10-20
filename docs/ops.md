@@ -2,7 +2,7 @@
 
 ## Schema do snapshot store
 
-O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `25_role_attributes_regression_workload.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
+O schema canônico está em `backend/migrations/01_baseline.sql`. Os ambientes iniciais vêm de `AUDITOR_TARGET_N_*` no `.env`: a API grava nome e id depois das migrations. A API aplica o baseline só quando o banco está vazio e registra `schema_migration`. Um volume que já tem o schema atual recebe só o que falta (`03_audit_schedule.sql` até `40_account_last_login.sql`) e não reaplica o baseline. O segundo boot não executa SQL de novo. Se o checksum de um arquivo já aplicado mudar, a API recusa subir. As notas de cada etapa (migrações, limites e decisões) estão em [notas-por-etapa.md](notas-por-etapa.md).
 
 Antes de atualizar uma instalação persistente, faça backup do snapshot store e confira a restauração. A migração `12_view_detail.sql` acrescenta campos sem apagar visões existentes. Depois do deploy, execute uma nova coleta de PostgreSQL para preencher colunas e opções de segurança: execuções antigas mostram esses campos como não coletados. Para voltar à versão anterior, pare a API nova e restaure o backup ou use a versão anterior do aplicativo; não remova as novas colunas manualmente.
 
@@ -349,6 +349,26 @@ Registre cardinalidade, tempo e pico de memória (`Maximum resident set size`) e
 
 Com pelo menos 10 coletas completas reais de um ambiente: liste os motivos de silêncio no log (`regression silenced`, nível debug) e os alertas criados em `regression_alert`; confira manualmente cada alerta (verdadeiro/falso positivo). Se a taxa de falso positivo passar de 1 em 10, ajuste `AUDITOR_REGRESSION_MAX_GAP` ao intervalo real do agendamento e anexe a tabela de calibração na issue #104.
 
+Os limiares do digest de consultas (média +50%, +10 ms, ≥100 chamadas, etc.)
+começam como valor inicial calibrável por ambiente em
+`PUT .../query-digest-config` (`thresholds` jsonb). Use o mesmo procedimento
+BA-15: após algumas janelas reais, registre falso positivo e ajuste. Sem
+destinatário por ambiente, o digest cai nos canais globais `AUDITOR_ALERT_*`;
+configure `notification-destinations` por ambiente em instalações multi-time.
+
+### Drift de schema, registro de migrations e Slack (spec 04)
+
+Migrations `27_schema_timeline.sql` e `28_migration_registry.sql` (depois da
+26; antes dos tokens/análises 29–30). A timeline grava eventos na ingestão;
+`is_production` no ambiente sobe a severidade dos achados `drift.*`.
+
+Registro opcional de migrations por ambiente (`GET`/`PUT
+.../migration-registry`): ferramentas `golang-migrate`, `goose`, `flyway`,
+`alembic`, `rails`, `prisma`. Schema/tabela são validados como identificadores
+PostgreSQL; a coleta só lê versão e carimbo, nunca falha a execução se a tabela
+faltar. Webhooks de destino aceitam `format=generic` (padrão) ou `format=slack`
+(ADR-0001 D15). O webhook global `AUDITOR_ALERT_WEBHOOK_URL` permanece genérico.
+
 ## Recuperar o acesso de operador
 
 Se todos os operadores perderem acesso, não apague `auditor_user`. Confirme um backup recente e restaurável do snapshot store e execute em terminal interativo na VPS:
@@ -358,3 +378,48 @@ podman compose -f deploy/compose.prod.yaml --env-file .env.prod exec -it api /au
 ```
 
 O comando pede a nova senha sem eco, aceita somente um operador ativo já existente, revoga suas sessões e registra o evento `operator.password_recovery` sem guardar a senha. Teste o login e mantenha o registro do incidente. Nunca informe a senha em argumento, variável de ambiente, ticket ou log. Se não houver operador ativo, restaure o backup em ambiente isolado e investigue antes de modificar dados manualmente.
+
+## Tokens de API por ambiente (CLI)
+
+Operator cria tokens em **Ambientes → Tokens de API**, com escopos mínimos (ADR-0001 D1):
+`snapshot-context:read`, `migration-analysis:write`, `deploy-annotation:write`, e os reservados
+`quality-contract:run`, `restore-evidence:write`, `last-login:write`.
+
+Ensaios do **banco auditado** (pg_dump → container efêmero): veja [backup-verifier.md](backup-verifier.md) (`auditor restore-verify`, evidência `target_restore_drill`). O ensaio do snapshot store continua em `deploy/snapshot-restore-verify.sh` → `retention_evidence`.
+
+Último login por role (agregado local da CLI `log-anomaly`, ADR-0001 D10):
+`auditor log-anomaly --path ./pgjson.log --last-login-out ultimo-login.json --submit-last-login --environment <uuid>`
+com `AUDITOR_API_URL` e `AUDITOR_CLI_TOKEN`/`_FILE` (escopo `last-login:write`). O corpo POST
+`/api/v1/environments/{id}/account-last-logins` leva só `role` e `last_login_at`. A matriz de
+revisão de acessos exibe o horário com fonte `log` ao lado de “sem sessão (amostra)”.
+
+- O segredo (`dba_<prefixo>_<segredo>`) aparece **uma vez** na criação. Guarde no GitHub Secrets (`AUDITOR_CLI_TOKEN`) ou em um gerenciador de segredos.
+- Rotação: crie um token novo, atualize o secret no CI, revogue o antigo (DELETE na API ou na UI).
+- Validade obrigatória (padrão 90 dias). Expirado ou revogado → HTTP 401; a CLI sai com código 2.
+- Um token pertence a um único ambiente; uso cruzado → 403 (registrado em `auditor_operation_log` com o id do token, nunca o segredo).
+- `AUDITOR_REPORT_API_TOKEN` **não** autentica rotas de CLI/contexto/análises.
+
+
+## Troca de moeda da tabela de preços (cost-lens)
+
+A moeda de um ambiente fica **travada** depois da primeira versão de `cost_price_version` (ADR-0001 D3). Não há câmbio automático.
+
+Procedimento manual (corta a série):
+
+1. Confirme o impacto com o operador responsável.
+2. No banco de controle, apague a série e as versões do ambiente:
+
+   `DELETE FROM cost_estimate_snapshot WHERE environment_id = '<uuid>';`
+   `DELETE FROM cost_price_version WHERE environment_id = '<uuid>';`
+
+3. Recrie a primeira versão pela API (`PUT .../cost/prices`) com a nova moeda.
+
+
+
+## Mapa de dados pessoais (PII)
+
+- Flag de processo (mais restrita que qualidade): `AUDITOR_PII_CONTENT_SCAN_ENABLED=1`.
+- Habilitação por ambiente: `PUT /api/v1/environments/{id}/pii-settings` (`content_scan_enabled`, operator).
+- Sem as duas, `POST .../pii-scans` com etapa 2 responde **409**; a etapa 1 (só metadados) continua disponível.
+- Migration `35_pii_scanner.sql`.
+- Download do mapa CSV exige auditor (RNF-04).

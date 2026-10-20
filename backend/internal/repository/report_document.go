@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -223,7 +224,177 @@ ORDER BY CASE e.severity WHEN 'critical' THEN 0 ELSE 1 END,e.finding_id LIMIT 5`
 	for i := range d.CoverageNotes {
 		d.CoverageNotes[i] = strings.TrimSpace(d.CoverageNotes[i])
 	}
+	d.CostSummary = r.loadCostSummary(ctx, job.EnvironmentID, job.AuditRunID)
+	d.RetentionSimulation = r.loadRetentionSimulation(ctx, job.EnvironmentID, job.AuditRunID)
+	d.RestoreVerified = r.loadRestoreVerified(ctx, job.EnvironmentID)
+	d.QualityContracts = r.loadQualityContracts(ctx, job.EnvironmentID)
+	d.PersonalData = r.loadPersonalData(ctx, job.EnvironmentID)
+	if job.Type == "access_review" || job.Filters.CampaignID != "" {
+		campaignID := job.Filters.CampaignID
+		if campaignID == "" {
+			// Fall back to the newest non-closed campaign for the environment.
+			if camps, _, err := r.store.ListAccessReviewCampaigns(ctx, job.EnvironmentID, 1, 0); err == nil && len(camps) > 0 {
+				campaignID = camps[0].ID
+			}
+		}
+		if campaignID != "" {
+			if sum, err := r.store.BuildAccessReviewSummary(ctx, job.EnvironmentID, campaignID); err == nil {
+				d.AccessReview = sum
+			}
+		}
+	}
 	return d, nil
+}
+
+func (r *ReportSections) loadCostSummary(ctx context.Context, env, runID string) *report.CostSummary {
+	var cur string
+	var storage, unused, bloat, query float64
+	var priced bool
+	var reason string
+	err := r.tx.QueryRow(ctx, `
+SELECT currency, storage_month, unused_index_month, bloat_month, query_month, priced, reason
+FROM cost_estimate_snapshot
+WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, env, runID).Scan(
+		&cur, &storage, &unused, &bloat, &query, &priced, &reason)
+	if err != nil {
+		return &report.CostSummary{Reason: "não estimado — preço não configurado"}
+	}
+	return &report.CostSummary{
+		Priced: priced, Currency: cur, Reason: reason,
+		StorageMonth: storage, UnusedIndexMonth: unused, BloatMonth: bloat, QueryMonth: query,
+	}
+}
+
+func (r *ReportSections) loadRetentionSimulation(ctx context.Context, env, runID string) *report.RetentionSimulationSummary {
+	var htCount int
+	_ = r.tx.QueryRow(ctx, `SELECT count(*) FROM hypertable_snapshot WHERE audit_run_id=$1::uuid`, runID).Scan(&htCount)
+	if htCount == 0 {
+		return &report.RetentionSimulationSummary{Applicable: false, Reason: "não aplicável"}
+	}
+	rows, err := r.tx.Query(ctx, `
+SELECT COALESCE(schema_name || '.' || hypertable_name, hypertable_name),
+  label, gb_saved::float8, currency, money_saved, risks, ratio_confidence_low, partial
+FROM retention_scenario
+WHERE environment_id=$1::uuid
+  AND (audit_run_id IS NULL OR audit_run_id=$2::uuid)
+ORDER BY saved_at DESC
+LIMIT 100`, env, runID)
+	if err != nil {
+		return &report.RetentionSimulationSummary{Applicable: true}
+	}
+	defer rows.Close()
+	out := &report.RetentionSimulationSummary{Applicable: true}
+	for rows.Next() {
+		var item report.RetentionSimulationItem
+		var money *float64
+		var risks []byte
+		var lowConf, partial bool
+		if err := rows.Scan(&item.Hypertable, &item.Label, &item.GBSaved, &item.Currency, &money, &risks, &lowConf, &partial); err != nil {
+			continue
+		}
+		item.MoneySaved = money
+		item.Confidence = "alta"
+		if lowConf {
+			item.Confidence = "baixa"
+		}
+		item.Risks = []string{}
+		if len(risks) > 0 {
+			_ = json.Unmarshal(risks, &item.Risks)
+		}
+		if partial {
+			out.Partial = true
+		}
+		out.Items = append(out.Items, item)
+	}
+	return out
+}
+
+func (r *ReportSections) loadRestoreVerified(ctx context.Context, env string) *report.RestoreVerifiedSummary {
+	out := &report.RestoreVerifiedSummary{MaxAgeDays: 30, RTOTargetSeconds: 600}
+	if pol, err := r.store.GetTargetRestorePolicy(ctx, env); err == nil && pol != nil {
+		out.RTOTargetSeconds = pol.RTOTargetSeconds
+		out.MaxAgeDays = pol.MaxAgeDays
+	}
+	items, _, err := r.store.ListTargetRestoreDrills(ctx, env, 1, 0)
+	if err != nil || len(items) == 0 {
+		out.Overdue = true
+		return out
+	}
+	d := items[0]
+	out.HasDrill = true
+	out.Succeeded = d.Succeeded
+	out.PerformedAt = d.PerformedAt.UTC().Format(time.RFC3339)
+	out.RTOSeconds = d.RTOSeconds
+	out.Note = d.Note
+	var divs []any
+	if json.Unmarshal(d.Divergences, &divs) == nil {
+		out.DivergenceCount = len(divs)
+	}
+	var checks []struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal(d.Checks, &checks) == nil {
+		out.ChecksTotal = len(checks)
+		for _, c := range checks {
+			if c.Status == "ok" || c.Status == "disabled" || c.Status == "skipped" {
+				out.ChecksOK++
+			}
+		}
+	}
+	lastOK, _ := r.store.LastSuccessfulTargetRestoreDrill(ctx, env)
+	maxAge := time.Duration(out.MaxAgeDays) * 24 * time.Hour
+	if lastOK == nil || time.Since(lastOK.PerformedAt) > maxAge {
+		out.Overdue = true
+	}
+	return out
+}
+
+func (r *ReportSections) loadQualityContracts(ctx context.Context, env string) *report.QualityContractsSummary {
+	results, note, err := r.store.ListQualityContractSummariesForReport(ctx, env, 30)
+	if err != nil {
+		return &report.QualityContractsSummary{SamplingNote: note}
+	}
+	out := &report.QualityContractsSummary{SamplingNote: note, Items: make([]report.QualityContractLine, 0, len(results))}
+	for _, cr := range results {
+		observed := "—"
+		switch {
+		case cr.FreshnessAgeHours != nil:
+			observed = fmt.Sprintf("%.0f h", *cr.FreshnessAgeHours)
+		case cr.ObservedPct != nil && cr.ObservedCount != nil:
+			observed = fmt.Sprintf("%d (%.2f%%)", *cr.ObservedCount, *cr.ObservedPct)
+		case cr.ObservedPct != nil:
+			observed = fmt.Sprintf("%.2f%%", *cr.ObservedPct)
+		case cr.ObservedCount != nil:
+			observed = fmt.Sprintf("%d", *cr.ObservedCount)
+		}
+		out.Items = append(out.Items, report.QualityContractLine{
+			CheckKey: cr.CheckKey, Result: cr.Result, Severity: cr.Severity,
+			SampleSize: cr.SampleSize, Observed: observed, Reason: cr.Reason,
+		})
+	}
+	return out
+}
+
+func (r *ReportSections) loadPersonalData(ctx context.Context, env string) *report.PersonalDataSummary {
+	totals, total, err := r.store.PIICategoryTotals(ctx, env)
+	if err != nil || total == 0 {
+		return nil
+	}
+	out := &report.PersonalDataSummary{TotalColumns: total, JSONNote: "Apenas categorias, confiança e contagens; nenhum valor amostrado."}
+	for cat, n := range totals {
+		out.ByCategory = append(out.ByCategory, report.PersonalDataCategoryCount{Category: cat, Count: n})
+	}
+	items, _, err := r.store.ListPIIMap(ctx, env, PIIMapFilter{Limit: 200})
+	if err == nil {
+		for _, it := range items {
+			out.DetailColumns = append(out.DetailColumns, report.PersonalDataColumnLine{
+				Qualified: it.Qualified,
+				Category:  it.Category, Confidence: it.Confidence, Method: it.Method,
+				ReadCount: it.ReadAccounts, HasRLS: it.HasRLS,
+			})
+		}
+	}
+	return out
 }
 
 // Databases loads the database list (at most 500 rows).

@@ -36,7 +36,13 @@ func DefaultRegistry() *Registry {
 	r.Register(PerformanceAnalyzer{})
 	r.Register(SecurityAnalyzer{})
 	r.Register(DriftAnalyzer{})
+	r.Register(SchemaDriftAnalyzer{})
 	r.Register(P2Analyzer{})
 	r.Register(MaintenanceTrendAnalyzer{})
+	r.Register(CostAnalyzer{})
+	r.Register(TimescaleRetentionAnalyzer{})
+	r.Register(AccessReviewAnalyzer{})
+	r.Register(PIIAnalyzer{})
+	r.Register(BackupAnalyzer{})
 	return r
 }

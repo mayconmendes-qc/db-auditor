@@ -279,7 +279,10 @@ func reportScope(w http.ResponseWriter, r *http.Request, store InventoryStore) (
 }
 
 func validReportRequest(kind string, f repository.ReportFilters) bool {
-	if kind != "executive" && kind != "technical" && kind != "table" && kind != "architecture" {
+	if kind != "executive" && kind != "technical" && kind != "table" && kind != "architecture" && kind != "access_review" {
+		return false
+	}
+	if kind == "access_review" && (f.Table != "" || f.CampaignID == "" || len(f.CampaignID) > 64) {
 		return false
 	}
 	if kind == "architecture" && (os.Getenv("AUDITOR_ARCHITECTURE_REPORT_ENABLED") != "true" || f.Database == "" || f.Table != "" || f.Severity != "") {

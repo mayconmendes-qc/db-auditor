@@ -57,7 +57,32 @@ O bloqueio de senha usa a conta junto com o IP visto pelo proxy confiável (`log
 
 A política em `retention_policy` guarda o dono, o prazo dos jobs de PDF (padrão 90 dias) e o prazo de snapshots (0 = não apagar até aprovação). A expiração do PDF remove só o artefato; a trilha do job permanece. O script `deploy/snapshot-backup.sh` gera `pg_dump` custom e registra sucesso ou falha. Restaure com `pg_restore --clean --if-exists` em um Postgres vazio, fora de produção, e confira contagens de `audit_run`, `finding` e `auditor_user` antes de promover. Volumes e backups precisam de criptografia do disco ou do destino (LUKS, volume cifrado do provedor ou `age`/`gpg` no arquivo). O Compose não guarda a chave. Sem backup verificado e aprovação, nenhuma limpeza apaga snapshots existentes. A API registra aprovação, backup verificado e restauração de teste (`/api/v1/retention-policy*`, só operador) e recusa limpeza sem os três; o ensaio é `deploy/snapshot-restore-verify.sh`. Veja [ops.md](ops.md#retenção-e-restauração).
 
+## Destinos de notificação (digest / drift)
+
+URLs de webhook por ambiente ficam em `notification_destination.target` em
+texto, com o mesmo padrão de confiança do volume cifrado do snapshot store
+(como o restante dos dados sensíveis internos). A API nunca devolve a URL
+completa (só `scheme://host/***`), nunca a registra em log ou métrica, e
+recusa `http`, credencial embutida, loopback, link-local e IPs privados
+(mitigação de SSRF). E-mails de destinatário são dado pessoal: ficam fora de
+logs e métricas. Formato `slack` fica bloqueado até o plano 04. Os alertas
+globais existentes continuam só em `AUDITOR_ALERT_*`.
+
 ## CSP
 
 A API envia `Content-Security-Policy` em todas as respostas. O Vite de desenvolvimento envia a mesma política com `script-src 'unsafe-inline'` e `connect-src` para o websocket local, porque o servidor de desenvolvimento injeta o cliente HMR. Produção, no Caddy, não libera `unsafe-inline` em script.
 
+## Principal token de ambiente (CLI)
+
+O principal `env-token` é distinto da sessão de usuário. Autentica só rotas da lista fechada
+(método + caminho + escopo), sempre no ambiente do token. Deny-by-default: auth/*, environments
+global, downloads e rotas de operator ficam fora. Rate limit por id do token. Logs usam
+`env-token:<id>` — nunca o Bearer em claro. Relatórios continuam só com `AUDITOR_REPORT_API_TOKEN`.
+
+
+## Garantias LGPD do mapa de dados pessoais
+
+- Valores amostrados na etapa 2 vivem só em memória durante a validação e são descartados (RNF-02).
+- Não vão para log, store, evidência, PDF, CSV, erro nem métrica — nem mascarados nem com hash.
+- Persistem apenas contagens, proporções, categoria, confiança e método.
+- Conta só leitura, transação `READ ONLY`, timeout por coluna; flag própria `AUDITOR_PII_CONTENT_SCAN_ENABLED` + opt-in por ambiente (ADR-0001 D4).

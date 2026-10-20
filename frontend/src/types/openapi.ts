@@ -29,9 +29,21 @@ export type ApiPath =
   | "/api/v1/compare"
   | "/api/v1/environments"
   | "/api/v1/environments/connection-status"
+  | "/api/v1/environments/{id}"
+  | "/api/v1/environments/{id}/access-review-owners"
+  | "/api/v1/environments/{id}/access-reviews"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}/close"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}/decisions"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}/diff"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}/export/download"
+  | "/api/v1/environments/{id}/access-reviews/{campaign}/matrix"
+  | "/api/v1/environments/{id}/account-last-logins"
   | "/api/v1/environments/{id}/actions"
   | "/api/v1/environments/{id}/actions/export"
   | "/api/v1/environments/{id}/annotations"
+  | "/api/v1/environments/{id}/api-tokens"
+  | "/api/v1/environments/{id}/api-tokens/{token}"
   | "/api/v1/environments/{id}/baseline"
   | "/api/v1/environments/{id}/baseline/comparisons"
   | "/api/v1/environments/{id}/capabilities"
@@ -40,6 +52,12 @@ export type ApiPath =
   | "/api/v1/environments/{id}/constraints"
   | "/api/v1/environments/{id}/continuous-aggregates"
   | "/api/v1/environments/{id}/continuous-aggregates/page"
+  | "/api/v1/environments/{id}/cost/inventory"
+  | "/api/v1/environments/{id}/cost/prices"
+  | "/api/v1/environments/{id}/cost/ranking"
+  | "/api/v1/environments/{id}/cost/ranking/export"
+  | "/api/v1/environments/{id}/cost/series"
+  | "/api/v1/environments/{id}/cost/templates"
   | "/api/v1/environments/{id}/databases"
   | "/api/v1/environments/{id}/dimensions"
   | "/api/v1/environments/{id}/findings-diff"
@@ -49,9 +67,36 @@ export type ApiPath =
   | "/api/v1/environments/{id}/hypertables/page"
   | "/api/v1/environments/{id}/indexes"
   | "/api/v1/environments/{id}/jobs"
+  | "/api/v1/environments/{id}/migration-analyses"
+  | "/api/v1/environments/{id}/migration-analyses/{analysis}"
+  | "/api/v1/environments/{id}/migration-context"
+  | "/api/v1/environments/{id}/migration-registry"
+  | "/api/v1/environments/{id}/notification-destinations"
+  | "/api/v1/environments/{id}/pii-classifications/{column}"
+  | "/api/v1/environments/{id}/pii-dictionary"
+  | "/api/v1/environments/{id}/pii-map"
+  | "/api/v1/environments/{id}/pii-map/export/download"
+  | "/api/v1/environments/{id}/pii-scans"
+  | "/api/v1/environments/{id}/pii-scans/{scan}"
+  | "/api/v1/environments/{id}/pii-settings"
   | "/api/v1/environments/{id}/policies"
+  | "/api/v1/environments/{id}/quality-contracts"
+  | "/api/v1/environments/{id}/quality-contracts/import"
+  | "/api/v1/environments/{id}/quality-contracts/proposals"
+  | "/api/v1/environments/{id}/quality-contracts/runs"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/runs"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/runs/{run}"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/runs/{run}/markdown"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/trend"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/versions"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/versions/{version}/approve"
+  | "/api/v1/environments/{id}/quality-contracts/{contract}/versions/{version}/yaml"
   | "/api/v1/environments/{id}/quality-issues/{issue}"
   | "/api/v1/environments/{id}/quality-scans"
+  | "/api/v1/environments/{id}/query-digest-config"
+  | "/api/v1/environments/{id}/query-digests"
+  | "/api/v1/environments/{id}/query-digests/{digest}"
+  | "/api/v1/environments/{id}/query-digests/{digest}/markdown"
   | "/api/v1/environments/{id}/regressions"
   | "/api/v1/environments/{id}/regressions/{alert}/acknowledge"
   | "/api/v1/environments/{id}/reports"
@@ -82,6 +127,8 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/jobs"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/policies"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/rls-policies"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/simulation"
+  | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/hypertables/{hypertable}/unscanned-chunks"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/detail"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/findings"
   | "/api/v1/environments/{id}/runs/{run}/databases/{database}/schemas/{schema}/indexes/{index}/history"
@@ -100,12 +147,18 @@ export type ApiPath =
   | "/api/v1/environments/{id}/runs/{run}/score/compare"
   | "/api/v1/environments/{id}/runs/{run}/scores"
   | "/api/v1/environments/{id}/schedules"
+  | "/api/v1/environments/{id}/schema-diff"
+  | "/api/v1/environments/{id}/schema-diff/export"
+  | "/api/v1/environments/{id}/schema-timeline"
+  | "/api/v1/environments/{id}/schema-timeline/export"
   | "/api/v1/environments/{id}/schemas"
   | "/api/v1/environments/{id}/snapshot-status"
   | "/api/v1/environments/{id}/tables"
   | "/api/v1/environments/{id}/tables/column-stats"
   | "/api/v1/environments/{id}/tables/history"
   | "/api/v1/environments/{id}/tables/workload"
+  | "/api/v1/environments/{id}/timescale-scenarios"
+  | "/api/v1/environments/{id}/timescale-scenarios/export"
   | "/api/v1/environments/{id}/views"
   | "/api/v1/finding-categories/{category}"
   | "/api/v1/findings"
@@ -336,6 +389,24 @@ export interface RetentionPolicy {
   approved_by: string;
   approved_at?: string;
   updated_at: string;
+}
+
+export interface SchemaDiffResult {
+  source_environment_id?: string;
+  target_environment_id?: string;
+  source_run_id?: string;
+  target_run_id?: string;
+  partial?: boolean;
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SchemaTimelinePage {
+  environment_id?: string;
+  total?: number;
+  limit?: number;
+  offset?: number;
 }
 
 export interface ScopeScore {

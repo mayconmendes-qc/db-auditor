@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/osmendes/db-auditor/internal/observability"
 	"github.com/osmendes/db-auditor/internal/repository"
 )
 
@@ -29,8 +30,14 @@ type AuthStore interface {
 	ClearLoginAttempt(context.Context, []byte) error
 }
 
+type envTokenResolver interface {
+	ResolveEnvAPIToken(context.Context, string) (*repository.EnvTokenPrincipal, error)
+	LogEnvTokenOperation(context.Context, string, string, string, string, string) error
+}
+
 type identityKey struct{}
 type sessionKey struct{}
+type envTokenKey struct{}
 
 const sessionCookie = "auditor_session"
 
@@ -42,6 +49,11 @@ type requestSession struct {
 func requestIdentity(r *http.Request) *repository.AuditorUser {
 	user, _ := r.Context().Value(identityKey{}).(*repository.AuditorUser)
 	return user
+}
+
+func requestEnvToken(r *http.Request) *repository.EnvTokenPrincipal {
+	tok, _ := r.Context().Value(envTokenKey{}).(*repository.EnvTokenPrincipal)
+	return tok
 }
 
 func registerAuthRoutes(mux *http.ServeMux, store AuthStore) {
@@ -268,6 +280,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 
 func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 	limiter := &apiWindow{byKey: make(map[string]attemptWindow), max: 600}
+	tokenLimiter := &apiWindow{byKey: make(map[string]attemptWindow), max: 120}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/totp" {
 			next.ServeHTTP(w, r)
@@ -289,6 +302,53 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 			writeError(w, http.StatusUnauthorized, CodeUnavailable, "Sessão ausente ou expirada.")
 			return
 		}
+
+		// Environment API token principal (ADR-0001 D1). Never logs plaintext.
+		if !session.cookie && strings.HasPrefix(session.token, "dba_") {
+			resolver, ok := store.(envTokenResolver)
+			if !ok {
+				writeError(w, http.StatusUnauthorized, CodeUnavailable, "Sessão ausente ou expirada.")
+				return
+			}
+			principal, err := resolver.ResolveEnvAPIToken(r.Context(), session.token)
+			if err != nil {
+				writeError(w, http.StatusServiceUnavailable, CodeUnavailable, "Autenticação indisponível.")
+				return
+			}
+			if principal == nil {
+				writeError(w, http.StatusUnauthorized, CodeUnavailable, "Credencial inválida ou expirada.")
+				return
+			}
+			if !tokenLimiter.allow(principal.ID) {
+				writeError(w, http.StatusTooManyRequests, CodeUnavailable, "Muitas requisições. Aguarde um minuto.")
+				return
+			}
+			env, allowed, scope := authorizeEnvToken(r, principal)
+			observabilityIncEnvToken(scope, allowed)
+			if !allowed {
+				if err := resolver.LogEnvTokenOperation(r.Context(), principal.ID, r.Method+" "+r.URL.Path, auditEnvironment(env), "", "denied"); err != nil {
+					slog.Warn("could not write token authorization log", "error", err)
+				}
+				writeError(w, http.StatusForbidden, CodeUnavailable, "Acesso não autorizado.")
+				return
+			}
+			ctx := context.WithValue(r.Context(), envTokenKey{}, principal)
+			if r.Method == http.MethodGet {
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			recorder := &operationRecorder{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(recorder, r.WithContext(ctx))
+			result := "success"
+			if recorder.status >= 400 {
+				result = "failed"
+			}
+			if err := resolver.LogEnvTokenOperation(r.Context(), principal.ID, r.Method+" "+r.URL.Path, auditEnvironment(env), "", result); err != nil {
+				slog.Warn("could not write token operation log", "error", err)
+			}
+			return
+		}
+
 		digest := sha256.Sum256([]byte(session.token))
 		user, err := store.GetAuditorSession(r.Context(), digest[:])
 		if err != nil {
@@ -333,6 +393,57 @@ func authMiddleware(next http.Handler, store AuthStore) http.Handler {
 	})
 }
 
+// authorizeEnvToken is deny-by-default: closed list of (method, path suffix, scope).
+func authorizeEnvToken(r *http.Request, tok *repository.EnvTokenPrincipal) (env string, allowed bool, scope string) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/")
+	parts := strings.Split(path, "/")
+	if strings.HasPrefix(path, "auth/") || path == "environments" || strings.HasSuffix(path, "/download") {
+		return "", false, ""
+	}
+	if len(parts) < 2 || parts[0] != "environments" || !uuidPattern.MatchString(parts[1]) {
+		return "", false, ""
+	}
+	env = parts[1]
+	if env != tok.EnvironmentID {
+		return env, false, ""
+	}
+	rest := strings.Join(parts[2:], "/")
+	switch {
+	case r.Method == http.MethodGet && rest == "migration-context":
+		scope = "snapshot-context:read"
+	case r.Method == http.MethodPost && rest == "migration-analyses":
+		scope = "migration-analysis:write"
+	case r.Method == http.MethodPost && rest == "annotations":
+		scope = "deploy-annotation:write"
+	case r.Method == http.MethodPost && (rest == "quality-contracts/runs" ||
+		(strings.HasPrefix(rest, "quality-contracts/") && strings.HasSuffix(rest, "/runs"))):
+		scope = "quality-contract:run"
+	case r.Method == http.MethodGet && rest == "restore-drill-context":
+		scope = "restore-evidence:write"
+	case r.Method == http.MethodPost && rest == "restore-drills":
+		scope = "restore-evidence:write"
+	case r.Method == http.MethodPost && rest == "account-last-logins":
+		scope = "last-login:write"
+	default:
+		return env, false, ""
+	}
+	if !tok.HasScope(scope) {
+		return env, false, scope
+	}
+	return env, true, scope
+}
+
+func observabilityIncEnvToken(scope string, allowed bool) {
+	result := "denied"
+	if allowed {
+		result = "allowed"
+	}
+	if scope == "" {
+		scope = "none"
+	}
+	observability.DefaultMetrics.IncEnvTokenRequest(scope, result)
+}
+
 func csrfToken(token string) string {
 	digest := sha256.Sum256([]byte("auditor-csrf:" + token))
 	return base64.RawURLEncoding.EncodeToString(digest[:])
@@ -357,6 +468,18 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 	if strings.HasSuffix(path, "/download") && !roleAtLeast(user.Role, "auditor") {
 		return environmentFromRequest(r, parts), false
 	}
+	// Notification destinations: GET and PUT are operator-only (ADR-0001 D6).
+	if strings.Contains(path, "/notification-destinations") {
+		if !roleAtLeast(user.Role, "operator") {
+			return environmentFromRequest(r, parts), false
+		}
+	}
+	// PII dictionary and settings: PUT is operator-only (ADR-0001 D14).
+	if r.Method == http.MethodPut && (strings.Contains(path, "/pii-dictionary") || strings.Contains(path, "/pii-settings")) {
+		if !roleAtLeast(user.Role, "operator") {
+			return environmentFromRequest(r, parts), false
+		}
+	}
 	if r.Method != http.MethodGet {
 		minimum := "operator"
 		if path == "auth/password" {
@@ -365,7 +488,17 @@ func authorizeRequest(r *http.Request, user *repository.AuditorUser, store AuthS
 		if strings.Contains(path, "/annotations") || strings.Contains(path, "/regressions/") {
 			minimum = "auditor"
 		}
-		if strings.Contains(path, "/quality-scans") || strings.Contains(path, "/quality-issues/") {
+		if strings.Contains(path, "/quality-scans") || strings.Contains(path, "/quality-issues/") ||
+			strings.Contains(path, "/quality-contracts") {
+			minimum = "auditor"
+		}
+		if strings.Contains(path, "/pii-scans") || strings.Contains(path, "/pii-classifications/") {
+			minimum = "auditor"
+		}
+		if strings.Contains(path, "/timescale-scenarios") {
+			minimum = "auditor"
+		}
+		if strings.Contains(path, "/access-reviews/") && strings.HasSuffix(path, "/decisions") {
 			minimum = "auditor"
 		}
 		if strings.HasSuffix(path, "/action/measurements") && r.Method == http.MethodPost {

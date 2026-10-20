@@ -92,6 +92,20 @@ severidade e ID do achado. `GET /api/v1/findings/priorities` devolve os cinco
 primeiros entre até 500 achados abertos; Dashboard, Findings e PDF usam a
 mesma fórmula e mostram o ID do achado.
 
+## Drift de schema (timeline × regressão `structure`)
+
+A **linha do tempo de schema** compara cada coleta completa com a coleta
+completa anterior do mesmo perfil e da mesma versão de coletor. Os eventos são
+gravados na ingestão (`schema_change_event`); a leitura da API não recalcula o
+diff. Mudanças sem anotação de implantação (`kind=deployment`) nem evidência no
+registro de migrations viram `drift.out_of_pipeline`. Divergência persistente
+entre ambientes pareados (`object_mapping` + `is_production`) vira
+`drift.environment_divergence`.
+
+A regressão **`structure`** (abaixo) compara a coleta atual com o **baseline**
+escolhido, não com a coleta anterior. As duas visões coexistirem: timeline =
+coleta a coleta; regressão = baseline.
+
 ## Baseline e regressões (AN-11)
 
 Uma regressão só é registrada quando:
@@ -139,6 +153,24 @@ Calibração (BA-15): o limiar padrão vem de coletas sintéticas nos testes
 `TestRegressionNoiseControlIntegration`. Registre a calibração com coletas
 reais seguindo o procedimento em [ops.md](ops.md#calibração-de-regressões-ba-15).
 
+## Digest de consultas (spec 06)
+
+O digest compara duas janelas consecutivas de `workload_snapshot` (padrão
+7 + 7 dias). Só coletas `success` com cobertura completa e análise concluída
+servem de extremo; `partial_success` nunca fecha janela. Um `stats_reset`
+(incluindo NULL→valor) invalida a janela e o cálculo usa a maior subjanela
+contígua sem reset. O digest classifica fingerprints como regressão, nova,
+sumiu, melhora ou estável; não cria alerta novo se já houver `regression_alert`
+`workload` aberto para o mesmo fingerprint.
+
+**Limitação de fingerprint.** A normalização remove literais, mas uma
+refatoração do SQL (renomear coluna, trocar JOIN, reordenar predicados) muda
+o fingerprint. Nesse caso o digest pode listar a consulta antiga como
+"sumiu" e a nova como "nova". Quando `query_id` de `pg_stat_statements` for
+estável entre coletas, o item o preserva para ajudar a correlação humana. O
+top N do coletor (`AUDITOR_WORKLOAD_LIMIT`) também limita a cobertura: uma
+"nova" pode só ter entrado no top N.
+
 ## Tendência e manutenção (BA-21)
 
 `maintenance.growth_trend` usa só duas coletas completas e comparáveis com no
@@ -151,6 +183,13 @@ de negócio/compliance e backup restaurável. Nenhuma recomendação propõe
 exclusão, `DROP` ou alteração automática. A interface e o PDF separam
 **hipótese**, **ganho previsto** e **ganho medido**; o ganho medido só aparece
 com uma medição comparável registrada após nova coleta completa.
+
+A simulação de retenção e compressão Timescale (spec 09) calcula economia sobre
+metadados de `chunk_snapshot` e cenários salvos; ela **não** cria políticas.
+Chunks “possivelmente sem consulta” usam contadores de varredura como proxy e
+sempre aparecem rotulados **aproximado** (ADR-0001 D9). O achado
+`timescale.retention_cagg_conflict` de um cenário é criado **no salvamento**,
+vinculado à última coleta completa.
 
 ## Roles poderosas e versão do PostgreSQL (#126, #134)
 
@@ -176,6 +215,26 @@ fica média). O limiar é `>= 160000` em `membershipModes`; a CI roda o teste
 ponta a ponta `TestPowerfulAccountRoleEndToEndIntegration` em PostgreSQL 14,
 15, 16, 17 e 18, então mover o limiar ou ignorar a versão na severidade falha
 em pelo menos uma versão (veja [ops.md](ops.md#matriz-de-versões-do-postgresql-na-ci-134)).
+
+### Origem do privilégio efetivo (spec 07)
+
+Além de `grant_snapshot` (privilégio efetivo já resolvido pelo servidor), a
+coleta `postgres.grant_origins` grava **de onde** cada privilégio veio:
+
+| `origin_kind` | Rótulo (UI/CSV) | Significado |
+| --- | --- | --- |
+| `direct` | direto | ACL do objeto (ou dono) concede à própria conta com LOGIN |
+| `role` | via *role* | conta alcança uma role que tem o privilégio na ACL; `via_chain` lista a role |
+| `public` | PUBLIC | privilégio concedido a `PUBLIC` |
+| `predefined` | predefinida | via `pg_read_all_data` (SELECT) ou `pg_write_all_data` (INSERT/UPDATE/DELETE) |
+
+A resolução de membership reutiliza os mesmos modos de `membershipModes`
+(`MEMBER` em 14/15; `SET` / `USAGE` / `MEMBER WITH ADMIN OPTION` em 16+). Em
+16+, `inherit_path` e `set_path` registram se o caminho usou herança e/ou SET
+ROLE. Privilégios por coluna (`column_grant_snapshot`, ACL em
+`pg_attribute.attacl`) entram como linhas próprias. Falha de leitura de
+catálogo em um banco gera cobertura parcial, não falha dura da coleta. O passo
+CI "Role privilege detection E2E" inclui `TestGrantOriginViaGroupRoleIntegration`.
 
 ## Relatórios PDF (BA-11)
 
@@ -203,3 +262,75 @@ nunca recomenda DROP automaticamente; a remoção exige revisão humana.").
 Achados já gravados mantêm o texto antigo em inglês (o histórico não é
 reescrito). A assinatura de descarte trata os dois textos como iguais, então
 um achado descartado não reabre só por causa da tradução.
+
+## Catálogo MR-* (risco de migration)
+
+Regras do modo CLI `auditor migration-risk` (plano 01). Não geram findings no snapshot store;
+a saída é Markdown/JSON e, opcionalmente, `migration_analysis` / `migration_analysis_item`.
+
+| ID | Operação | Severidade base |
+|---|---|---|
+| MR-01 | `CREATE INDEX` sem `CONCURRENTLY` | média (eleva com tamanho) |
+| MR-02 | `ADD COLUMN ... DEFAULT` volátil | alta |
+| MR-03 | `ALTER COLUMN TYPE` com reescrita | alta |
+| MR-04 | `SET NOT NULL` sem validação prévia | média (alt. PG18: `NOT NULL NOT VALID`) |
+| MR-05 | FK validada imediatamente | média |
+| MR-06 | CHECK validado imediatamente | média |
+| MR-07 | PK/UNIQUE sem `USING INDEX` | alta |
+| MR-08 | DROP/RENAME | média |
+| MR-09 | VACUUM FULL / CLUSTER / REFRESH sem CONCURRENTLY | alta |
+| MR-10 | lock forte sem `lock_timeout` | baixa |
+| MR-11 | operação não transacional dentro de `BEGIN` | alta |
+
+Supressão inline: `-- db-auditor:ignore MR-XX motivo: <texto>` (justificativa obrigatória).
+Guia de uso: [migration-risk.md](migration-risk.md).
+
+## Custo estimado (`cost.*`)
+
+- Valores monetários usam a tabela de preços versionada do ambiente (BRL ou USD).
+- `cost.bloat_recoverable` usa método estatístico sobre `column_stat_snapshot`
+  (largura média e null_fraction). É **estimativa**, não medição física, e não
+  substitui `maintenance.dead_tuple_pressure`.
+- Sem preço configurado, o impacto fica "não estimado — preço não configurado";
+  bytes e tempo continuam visíveis.
+
+
+
+## Contratos de qualidade (`quality.contract_violation`)
+
+Contratos versionados (spec 03). Só contagens são persistidas. Sem categoria nova em `regression_alert` (ADR-0001 D13).
+
+| ID | Severidade padrão | Notas |
+|---|---|---|
+| `quality.contract_violation` | média (alta p/ unicidade, frescor ou nulos críticos; baixa p/ volume) | Dedup por contrato + checagem + versão |
+
+Esquema YAML e CLI: [dq-contracts.md](dq-contracts.md).
+
+## Dados pessoais (`pii.*`)
+
+Mapa LGPD (spec 05). Nenhum valor amostrado é persistido.
+
+| ID | Severidade | Notas |
+|---|---|---|
+| `pii.column_detected` | informativa | confiança ≥ média |
+| `pii.broad_read_access` | média (alta p/ CPF/CNPJ/PIX) | ≥ 5 contas LOGIN com SELECT; evidência lista contas; pode marcar "nível tabela" |
+| `pii.no_rls_hypothesis` | baixa (hipótese) | dado pessoal alta, sem RLS, ≥ 2 contas |
+
+A etapa 2 de conteúdo exige `AUDITOR_PII_CONTENT_SCAN_ENABLED=1` **e** habilitação por ambiente (ADR-0001 D4).
+
+## Restauração do banco auditado (`backup.*`)
+
+Evidência `target_restore_drill` enviada por `auditor restore-verify` (plano 08).
+Separada de `retention_evidence` / ensaio do snapshot store.
+
+| ID | Condição | Severidade |
+|---|---|---|
+| `backup.restore_failed` | pré-validação, restauração ou verificação física falhou | crítica |
+| `backup.restore_divergence` | inventário / contagem / checksum / amcheck diverge | crítica, alta ou média |
+| `backup.rto_exceeded` | RTO medido > RTO-alvo do ambiente | alta |
+| `backup.drill_overdue` | sem ensaio bem-sucedido no prazo (padrão 30 dias) | média |
+
+Hash de amostra é opt-in (`--sample-hash` + `AUDITOR_RESTORE_VERIFY_SOURCE_DSN`/`_FILE`).
+Sem opt-in, (c) fica "desabilitada" e não conta como parcial (ADR-0001 D8).
+Runbook: [backup-verifier.md](backup-verifier.md).
+

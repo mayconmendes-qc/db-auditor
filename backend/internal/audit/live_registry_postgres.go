@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/osmendes/db-auditor/internal/collectors/postgres"
 	"github.com/osmendes/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/repository"
 )
 
 func registerPostgresCollectors(
@@ -333,9 +334,55 @@ func registerPostgresCollectors(
 		}
 		return 1, nil
 	})
+
+	must("postgres.migration_registry", func(ctx context.Context) (int64, error) {
+		cfgSrc, ok := writer.(migrationRegistrySource)
+		if !ok {
+			return 0, nil
+		}
+		meta, ok := RunMetaFromContext(ctx)
+		if !ok || meta.EnvironmentID == "" || meta.AuditRunID == "" {
+			return 0, nil
+		}
+		cfgs, err := cfgSrc.ListEnabledMigrationRegistryForEnv(ctx, meta.EnvironmentID)
+		if err != nil || len(cfgs) == 0 {
+			return 0, nil
+		}
+		dsn, err := dsnFromContext(ctx, targets)
+		if err != nil {
+			return 0, nil // never fail the run for optional registry
+		}
+		var n int64
+		_, _ = postgres.ForEachUserDatabase(ctx, dsn, scope, func(cctx context.Context, conn *pgx.Conn, dbName string) error {
+			for _, cfg := range cfgs {
+				if cfg.DatabaseName != "" && cfg.DatabaseName != dbName {
+					continue
+				}
+				reading := postgres.CollectMigrationRegistry(cctx, conn, postgres.MigrationRegistryConfig{
+					Tool:       postgres.MigrationTool(cfg.Tool),
+					SchemaName: cfg.SchemaName,
+					TableName:  cfg.TableName,
+				})
+				if saver, ok := writer.(migrationRegistrySaver); ok {
+					_ = saver.SaveMigrationRegistrySnapshot(cctx, meta.EnvironmentID, meta.AuditRunID, dbName, reading)
+				}
+				n++
+			}
+			return nil
+		})
+		return n, nil
+	})
 }
 
 // replicationPersister is implemented by repository.Store.
 type replicationPersister interface {
 	SaveReplicationSnapshot(ctx context.Context, environmentID, auditRunID pgtype.UUID, facts postgres.ReplicationFacts) error
+}
+
+type migrationRegistrySource interface {
+	ListEnabledMigrationRegistryForEnv(ctx context.Context, env string) ([]repository.EnvironmentMigrationRegistry, error)
+}
+
+type migrationRegistrySaver interface {
+	SaveMigrationRegistrySnapshot(ctx context.Context, env, run, database string, reading postgres.MigrationRegistryReading) error
 }

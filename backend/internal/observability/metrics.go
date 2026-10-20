@@ -21,6 +21,49 @@ type Metrics struct {
 	auditRunsTotal  atomic.Uint64
 	auditRunsFailed atomic.Uint64
 	backupAge       atomic.Uint64 // seconds; 0 means not yet observed
+
+	// Plan 06 — query digest
+	queryDigestsOK              atomic.Uint64
+	queryDigestsNoWindow        atomic.Uint64
+	queryDigestsNotApplicable   atomic.Uint64
+	queryDigestDeliveriesFailed atomic.Uint64
+
+	// Plan 01 — migration-risk
+	migrationAnalyses    sync.Map // result -> *atomic.Uint64
+	migrationParseErrors atomic.Uint64
+	envTokenRequests     sync.Map // scope|result -> *atomic.Uint64
+
+	// Plan 04 — schema drift
+	schemaChangeEvents    sync.Map // kind -> *atomic.Uint64
+	alertDeliveriesFailed sync.Map // kind -> *atomic.Uint64
+
+	// Plan 02 — cost-lens
+	costCalculationsPriced   atomic.Uint64
+	costCalculationsUnpriced atomic.Uint64
+
+	// Plan 09 — timescale retention advisor
+	retentionSimulations         atomic.Uint64
+	retentionSimulationsLowRatio atomic.Uint64
+
+	// Plan 07 — access review
+	accessReviewCampaigns sync.Map // status -> *atomic.Uint64
+	accessReviewPending   atomic.Int64
+	lastLoginIngest       sync.Map // result -> *atomic.Uint64 (accepted|rejected)
+
+	// Plan 05 — PII scanner
+	piiScans           sync.Map
+	piiColumnsByMethod sync.Map
+	piiScanCeilings    atomic.Uint64
+	piiExportRows      atomic.Uint64
+
+	// Plan 08 — target restore drills
+	targetRestoreDrillAge sync.Map // environment -> *atomic.Uint64 (seconds)
+	targetRestoreRTO      sync.Map // environment -> *atomic.Uint64 (seconds)
+
+	// Plan 03 — quality contracts
+	qualityContractChecks     sync.Map // result -> *atomic.Uint64
+	qualityContractDurationNs sync.Map // result -> *atomic.Uint64 (sum)
+	qualityContractDurationN  sync.Map // result -> *atomic.Uint64 (count)
 }
 
 // DefaultMetrics is the process-wide registry.
@@ -63,6 +106,161 @@ func (m *Metrics) IncAuditRun(failed bool) {
 	if failed {
 		m.auditRunsFailed.Add(1)
 	}
+}
+
+// IncMigrationAnalysis increments auditor_migration_analyses_total{result}.
+func (m *Metrics) IncMigrationAnalysis(result string) {
+	if result == "" {
+		result = "unknown"
+	}
+	m.incMap(&m.migrationAnalyses, result)
+}
+
+// IncMigrationParseError increments auditor_migration_parse_errors_total.
+func (m *Metrics) IncMigrationParseError() {
+	m.migrationParseErrors.Add(1)
+}
+
+// IncEnvTokenRequest increments auditor_env_token_requests_total{scope,result}.
+func (m *Metrics) IncEnvTokenRequest(scope, result string) {
+	m.incMap(&m.envTokenRequests, scope+"|"+result)
+}
+
+// IncQueryDigest records one generated digest by result state.
+func (m *Metrics) IncQueryDigest(result string) {
+	switch result {
+	case "ok":
+		m.queryDigestsOK.Add(1)
+	case "no_comparable_window":
+		m.queryDigestsNoWindow.Add(1)
+	case "not_applicable":
+		m.queryDigestsNotApplicable.Add(1)
+	default:
+		m.queryDigestsOK.Add(1)
+	}
+}
+
+// IncQueryDigestDeliveryFailed records one failed digest delivery attempt.
+func (m *Metrics) IncQueryDigestDeliveryFailed() {
+	m.queryDigestDeliveriesFailed.Add(1)
+}
+
+// IncSchemaChangeEvent records one timeline event by change kind.
+func (m *Metrics) IncSchemaChangeEvent(kind string) {
+	if kind == "" {
+		kind = "unknown"
+	}
+	m.incMap(&m.schemaChangeEvents, kind)
+}
+
+// IncAlertDeliveryFailed records one failed alert delivery by kind (RNF-05).
+func (m *Metrics) IncAlertDeliveryFailed(kind string) {
+	if kind == "" {
+		kind = "unknown"
+	}
+	m.incMap(&m.alertDeliveriesFailed, kind)
+}
+
+// IncCostCalculation increments auditor_cost_calculations_total{priced}.
+func (m *Metrics) IncCostCalculation(priced bool) {
+	if priced {
+		m.costCalculationsPriced.Add(1)
+	} else {
+		m.costCalculationsUnpriced.Add(1)
+	}
+}
+
+// IncRetentionSimulation increments auditor_retention_simulations_total (RNF-05).
+func (m *Metrics) IncRetentionSimulation(lowConfidenceRatio bool) {
+	m.retentionSimulations.Add(1)
+	if lowConfidenceRatio {
+		m.retentionSimulationsLowRatio.Add(1)
+	}
+}
+
+// IncAccessReviewCampaign increments auditor_access_review_campaigns_total{status}.
+func (m *Metrics) IncAccessReviewCampaign(status string) {
+	if status == "" {
+		status = "unknown"
+	}
+	m.incMap(&m.accessReviewCampaigns, status)
+}
+
+// AddAccessReviewPendingDelta adjusts the pending-lines gauge (can be negative).
+func (m *Metrics) AddAccessReviewPendingDelta(delta int) {
+	m.accessReviewPending.Add(int64(delta))
+}
+
+// SetAccessReviewPending sets the pending-lines gauge from a store recount.
+func (m *Metrics) SetAccessReviewPending(n int) {
+	m.accessReviewPending.Store(int64(n))
+}
+
+// IncLastLoginIngest increments auditor_last_login_ingest_total{result}.
+func (m *Metrics) IncLastLoginIngest(result string) {
+	if result == "" {
+		result = "unknown"
+	}
+	m.incMap(&m.lastLoginIngest, result)
+}
+
+// IncPIIScan increments auditor_pii_scans_total{status,content}.
+func (m *Metrics) IncPIIScan(status string, content bool) {
+	if status == "" {
+		status = "unknown"
+	}
+	contentLabel := "false"
+	if content {
+		contentLabel = "true"
+	}
+	m.incMap(&m.piiScans, status+"|"+contentLabel)
+	if status == "partial_success" {
+		m.piiScanCeilings.Add(1)
+	}
+}
+
+func (m *Metrics) IncPIIColumnMethod(method string, n int) {
+	if method == "" || n <= 0 {
+		return
+	}
+	m.addMap(&m.piiColumnsByMethod, method, uint64(n))
+}
+
+func (m *Metrics) AddPIIExportRows(n int) {
+	if n > 0 {
+		m.piiExportRows.Add(uint64(n))
+	}
+}
+
+// SetTargetRestoreDrillAge records seconds since the last successful target restore drill.
+func (m *Metrics) SetTargetRestoreDrillAge(environment string, seconds uint64) {
+	if environment == "" {
+		environment = "unknown"
+	}
+	v, _ := m.targetRestoreDrillAge.LoadOrStore(environment, &atomic.Uint64{})
+	v.(*atomic.Uint64).Store(seconds)
+}
+
+// SetTargetRestoreRTO records the RTO seconds of the last successful target restore drill.
+func (m *Metrics) SetTargetRestoreRTO(environment string, seconds uint64) {
+	if environment == "" {
+		environment = "unknown"
+	}
+	v, _ := m.targetRestoreRTO.LoadOrStore(environment, &atomic.Uint64{})
+	v.(*atomic.Uint64).Store(seconds)
+}
+
+// ObserveQualityContractCheck records one contract check by result and duration (RNF-05).
+func (m *Metrics) ObserveQualityContractCheck(result string, d time.Duration) {
+	if result == "" {
+		result = "unknown"
+	}
+	m.incMap(&m.qualityContractChecks, result)
+	if d < 0 {
+		d = 0
+	}
+	m.addMap(&m.qualityContractDurationNs, result, uint64(d.Nanoseconds())) //nolint:gosec // G115: negative durations are clamped above.
+	m.incMap(&m.qualityContractDurationN, result)
 }
 
 func normalizePath(path string) string {
@@ -156,6 +354,186 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		b.WriteString("# HELP auditor_audit_runs_failed_total Audit runs that finished FAILED.\n")
 		b.WriteString("# TYPE auditor_audit_runs_failed_total counter\n")
 		fmt.Fprintf(&b, "auditor_audit_runs_failed_total %d\n", m.auditRunsFailed.Load())
+
+		b.WriteString("# HELP auditor_query_digests_total Query digests generated by result.\n")
+		b.WriteString("# TYPE auditor_query_digests_total counter\n")
+		fmt.Fprintf(&b, "auditor_query_digests_total{result=%q} %d\n", "ok", m.queryDigestsOK.Load())
+		fmt.Fprintf(&b, "auditor_query_digests_total{result=%q} %d\n", "no_comparable_window", m.queryDigestsNoWindow.Load())
+		fmt.Fprintf(&b, "auditor_query_digests_total{result=%q} %d\n", "not_applicable", m.queryDigestsNotApplicable.Load())
+		b.WriteString("# HELP auditor_query_digest_deliveries_failed_total Failed query digest delivery attempts.\n")
+		b.WriteString("# TYPE auditor_query_digest_deliveries_failed_total counter\n")
+		fmt.Fprintf(&b, "auditor_query_digest_deliveries_failed_total %d\n", m.queryDigestDeliveriesFailed.Load())
+
+		b.WriteString("# HELP auditor_migration_analyses_total Migration analyses accepted by result.\n")
+		b.WriteString("# TYPE auditor_migration_analyses_total counter\n")
+		mkeys := make([]string, 0)
+		m.migrationAnalyses.Range(func(k, _ any) bool {
+			mkeys = append(mkeys, k.(string))
+			return true
+		})
+		sort.Strings(mkeys)
+		for _, k := range mkeys {
+			v, _ := m.migrationAnalyses.Load(k)
+			fmt.Fprintf(&b, "auditor_migration_analyses_total{result=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_migration_parse_errors_total Migration analysis items marked unparsed.\n")
+		b.WriteString("# TYPE auditor_migration_parse_errors_total counter\n")
+		fmt.Fprintf(&b, "auditor_migration_parse_errors_total %d\n", m.migrationParseErrors.Load())
+
+		b.WriteString("# HELP auditor_env_token_requests_total Environment API token authorizations.\n")
+		b.WriteString("# TYPE auditor_env_token_requests_total counter\n")
+		tkeys := make([]string, 0)
+		m.envTokenRequests.Range(func(k, _ any) bool {
+			tkeys = append(tkeys, k.(string))
+			return true
+		})
+		sort.Strings(tkeys)
+		for _, k := range tkeys {
+			v, _ := m.envTokenRequests.Load(k)
+			parts := strings.SplitN(k, "|", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			fmt.Fprintf(&b, "auditor_env_token_requests_total{scope=%q,result=%q} %d\n",
+				parts[0], parts[1], v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_schema_change_events_total Schema timeline events by change kind.\n")
+		b.WriteString("# TYPE auditor_schema_change_events_total counter\n")
+		skeys := make([]string, 0)
+		m.schemaChangeEvents.Range(func(k, _ any) bool {
+			skeys = append(skeys, k.(string))
+			return true
+		})
+		sort.Strings(skeys)
+		for _, k := range skeys {
+			v, _ := m.schemaChangeEvents.Load(k)
+			fmt.Fprintf(&b, "auditor_schema_change_events_total{kind=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_alert_deliveries_failed_total Failed alert delivery attempts by kind.\n")
+		b.WriteString("# TYPE auditor_alert_deliveries_failed_total counter\n")
+		akeys := make([]string, 0)
+		m.alertDeliveriesFailed.Range(func(k, _ any) bool {
+			akeys = append(akeys, k.(string))
+			return true
+		})
+		sort.Strings(akeys)
+		for _, k := range akeys {
+			v, _ := m.alertDeliveriesFailed.Load(k)
+			fmt.Fprintf(&b, "auditor_alert_deliveries_failed_total{kind=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_cost_calculations_total Cost ranking calculations with or without a price table.\n")
+		b.WriteString("# TYPE auditor_cost_calculations_total counter\n")
+		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "true", m.costCalculationsPriced.Load())
+		fmt.Fprintf(&b, "auditor_cost_calculations_total{priced=%q} %d\n", "false", m.costCalculationsUnpriced.Load())
+
+		b.WriteString("# HELP auditor_retention_simulations_total Timescale retention/compression simulations.\n")
+		b.WriteString("# TYPE auditor_retention_simulations_total counter\n")
+		fmt.Fprintf(&b, "auditor_retention_simulations_total %d\n", m.retentionSimulations.Load())
+		b.WriteString("# HELP auditor_retention_simulations_low_ratio_total Simulations using the default compression ratio (low confidence).\n")
+		b.WriteString("# TYPE auditor_retention_simulations_low_ratio_total counter\n")
+		fmt.Fprintf(&b, "auditor_retention_simulations_low_ratio_total %d\n", m.retentionSimulationsLowRatio.Load())
+
+		b.WriteString("# HELP auditor_access_review_campaigns_total Access-review campaigns by status.\n")
+		b.WriteString("# TYPE auditor_access_review_campaigns_total counter\n")
+		arkeys := make([]string, 0)
+		m.accessReviewCampaigns.Range(func(k, _ any) bool {
+			arkeys = append(arkeys, k.(string))
+			return true
+		})
+		sort.Strings(arkeys)
+		for _, k := range arkeys {
+			v, _ := m.accessReviewCampaigns.Load(k)
+			fmt.Fprintf(&b, "auditor_access_review_campaigns_total{status=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_access_review_pending_lines Pending access-review matrix lines.\n")
+		b.WriteString("# TYPE auditor_access_review_pending_lines gauge\n")
+		fmt.Fprintf(&b, "auditor_access_review_pending_lines %d\n", m.accessReviewPending.Load())
+
+		b.WriteString("# HELP auditor_last_login_ingest_total Last-login aggregate ingest attempts by result.\n")
+		b.WriteString("# TYPE auditor_last_login_ingest_total counter\n")
+		llKeys := make([]string, 0)
+		m.lastLoginIngest.Range(func(k, _ any) bool {
+			llKeys = append(llKeys, k.(string))
+			return true
+		})
+		sort.Strings(llKeys)
+		for _, k := range llKeys {
+			v, _ := m.lastLoginIngest.Load(k)
+			fmt.Fprintf(&b, "auditor_last_login_ingest_total{result=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_pii_scans_total PII map scans by status and whether content stage ran.\n")
+		b.WriteString("# TYPE auditor_pii_scans_total counter\n")
+		pkeys := make([]string, 0)
+		m.piiScans.Range(func(k, _ any) bool { pkeys = append(pkeys, k.(string)); return true })
+		sort.Strings(pkeys)
+		for _, k := range pkeys {
+			v, _ := m.piiScans.Load(k)
+			parts := strings.SplitN(k, "|", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			fmt.Fprintf(&b, "auditor_pii_scans_total{status=%q,content=%q} %d\n", parts[0], parts[1], v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_pii_scan_ceilings_total PII scans stopped by duration or table ceiling.\n")
+		b.WriteString("# TYPE auditor_pii_scan_ceilings_total counter\n")
+		fmt.Fprintf(&b, "auditor_pii_scan_ceilings_total %d\n", m.piiScanCeilings.Load())
+		b.WriteString("# HELP auditor_pii_export_rows_total Rows streamed in PII CSV exports.\n")
+		b.WriteString("# TYPE auditor_pii_export_rows_total counter\n")
+		fmt.Fprintf(&b, "auditor_pii_export_rows_total %d\n", m.piiExportRows.Load())
+		b.WriteString("# HELP auditor_pii_columns_by_method_total Classified PII columns by detection method.\n")
+		b.WriteString("# TYPE auditor_pii_columns_by_method_total counter\n")
+		piiMethodKeys := make([]string, 0)
+		m.piiColumnsByMethod.Range(func(k, _ any) bool { piiMethodKeys = append(piiMethodKeys, k.(string)); return true })
+		sort.Strings(piiMethodKeys)
+		for _, k := range piiMethodKeys {
+			v, _ := m.piiColumnsByMethod.Load(k)
+			fmt.Fprintf(&b, "auditor_pii_columns_by_method_total{method=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_target_restore_drill_age_seconds Seconds since the last successful target_restore_drill per environment.\n")
+		b.WriteString("# TYPE auditor_target_restore_drill_age_seconds gauge\n")
+		ageKeys := make([]string, 0)
+		m.targetRestoreDrillAge.Range(func(k, _ any) bool { ageKeys = append(ageKeys, k.(string)); return true })
+		sort.Strings(ageKeys)
+		for _, env := range ageKeys {
+			v, _ := m.targetRestoreDrillAge.Load(env)
+			fmt.Fprintf(&b, "auditor_target_restore_drill_age_seconds{environment=%q} %d\n", env, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_target_restore_rto_seconds RTO seconds of the last successful target_restore_drill per environment.\n")
+		b.WriteString("# TYPE auditor_target_restore_rto_seconds gauge\n")
+		rtoKeys := make([]string, 0)
+		m.targetRestoreRTO.Range(func(k, _ any) bool { rtoKeys = append(rtoKeys, k.(string)); return true })
+		sort.Strings(rtoKeys)
+		for _, env := range rtoKeys {
+			v, _ := m.targetRestoreRTO.Load(env)
+			fmt.Fprintf(&b, "auditor_target_restore_rto_seconds{environment=%q} %d\n", env, v.(*atomic.Uint64).Load())
+		}
+
+		b.WriteString("# HELP auditor_quality_contract_checks_total Quality contract checks by result.\n")
+		b.WriteString("# TYPE auditor_quality_contract_checks_total counter\n")
+		qcKeys := make([]string, 0)
+		m.qualityContractChecks.Range(func(k, _ any) bool { qcKeys = append(qcKeys, k.(string)); return true })
+		sort.Strings(qcKeys)
+		for _, k := range qcKeys {
+			v, _ := m.qualityContractChecks.Load(k)
+			fmt.Fprintf(&b, "auditor_quality_contract_checks_total{result=%q} %d\n", k, v.(*atomic.Uint64).Load())
+		}
+		b.WriteString("# HELP auditor_quality_contract_check_duration_seconds_sum Sum of quality contract check durations.\n")
+		b.WriteString("# TYPE auditor_quality_contract_check_duration_seconds_sum counter\n")
+		b.WriteString("# HELP auditor_quality_contract_check_duration_seconds_count Count of quality contract check durations.\n")
+		b.WriteString("# TYPE auditor_quality_contract_check_duration_seconds_count counter\n")
+		qcDurKeys := make([]string, 0)
+		m.qualityContractDurationN.Range(func(k, _ any) bool { qcDurKeys = append(qcDurKeys, k.(string)); return true })
+		sort.Strings(qcDurKeys)
+		for _, k := range qcDurKeys {
+			ns, _ := m.qualityContractDurationNs.Load(k)
+			n, _ := m.qualityContractDurationN.Load(k)
+			fmt.Fprintf(&b, "auditor_quality_contract_check_duration_seconds_sum{result=%q} %f\n", k, float64(ns.(*atomic.Uint64).Load())/1e9)
+			fmt.Fprintf(&b, "auditor_quality_contract_check_duration_seconds_count{result=%q} %d\n", k, n.(*atomic.Uint64).Load())
+		}
 
 		_, _ = w.Write([]byte(b.String()))
 	}

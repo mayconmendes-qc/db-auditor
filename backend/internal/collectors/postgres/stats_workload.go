@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/osmendes/db-auditor/internal/config"
+	"github.com/osmendes/db-auditor/internal/fingerprint"
 )
 
 const columnStatsSQL = `
@@ -42,25 +43,13 @@ ORDER BY total_exec_time DESC
 LIMIT $1
 `
 
-var (
-	blockCommentPattern = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	lineCommentPattern  = regexp.MustCompile(`(?m)--[^\n]*`)
-	quotedPattern       = regexp.MustCompile(`'(?:''|[^'])*'`)
-	dollarPattern       = regexp.MustCompile(`(?s)\$[A-Za-z_0-9]*\$.*?\$[A-Za-z_0-9]*\$`)
-	numberPattern       = regexp.MustCompile(`\b\d+(?:\.\d+)?\b`)
-	spacePattern        = regexp.MustCompile(`\s+`)
-	objectPattern       = regexp.MustCompile(`(?i)\b(?:from|join|update|into)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?)`)
-)
+var objectPattern = regexp.MustCompile(`(?i)\b(?:from|join|update|into)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?)`)
 
 // NormalizeQuery removes comments and literal values. It is intentionally
 // conservative and is never used to reconstruct or execute SQL.
+// Literal stripping lives in fingerprint.StripLiterals (ADR-0001 D16).
 func NormalizeQuery(query string) string {
-	q := blockCommentPattern.ReplaceAllString(query, " ")
-	q = lineCommentPattern.ReplaceAllString(q, " ")
-	q = dollarPattern.ReplaceAllString(q, "?")
-	q = quotedPattern.ReplaceAllString(q, "?")
-	q = numberPattern.ReplaceAllString(q, "?")
-	return strings.TrimSpace(spacePattern.ReplaceAllString(strings.ToLower(q), " "))
+	return fingerprint.StripLiterals(query)
 }
 
 func queryFingerprint(normalized string) string {

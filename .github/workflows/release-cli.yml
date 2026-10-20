@@ -1,0 +1,44 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Build static binaries
+        env:
+          CGO_ENABLED: "0"
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          mkdir -p dist
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/osmendes/db-auditor/internal/buildinfo.Version=${VERSION} -X github.com/osmendes/db-auditor/internal/buildinfo.Commit=${COMMIT} -X github.com/osmendes/db-auditor/internal/buildinfo.Date=${DATE}"
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="$LDFLAGS" -o dist/auditor-linux-amd64 ./cmd/auditor
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="$LDFLAGS" -o dist/auditor-linux-arm64 ./cmd/auditor
+          (cd dist && sha256sum auditor-linux-amd64 auditor-linux-arm64 > SHA256SUMS)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            backend/dist/auditor-linux-amd64
+            backend/dist/auditor-linux-arm64
+            backend/dist/SHA256SUMS
+          generate_release_notes: true

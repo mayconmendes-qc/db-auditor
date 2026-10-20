@@ -12,6 +12,38 @@ func (d *Document) RedactSensitive(level string) {
 	d.Tables = redactTables(level, d.Tables)
 	d.Findings = redactFindings(level, d.Findings)
 	d.redactOverview(level, databases)
+	if d.CostSummary != nil && level == "strict" {
+		d.CostSummary.Items = nil
+	}
+	if d.RetentionSimulation != nil && level == "strict" {
+		for i := range d.RetentionSimulation.Items {
+			d.RetentionSimulation.Items[i].Hypertable = redactionMask
+		}
+	}
+	d.redactAccessReview(level)
+	d.redactPersonalData(level)
+}
+
+func (d *Document) redactAccessReview(level string) {
+	if d.AccessReview == nil || !redactsSensitive(level) {
+		return
+	}
+	for i := range d.AccessReview.Owners {
+		d.AccessReview.Owners[i].OwnerName = redactionMask
+		d.AccessReview.Owners[i].Contact = ""
+		d.AccessReview.Owners[i].TargetRole = redactionMask
+	}
+	for i := range d.AccessReview.PendingSamples {
+		d.AccessReview.PendingSamples[i].Account = redactionMask
+		d.AccessReview.PendingSamples[i].Object = redactionMask
+	}
+}
+
+func (d *Document) redactPersonalData(level string) {
+	if d.PersonalData == nil || !redactsSensitive(level) {
+		return
+	}
+	d.PersonalData.DetailColumns = nil
 }
 
 func redactsSensitive(level string) bool { return level == "identifiers" || level == "strict" }
@@ -42,6 +74,9 @@ func (d *Document) redactOverview(level string, databases int) {
 		d.Growth = nil
 		d.Baseline = nil
 		d.Regressions = nil
+		if d.CostSummary != nil {
+			d.CostSummary.Items = nil
+		}
 	}
 }
 

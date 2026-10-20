@@ -52,7 +52,7 @@ Em **Índices**, abra uma linha para ver as colunas da chave, colunas incluídas
 
 Em **Funções**, o nome e a assinatura identificam cada sobrecarga. Abra a linha correta para ver retorno, linguagem, volatilidade, paralelismo, dependências registradas, estatísticas agregadas, papéis com `EXECUTE` observado e achados daquela assinatura. O corpo e as configurações brutas não são exibidos. `SECURITY DEFINER` indica execução com privilégios do proprietário e pede revisão humana do corpo, dos acessos e do caminho de busca; a opção sozinha não comprova uma falha. Estatísticas de chamadas só aparecem se o PostgreSQL as tiver fornecido. Uma coleta antiga pode mostrar “não coletado” para os novos campos; faça outra coleta. Dependências por SQL dinâmico não são inferidas.
 
-Em **Tabelas temporais**, abra uma linha para examinar dimensões, chunks, índices, políticas, jobs, armazenamento, histórico, acessos observados na tabela base e achados daquela execução. Um job com falhas merece investigação, mas o número acumulado de falhas não prova que a última execução falhou. Os tamanhos não medem tempo de consulta. Compare coletas com cobertura semelhante e use a indicação de coleta parcial antes de concluir que houve crescimento ou melhora. Quando a tabela base não aparece na coleta, o auditor não deduz seus acessos. Compressão desabilitada significa apenas que ela não estava habilitada no momento observado. Use os links da sheet para abrir a tabela base e seus índices no mesmo ambiente e execução; o auditor não executa mudanças no banco analisado.
+Em **Tabelas temporais**, abra uma linha para examinar dimensões, chunks, índices, políticas, jobs, armazenamento, histórico, acessos observados na tabela base e achados daquela execução. A seção **Simulação** estima economia de retenção e compressão sobre os chunks observados (GB e, se houver preço do ambiente, moeda), mostra riscos (por exemplo conflito com CAGG) e separa hipótese, ganho previsto e ganho medido. A simulação não aplica políticas. Viewer simula; salvar cenário exige papel auditor. Chunks “possivelmente sem consulta” usam contadores de varredura e aparecem como **aproximado**. Um job com falhas merece investigação, mas o número acumulado de falhas não prova que a última execução falhou. Os tamanhos não medem tempo de consulta. Compare coletas com cobertura semelhante e use a indicação de coleta parcial antes de concluir que houve crescimento ou melhora. Quando a tabela base não aparece na coleta, o auditor não deduz seus acessos. Compressão desabilitada significa apenas que ela não estava habilitada no momento observado. Use os links da sheet para abrir a tabela base e seus índices no mesmo ambiente e execução; o auditor não executa mudanças no banco analisado.
 
 Em **Agregados contínuos**, abra uma linha para analisar origem, materialização, políticas de atualização, atraso observado, dependências, acessos da visão e achados do agregado na execução selecionada. O SQL da definição é protegido; sua impressão digital permite reconhecer alterações sem expor valores. A origem e o intervalo do bucket aparecem quando o catálogo do Timescale os fornece; a coluna temporal usada no SQL não é inferida. Confirme esses detalhes no banco antes de mudar uma política. Quando o tamanho da materialização ou o atraso não estiver disponível, a sheet mostra “não coletado”. Uma política ausente não significa que o agregado não seja atualizado manualmente. O número de falhas de job é acumulado; consulte o último resultado antes de concluir que o refresh atual falhou. Os acessos exibidos pertencem à visão do agregado, não à origem. Uma execução parcial limita comparações de tamanho e atraso.
 
@@ -81,6 +81,8 @@ Algumas ações mostram um indicador numérico preliminar: tamanho de um índice
 ## 7. Diagnóstico opcional de qualidade de dados
 
 Um operador precisa habilitar o recurso e configurar uma conta de leitura sem privilégios de escrita. Em **Ações assistidas**, informe banco, esquema, tabela, limite de até 1.000 linhas e as colunas que deseja examinar. Você pode verificar nulos inesperados, chaves candidatas repetidas, datas fora de um intervalo, distribuição concentrada e referências órfãs em relações simples.
+
+Na mesma tela, a seção **Qualidade — contratos** permite gerar uma proposta a partir do schema coletado, aprovar versões (auditor), executar sob demanda e ver tendência. O contrato padrão amostra até 10.000 linhas (opt-in até 100.000). Detalhes: [dq-contracts.md](dq-contracts.md).
 
 O resultado guarda **contagens**, não valores de linhas. Em tabelas grandes, o PostgreSQL seleciona páginas para a amostra; em tabelas menores, a leitura limitada pode seguir a ordem física. A margem de erro amostral é **desconhecida** e aparece no diagnóstico; as contagens descrevem somente as linhas lidas. Confirme qualquer hipótese na população de dados antes de uma mudança.
 
@@ -281,25 +283,44 @@ Mapeamento é dizer que um objeto de um ambiente corresponde a um objeto de outr
 
 <!-- topic: desvio | abrir: Desvio de schema -->
 
-Desvio de schema é a diferença de estrutura entre dois ambientes: o que está igual, o que mudou e o que existe só de um lado. A tela mostra a diferença. Ela não aplica correção.
+Desvio de schema é a diferença de estrutura entre duas execuções reais (mesmo ambiente ou ambientes distintos): o que está igual, o que mudou e o que existe só de um lado. A tela não usa dados de demonstração. Ela não aplica correção.
 
 **Como usar**
 
-1. Escolha a origem e o destino. Os dois precisam ter inventário comparável.
+1. Escolha ambiente e execução de origem e de destino (padrão: última completa de cada lado).
 2. Leia as categorias: igual, diferente, só na origem e só no destino.
-3. Abra um item para ver o que divergiu, como coluna, tipo ou índice.
+3. Abra um item para ver fingerprints e campos alterados — nunca o corpo SQL.
 4. Use o resultado como evidência para a equipe do banco. A mudança, se houver, acontece fora do auditor.
 
 **Vale saber**
 
 - Versão, perfil de coleta e cobertura mudam o que dá para comparar. Uma ausência pode ser objeto que não entrou na visita.
-- Ambientes de mecanismos diferentes, como PostgreSQL e MongoDB, não têm a mesma estrutura para comparar.
+- Ambientes de mecanismos diferentes, como PostgreSQL e MongoDB, não têm a mesma estrutura para comparar (a API responde 400).
+- Execução parcial marca o diff como parcial e não gera achados de drift.
 
 **Termos desta tela**
 
 - **Igual** — Os dois lados parecem o mesmo objeto, sem diferença relevante de estrutura nesta comparação.
 - **Diferente** — O par existe nos dois lados, mas alguma parte da estrutura não coincide.
 - **Só de um lado** — O objeto apareceu na origem ou no destino, e não no outro.
+- **Fingerprint** — Assinatura do objeto ou da definição; o corpo SQL nunca é exibido.
+
+### Linha do tempo de schema
+
+<!-- topic: timeline | abrir: Linha do tempo -->
+
+A linha do tempo registra, na ingestão, o que mudou entre duas coletas completas do mesmo perfil e versão de coletor. Lacunas (coleta parcial no meio) aparecem sem gerar eventos.
+
+**Como usar**
+
+1. Escolha o ambiente.
+2. Veja eventos com tipo de mudança, correlação (anotação de implantação ou registro de migrations) e o selo **fora do pipeline** quando não houver evidência.
+3. Exporte CSV ou Markdown se precisar anexar a um ticket.
+
+**Vale saber**
+
+- Em **Ambientes**, o operador marca se o ambiente é de produção; isso sobe a severidade dos achados `drift.*`.
+- A regressão `structure` compara com o baseline; a timeline compara coleta a coleta.
 
 ### Comparar servidores
 
@@ -448,6 +469,57 @@ O relatório em PDF é uma leitura para compartilhar: resumo executivo, detalhe 
 - **Fila** — A lista de pedidos. O PDF não sai no instante do clique. A tela avisa quando ele fica pronto.
 - **Redação** — Uma opção de esconder identificadores no PDF, para compartilhar o conteúdo com menos contexto interno.
 
+
+### Digest
+
+<!-- topic: digest | abrir: Digest -->
+
+O Digest compara duas janelas de workload (padrão uma semana contra a anterior) e lista regressões, consultas novas, consultas que sumiram e melhoras. Tudo a partir do que já foi coletado — sem literais SQL e sem nova sessão no banco auditado.
+
+**Como usar**
+
+1. Escolha o ambiente.
+2. Abra um digest na lista. Veja o estado: ok, sem janela comparável ou não aplicável (MongoDB ou sem `pg_stat_statements`).
+3. Nas quatro seções, confira variação de média e os objetos referenciados. Um link leva ao achado ou ao alerta de regressão já aberto, sem criar alerta novo.
+4. Leia as ressalvas: o coletor guarda só o top N; uma “nova” pode apenas ter entrado no ranking.
+5. Se você for operador, pode gerar agora, ajustar a janela e cadastrar destinatários (e-mail e webhook). Sem destinatário, o digest usa os canais globais.
+
+**Vale saber**
+
+- Viewer não vê os controles de configuração nem de destinatários.
+- A URL completa do webhook nunca aparece na tela.
+- Uma refatoração de SQL pode mudar o fingerprint e parecer “sumiu” + “nova”.
+
+**Termos desta tela**
+
+- **Janela** — Intervalo entre a primeira e a última coleta completa usadas no cálculo.
+- **Subjanela** — Trecho contíguo sem `stats_reset`, usado quando houve reset no meio.
+
+### Revisão de acessos
+
+<!-- topic: access-review | abrir: Revisão de acessos -->
+
+Revisão de acessos congela a matriz de privilégios efetivos de uma coleta completa, com origem (direto, via role, PUBLIC, predefinida) e privilégios por coluna. O responsável da linha decide aprovar, revogar ou manter; manter pede justificativa.
+
+**Como usar**
+
+1. Operator mapeia responsáveis (role/conta do banco → conta do auditor com papel auditor+).
+2. Operator cria a campanha com coleta completa e prazo.
+3. Filtre a matriz ou use **Minhas pendências**.
+4. Registre a decisão. Revogar gera ação assistida; o auditor não executa REVOKE.
+5. Auditor exporta CSV ou solicita o PDF de evidência. Diff compara com a campanha anterior.
+
+**Vale saber**
+
+- Viewer lê; não vê controles de decisão.
+- Contato opcional do responsável é dado pessoal: não entra em log.
+- Coleta parcial impede criar campanha.
+
+**Termos desta tela**
+
+- **Origem** — De onde o privilégio veio na cadeia de membership.
+- **Matriz congelada** — Retrato da coleta de referência; coletas novas não a alteram.
+
 ### Acompanhamento
 
 <!-- topic: acompanhamento | abrir: Acompanhamento -->
@@ -571,3 +643,68 @@ Antes de concluir que o banco piorou, ou que a tela quebrou, confira se você es
 - **Filtro** — Uma restrição da lista, como gravidade ou esquema. Limpar o filtro mostra de novo o conjunto inteiro daquela execução.
 
 <!-- ajuda-por-tela:fim -->
+
+## Tokens de API (Ambientes)
+
+Operadores criam tokens por ambiente na tela **Ambientes**, no cartão **Tokens de API**.
+Escolha escopos mínimos (leitura de contexto de snapshot, envio de análise de migration,
+anotação de deploy). O valor secreto aparece **uma única vez** — copie para o GitHub Secret
+`AUDITOR_CLI_TOKEN`. Revogue tokens comprometidos ou expirados pela mesma tela.
+
+## Análises de migration
+
+A seção **Análises de migration** lista resultados enviados pela CLI (`auditor migration-risk --submit`).
+Cada linha mostra repositório, PR, maior severidade e data. O detalhe repete a tabela de riscos
+sem SQL nem literais. Qualquer papel com concessão ao ambiente pode ler.
+
+## Custo estimado
+
+Na seção **Custo** (Análise) o auditor mostra o ranking de desperdícios
+(armazenamento, índice sem uso, bloat estimado e consultas) em valores
+**estimado/mês**, com base na tabela de preços do ambiente. A edição da tabela
+de preços fica em **Ambientes** (papel operator). A moeda (BRL ou USD) trava
+depois da primeira versão.
+
+## Revisão de acessos
+
+<!-- topic: access-review | abrir: Revisão de acessos -->
+
+Na seção **Revisão de acessos** (Análise) o operator cria campanhas a partir de
+uma coleta **completa**. A matriz congela privilégios efetivos com origem
+(direto, via role, PUBLIC, predefinida) e privilégios por coluna. Responsáveis
+são contas do auditor com papel auditor ou acima no ambiente; o contato livre
+opcional aparece só na planilha e no PDF (dado pessoal).
+
+**Como usar**
+
+1. Operator mapeia responsáveis (role/conta do banco → conta do auditor).
+2. Operator cria a campanha escolhendo a coleta de referência e o prazo.
+3. Filtre a matriz (conta, objeto, privilégio, origem, destaque, pendente) ou
+   use **Minhas pendências**.
+4. O responsável da linha (ou o operator nas linhas sem responsável) registra
+   aprovar, revogar ou manter. Manter exige justificativa.
+5. Auditor exporta CSV (`# export_complete`) ou solicita o PDF de evidência.
+6. Diff mostra privilégios novos/removidos em relação à campanha anterior.
+
+**Vale saber**
+
+- Coleta parcial impede criar campanha (409).
+- Decisões são imutáveis; correção vira nova decisão com `supersedes_id`.
+- Revogar cria ação assistida; o auditor não executa REVOKE no banco.
+- Viewer lê a matriz; não vê controles de decisão.
+
+
+
+### Dados pessoais
+
+<!-- topic: pii | abrir: Dados pessoais -->
+
+Mapa LGPD por coluna (categoria, confiança, método, contas com leitura, RLS). A etapa "validar conteúdo" só fica disponível quando a operação habilita a flag de processo e o operator liga o ambiente. Nenhum valor de CPF/e-mail aparece na tela nem no CSV. Em MongoDB a aba indica "não aplicável a este mecanismo".
+
+## Restauração verificada
+
+Na página de Ambientes, a área **Restauração verificada** mostra o histórico dos
+ensaios CLI `auditor restore-verify` do backup do banco auditado (RTO × alvo,
+divergências e política). Viewer consulta; operator configura RTO-alvo e prazo.
+Detalhes operacionais: [backup-verifier.md](backup-verifier.md).
+

@@ -67,10 +67,10 @@ type RegressionPair struct {
 	PriorWorkloadReset, CurrentWorkloadReset *time.Time
 }
 
-// statsResetChanged is true when the two runs saw different counter epochs.
+// StatsResetChanged is true when the two runs saw different counter epochs.
 // A cluster never reset reports NULL, so the first reset is NULL -> value
 // (and a recreated cluster value -> NULL); both are resets (#128).
-func statsResetChanged(prior, current *time.Time) bool {
+func StatsResetChanged(prior, current *time.Time) bool {
 	if prior == nil || current == nil {
 		return prior != current
 	}
@@ -87,7 +87,7 @@ func PairComparable(p RegressionPair, maxGap time.Duration, counters bool) (bool
 	if p.PriorStarted.IsZero() || p.CurrentStarted.IsZero() || !p.CurrentStarted.After(p.PriorStarted) || p.CurrentStarted.Sub(p.PriorStarted) > maxGap {
 		return false, RegressionGapWindow
 	}
-	if counters && (statsResetChanged(p.PriorStatsReset, p.CurrentStatsReset) || statsResetChanged(p.PriorWorkloadReset, p.CurrentWorkloadReset)) {
+	if counters && (StatsResetChanged(p.PriorStatsReset, p.CurrentStatsReset) || StatsResetChanged(p.PriorWorkloadReset, p.CurrentWorkloadReset)) {
 		return false, RegressionCounterReset
 	}
 	return true, ""

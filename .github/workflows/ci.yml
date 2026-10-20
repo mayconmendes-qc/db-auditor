@@ -40,7 +40,11 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 10s --health-timeout 5s --health-retries 12
       mongodb:
+        # mongo:8 refuses to start on Linux kernels ≥6.19 without this
+        # TCMalloc/rseq workaround (SERVER-121912 / SERVER-125742).
         image: mongo:8
+        env:
+          GLIBC_TUNABLES: "glibc.pthread.rseq=1"
         ports:
           - 27017:27017
         options: >-
@@ -52,6 +56,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so golangci-lint --new-from-rev can reach the PR base.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -92,7 +99,10 @@ jobs:
         with:
           version: latest
           working-directory: backend
-          only-new-issues: true
+          # GitHub refuses PR diffs over 20k lines, which breaks only-new-issues.
+          # Compare against the merge-base via git instead.
+          only-new-issues: false
+          args: --new-from-rev=${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
 
       - name: Prove gosec fails a new finding
         working-directory: backend
@@ -100,7 +110,7 @@ jobs:
 
       - name: Prepare disposable snapshot store
         run: |
-          for migration in migrations/01_baseline.sql migrations/03_audit_schedule.sql migrations/04_p1.sql migrations/05_p2.sql migrations/06_second_stage.sql migrations/07_third_stage.sql migrations/08_action_workload.sql migrations/09_query_action_metrics.sql migrations/10_account_activity.sql migrations/11_quality_validation.sql migrations/12_view_detail.sql migrations/13_index_detail.sql migrations/14_function_detail.sql migrations/15_cagg_source.sql migrations/16_identity.sql migrations/17_report_retention.sql migrations/18_totp_discard_retention.sql migrations/19_architecture_report.sql migrations/20_architecture_insertion.sql migrations/21_identity_login_block.sql migrations/22_finding_queue_order_idx.sql migrations/23_finding_env_last_seen_idx.sql migrations/24_report_limits_retention_governance.sql migrations/25_role_attributes_regression_workload.sql; do
+          for migration in migrations/01_baseline.sql migrations/03_audit_schedule.sql migrations/04_p1.sql migrations/05_p2.sql migrations/06_second_stage.sql migrations/07_third_stage.sql migrations/08_action_workload.sql migrations/09_query_action_metrics.sql migrations/10_account_activity.sql migrations/11_quality_validation.sql migrations/12_view_detail.sql migrations/13_index_detail.sql migrations/14_function_detail.sql migrations/15_cagg_source.sql migrations/16_identity.sql migrations/17_report_retention.sql migrations/18_totp_discard_retention.sql migrations/19_architecture_report.sql migrations/20_architecture_insertion.sql migrations/21_identity_login_block.sql migrations/22_finding_queue_order_idx.sql migrations/23_finding_env_last_seen_idx.sql migrations/24_report_limits_retention_governance.sql migrations/25_role_attributes_regression_workload.sql migrations/26_query_digest.sql migrations/27_schema_timeline.sql migrations/28_migration_registry.sql migrations/29_environment_api_token.sql migrations/30_migration_analysis.sql migrations/31_cost_price_table.sql migrations/32_cost_estimate_series.sql migrations/33_grant_origin_column_privilege.sql migrations/34_access_review.sql migrations/35_pii_scanner.sql migrations/36_dq_contracts.sql migrations/37_retention_scenarios.sql migrations/38_chunk_scan_counters.sql migrations/39_target_restore_drill.sql migrations/40_account_last_login.sql; do
             docker exec -i ${{ job.services.postgres.id }} psql -v ON_ERROR_STOP=1 -U postgres -d db_auditor_test < "$migration" >/dev/null
           done
 
@@ -112,6 +122,18 @@ jobs:
           AUDITOR_TEST_DISPOSABLE: "1"
           AUDITOR_TEST_SCALE: "1"
         run: go test -p 1 ./... -coverprofile=coverage.out
+
+      - name: CLI migration-risk fixture (no token)
+        run: |
+          CGO_ENABLED=0 go build -o /tmp/auditor ./cmd/auditor
+          /tmp/auditor help | grep -q migration-risk
+          /tmp/auditor migration-risk --path internal/migrationrisk/testdata/create_index.sql --pg-version 16 --format md >/tmp/mr.md
+          grep -q MR-01 /tmp/mr.md
+          set +e
+          /tmp/auditor migration-risk --token=secret --path internal/migrationrisk/testdata/create_index.sql >/dev/null 2>&1
+          CODE=$?
+          set -e
+          test "$CODE" -eq 2
 
       - name: Scale test report (duration and volume)
         timeout-minutes: 5
@@ -329,9 +351,10 @@ jobs:
       - name: Role privilege detection E2E (must run, not skip)
         run: |
           set -o pipefail
-          go test -p 1 -count=1 -v -run '^(TestPowerfulAccountRoleEndToEndIntegration|TestMembershipModesSwitchAtPostgreSQL16|TestPowerfulRoleCreateRoleSeverityByVersion)$' \
+          go test -p 1 -count=1 -v -run '^(TestPowerfulAccountRoleEndToEndIntegration|TestMembershipModesSwitchAtPostgreSQL16|TestPowerfulRoleCreateRoleSeverityByVersion|TestGrantOriginViaGroupRoleIntegration)$' \
             ./internal/repository/ ./internal/collectors/postgres/ ./internal/analyzer/ | tee roles-e2e.log
           grep -q -- '--- PASS: TestPowerfulAccountRoleEndToEndIntegration' roles-e2e.log || { echo "::error::role E2E did not run"; exit 1; }
+          grep -q -- '--- PASS: TestGrantOriginViaGroupRoleIntegration' roles-e2e.log || { echo "::error::grant origin E2E did not run"; exit 1; }
           version=$(grep -o 'server_version_num=[0-9]*' roles-e2e.log | head -1 | cut -d= -f2)
           if [ "$((version / 10000))" != "${{ matrix.postgres }}" ]; then
             echo "::error::role E2E ran against server_version_num=${version}, expected PostgreSQL ${{ matrix.postgres }}"

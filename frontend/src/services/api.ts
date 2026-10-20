@@ -1,5 +1,12 @@
 import { networkApiError, toApiError } from "../lib/errors";
 import type {
+  AccessReviewCampaign,
+  AccessReviewDecision,
+  AccessReviewDecisionInput,
+  AccessReviewDiff,
+  AccessReviewItem,
+  AccessReviewOwner,
+  AccessReviewOwnerInput,
   ActionEvent,
   ActionMeasurement,
   AnalysisRun,
@@ -21,11 +28,18 @@ import type {
   CompareResult,
   ConnectionStatus,
   ConstraintSnapshot,
+  CostPricesResponse,
+  CostPriceTemplate,
+  CostPriceVersion,
+  CostRankingItem,
+  CostRankingResponse,
+  CostSeriesPoint,
   DashboardKPIs,
   DatabaseSnapshot,
   DependencySnapshot,
   DimensionSnapshot,
   EffectiveRule,
+  EnvAPIToken,
   EnvironmentCapabilities,
   EnvironmentsResponse,
   Finding,
@@ -41,6 +55,7 @@ import type {
   HypertableHistoryPoint,
   HypertableJobDetail,
   HypertablePolicyDetail,
+  HypertableSimulationResponse,
   HypertableSnapshot,
   IndexHistoryPoint,
   IndexSnapshot,
@@ -48,18 +63,34 @@ import type {
   JobHealthResponse,
   JobSnapshot,
   MappingCandidate,
+  MigrationAnalysis,
+  MigrationAnalysisItem,
+  MigrationRegistryInput,
+  MigrationRegistryItem,
+  NotificationDestination,
+  NotificationDestinationInput,
   ObjectMapping,
   PagedResponse,
+  PiiMapItem,
   PolicySnapshot,
   PrioritiesResponse,
+  QualityContract,
+  QualityContractTrendPoint,
   QualityRequest,
   QualityScan,
+  QueryDigest,
+  QueryDigestConfig,
   RegressionAlert,
   RelationshipGraph,
   ReportFilters,
   ReportJob,
+  RestoreDrill,
+  RestoreDrillPolicy,
+  RetentionScenario,
   RLSPolicySnapshot,
+  SchemaDiffResult,
   SchemaSnapshot,
+  SchemaTimelinePage,
   ScopeAggregate,
   ScopeHistoryPoint,
   ServerCompareReport,
@@ -71,6 +102,7 @@ import type {
   TableSnapshot,
   TrackedAction,
   TriggerSnapshot,
+  UnscannedChunksResponse,
   ViewDetailSnapshot,
   ViewSnapshot,
   WorkloadSnapshot,
@@ -249,7 +281,27 @@ async function patchJSON<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function qs(params?: Record<string, string | number | undefined>): string {
+async function delJSON<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "DELETE",
+      headers: { ...authHeaders("DELETE") },
+      credentials: "include",
+    });
+  } catch (cause) {
+    throw networkApiError(path, cause);
+  }
+  if (!response.ok) {
+    handleSessionExpiry(response, path);
+    throw await toApiError(response, path);
+  }
+  return response.json() as Promise<T>;
+}
+
+function qs(
+  params?: Record<string, string | number | boolean | undefined>,
+): string {
   if (!params) {
     return "";
   }
@@ -644,11 +696,104 @@ export const api = {
     postJSON<{ id: string; name: string; dsn: null }>("/api/v1/environments", {
       name,
     }),
+  patchEnvironment: (env: string, body: { is_production: boolean }) =>
+    patchJSON<{ id: string; is_production: boolean }>(
+      `/api/v1/environments/${env}`,
+      body,
+    ),
+  schemaDiff: (
+    env: string,
+    params?: {
+      source_run?: string;
+      target_environment_id?: string;
+      target_run?: string;
+      object_type?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<SchemaDiffResult>(
+      `/api/v1/environments/${env}/schema-diff${qs(params)}`,
+      signal,
+    ),
+  schemaTimeline: (
+    env: string,
+    params?: { from?: string; to?: string; limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<SchemaTimelinePage>(
+      `/api/v1/environments/${env}/schema-timeline${qs(params)}`,
+      signal,
+    ),
+  migrationRegistry: (env: string, signal?: AbortSignal) =>
+    getJSON<{ items: MigrationRegistryItem[] }>(
+      `/api/v1/environments/${env}/migration-registry`,
+      signal,
+    ),
+  putMigrationRegistry: (env: string, items: MigrationRegistryInput[]) =>
+    putJSON<{ items: MigrationRegistryItem[] }>(
+      `/api/v1/environments/${env}/migration-registry`,
+      { items },
+    ),
   environmentCapabilities: (env: string, signal?: AbortSignal) =>
     getJSON<EnvironmentCapabilities>(
       `/api/v1/environments/${env}/capabilities`,
       signal,
     ),
+  piiScans: (env: string, signal?: AbortSignal) =>
+    getJSON<{
+      items: unknown[];
+      applicable?: boolean;
+      reason?: string;
+      content_scan_enabled?: boolean;
+    }>(`/api/v1/environments/${env}/pii-scans`, signal),
+  startPiiScan: (env: string, body: { stages: number[] }) =>
+    postJSON(`/api/v1/environments/${env}/pii-scans`, body),
+  piiMap: (
+    env: string,
+    params?: {
+      category?: string;
+      confidence?: string;
+      limit?: number;
+      offset?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<{
+      items: PiiMapItem[];
+      total: number;
+      limit: number;
+      offset: number;
+      applicable?: boolean;
+      reason?: string;
+    }>(`/api/v1/environments/${env}/pii-map${qs(params)}`, signal),
+  reviewPiiClassification: (
+    env: string,
+    column: string,
+    body: { decision: string; justification: string },
+  ) =>
+    patchJSON(
+      `/api/v1/environments/${env}/pii-classifications/${encodeURIComponent(column)}`,
+      body,
+    ),
+  exportPiiMapCsv: async (env: string) => {
+    const res = await fetch(
+      `/api/v1/environments/${env}/pii-map/export/download?format=csv`,
+      {
+        credentials: "include",
+      },
+    );
+    if (!res.ok) throw new Error(`export ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pii-map.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   qualityScans: (env: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<QualityScan> & { enabled: boolean }>(
       `/api/v1/environments/${env}/quality-scans`,
@@ -656,6 +801,38 @@ export const api = {
     ),
   runQualityScan: (env: string, body: QualityRequest) =>
     postJSON<QualityScan>(`/api/v1/environments/${env}/quality-scans`, body),
+  qualityContracts: (env: string, signal?: AbortSignal) =>
+    getJSON<{ items: QualityContract[]; enabled: boolean }>(
+      `/api/v1/environments/${env}/quality-contracts`,
+      signal,
+    ),
+  proposeQualityContract: (
+    env: string,
+    body: { database: string; schema: string; table: string },
+  ) =>
+    postJSON<QualityContract>(
+      `/api/v1/environments/${env}/quality-contracts/proposals`,
+      body,
+    ),
+  approveQualityContractVersion: (
+    env: string,
+    contract: string,
+    version: string,
+  ) =>
+    postJSON(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/versions/${version}/approve`,
+      {},
+    ),
+  runQualityContract: (env: string, contract: string) =>
+    postJSON(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/runs`,
+      {},
+    ),
+  qualityContractTrend: (env: string, contract: string, signal?: AbortSignal) =>
+    getJSON<{ items: QualityContractTrendPoint[]; sampling_note: string }>(
+      `/api/v1/environments/${env}/quality-contracts/${contract}/trend`,
+      signal,
+    ),
   updateQualityIssue: (
     env: string,
     issue: string,
@@ -851,6 +1028,56 @@ export const api = {
     getJSON<PagedResponse<Finding>>(
       `${hypertableScopePath(env, run, database, schema, name)}/findings${qs({ limit, offset })}`,
       signal,
+    ),
+  hypertableSimulation: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    params?: {
+      retention_days?: number;
+      compress_after_days?: number;
+      scenario?: string;
+    },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<HypertableSimulationResponse>(
+      `${hypertableScopePath(env, run, database, schema, name)}/simulation${qs(params)}`,
+      signal,
+    ),
+  hypertableUnscannedChunks: (
+    env: string,
+    run: string,
+    database: string,
+    schema: string,
+    name: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<UnscannedChunksResponse>(
+      `${hypertableScopePath(env, run, database, schema, name)}/unscanned-chunks`,
+      signal,
+    ),
+  timescaleScenarios: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<RetentionScenario>>(
+      `/api/v1/environments/${environmentId}/timescale-scenarios`,
+      signal,
+    ),
+  saveTimescaleScenario: (
+    environmentId: string,
+    body: {
+      database_name: string;
+      schema_name: string;
+      hypertable_name: string;
+      label?: string;
+      retention_days: number;
+      compress_after_days: number;
+      audit_run_id: string;
+    },
+  ) =>
+    postJSON<RetentionScenario>(
+      `/api/v1/environments/${environmentId}/timescale-scenarios`,
+      body,
     ),
   dimensions: (environmentId: string, signal?: AbortSignal) =>
     getJSON<ItemsResponse<DimensionSnapshot>>(
@@ -1429,6 +1656,94 @@ export const api = {
       `/api/v1/environments/${environmentId}/regressions/${id}/acknowledge`,
       { reason },
     ),
+  queryDigests: (
+    environmentId: string,
+    params?: { limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<PagedResponse<QueryDigest>>(
+      `/api/v1/environments/${environmentId}/query-digests${qs(params)}`,
+      signal,
+    ),
+  queryDigest: (environmentId: string, id: string, signal?: AbortSignal) =>
+    getJSON<QueryDigest>(
+      `/api/v1/environments/${environmentId}/query-digests/${id}`,
+      signal,
+    ),
+  generateQueryDigest: (environmentId: string, reference?: string) =>
+    postJSON<QueryDigest>(
+      `/api/v1/environments/${environmentId}/query-digests`,
+      reference ? { reference } : {},
+    ),
+  queryDigestConfig: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<QueryDigestConfig>(
+      `/api/v1/environments/${environmentId}/query-digest-config`,
+      signal,
+    ),
+  updateQueryDigestConfig: (
+    environmentId: string,
+    body: {
+      window_days: number;
+      thresholds?: Record<string, unknown>;
+      delivery_enabled: boolean;
+    },
+  ) =>
+    putJSON<QueryDigestConfig>(
+      `/api/v1/environments/${environmentId}/query-digest-config`,
+      body,
+    ),
+  notificationDestinations: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{
+      items: NotificationDestination[];
+      using_global_fallback: boolean;
+    }>(
+      `/api/v1/environments/${environmentId}/notification-destinations`,
+      signal,
+    ),
+  replaceNotificationDestinations: (
+    environmentId: string,
+    items: NotificationDestinationInput[],
+  ) =>
+    putJSON<{
+      items: NotificationDestination[];
+      using_global_fallback: boolean;
+    }>(`/api/v1/environments/${environmentId}/notification-destinations`, {
+      items,
+    }),
+  listEnvAPITokens: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<EnvAPIToken>>(
+      `/api/v1/environments/${environmentId}/api-tokens`,
+      signal,
+    ),
+  createEnvAPIToken: (
+    environmentId: string,
+    body: { name: string; scopes: string[]; expires_at?: string },
+  ) =>
+    postJSON<{ token: EnvAPIToken; plaintext: string }>(
+      `/api/v1/environments/${environmentId}/api-tokens`,
+      body,
+    ),
+  revokeEnvAPIToken: (environmentId: string, tokenId: string) =>
+    delJSON<{ status: string }>(
+      `/api/v1/environments/${environmentId}/api-tokens/${tokenId}`,
+    ),
+  listMigrationAnalyses: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<ItemsResponse<MigrationAnalysis>>(
+      `/api/v1/environments/${environmentId}/migration-analyses`,
+      signal,
+    ),
+  getMigrationAnalysis: (
+    environmentId: string,
+    analysisId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<{
+      analysis: MigrationAnalysis;
+      items: MigrationAnalysisItem[];
+    }>(
+      `/api/v1/environments/${environmentId}/migration-analyses/${analysisId}`,
+      signal,
+    ),
   scopeScore: (
     environmentId: string,
     runId: string,
@@ -1712,4 +2027,208 @@ export const api = {
     grants?: unknown[];
     functions?: unknown[];
   }) => postJSON<AnalyzeResult>("/api/v1/findings/analyze", body),
+
+  costPrices: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<CostPricesResponse>(
+      `/api/v1/environments/${environmentId}/cost/prices`,
+      signal,
+    ),
+  updateCostPrices: (
+    environmentId: string,
+    body: {
+      currency: string;
+      storage_gb_month: number;
+      io_per_million?: number;
+      io_per_gb_read?: number;
+      compute_vcpu_hour?: number;
+      instance_month?: number;
+      model_origin?: string;
+      effective_from: string;
+    },
+  ) =>
+    putJSON<CostPriceVersion>(
+      `/api/v1/environments/${environmentId}/cost/prices`,
+      body,
+    ),
+  costTemplates: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: CostPriceTemplate[] }>(
+      `/api/v1/environments/${environmentId}/cost/templates`,
+      signal,
+    ),
+  costRanking: (
+    environmentId: string,
+    params?: {
+      run?: string;
+      database?: string;
+      schema?: string;
+      type?: string;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.run) q.set("run", params.run);
+    if (params?.database) q.set("database", params.database);
+    if (params?.schema) q.set("schema", params.schema);
+    if (params?.type) q.set("type", params.type);
+    const qs = q.toString();
+    return getJSON<CostRankingResponse>(
+      `/api/v1/environments/${environmentId}/cost/ranking${qs ? `?${qs}` : ""}`,
+      signal,
+    );
+  },
+  costSeries: (
+    environmentId: string,
+    params?: { from?: string; to?: string },
+    signal?: AbortSignal,
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const qs = q.toString();
+    return getJSON<{ items: CostSeriesPoint[] }>(
+      `/api/v1/environments/${environmentId}/cost/series${qs ? `?${qs}` : ""}`,
+      signal,
+    );
+  },
+  costRankingExport: async (environmentId: string) => {
+    const res = await fetch(
+      `${API_BASE}/api/v1/environments/${environmentId}/cost/ranking/export?format=csv`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw await toApiError(res, "/cost/ranking/export");
+    return res.text();
+  },
+  costInventory: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: Record<string, CostRankingItem> }>(
+      `/api/v1/environments/${environmentId}/cost/inventory`,
+      signal,
+    ),
+  accessReviewOwners: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: AccessReviewOwner[] }>(
+      `/api/v1/environments/${environmentId}/access-review-owners`,
+      signal,
+    ),
+  replaceAccessReviewOwners: (
+    environmentId: string,
+    items: AccessReviewOwnerInput[],
+  ) =>
+    putJSON<{ items: AccessReviewOwner[] }>(
+      `/api/v1/environments/${environmentId}/access-review-owners`,
+      { items },
+    ),
+  accessReviews: (
+    environmentId: string,
+    params?: { limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ) =>
+    getJSON<PagedResponse<AccessReviewCampaign>>(
+      `/api/v1/environments/${environmentId}/access-reviews${qs(params)}`,
+      signal,
+    ),
+  accessReview: (
+    environmentId: string,
+    campaignId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}`,
+      signal,
+    ),
+  createAccessReview: (
+    environmentId: string,
+    body: {
+      name: string;
+      reference_run_id: string;
+      due_at: string;
+      scope?: unknown;
+    },
+  ) =>
+    postJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews`,
+      body,
+    ),
+  accessReviewMatrix: (
+    environmentId: string,
+    campaignId: string,
+    params?: {
+      account?: string;
+      object?: string;
+      privilege?: string;
+      origin?: string;
+      highlight?: string;
+      pending?: boolean;
+      owner?: string;
+      mine?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const q: Record<string, string | number | boolean | undefined> = {
+      account: params?.account,
+      object: params?.object,
+      privilege: params?.privilege,
+      origin: params?.origin,
+      highlight: params?.highlight,
+      owner: params?.owner,
+      limit: params?.limit,
+      offset: params?.offset,
+    };
+    if (params?.pending != null) q.pending = params.pending;
+    if (params?.mine) q.mine = true;
+    return getJSON<PagedResponse<AccessReviewItem>>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/matrix${qs(q)}`,
+      signal,
+    );
+  },
+  postAccessReviewDecisions: (
+    environmentId: string,
+    campaignId: string,
+    decisions: AccessReviewDecisionInput[],
+  ) =>
+    postJSON<{ items: AccessReviewDecision[] }>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/decisions`,
+      { decisions },
+    ),
+  closeAccessReview: (environmentId: string, campaignId: string) =>
+    postJSON<AccessReviewCampaign>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/close`,
+      {},
+    ),
+  accessReviewDiff: (
+    environmentId: string,
+    campaignId: string,
+    signal?: AbortSignal,
+  ) =>
+    getJSON<AccessReviewDiff>(
+      `/api/v1/environments/${environmentId}/access-reviews/${campaignId}/diff`,
+      signal,
+    ),
+  accessReviewExportCSV: async (environmentId: string, campaignId: string) => {
+    const res = await fetch(
+      `${API_BASE}/api/v1/environments/${environmentId}/access-reviews/${campaignId}/export/download?format=csv`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw await toApiError(res, "/access-reviews/export");
+    return res.text();
+  },
+
+  restoreDrills: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<{ items: RestoreDrill[]; total: number }>(
+      `/api/v1/environments/${environmentId}/restore-drills`,
+      signal,
+    ),
+  restoreDrillPolicy: (environmentId: string, signal?: AbortSignal) =>
+    getJSON<RestoreDrillPolicy>(
+      `/api/v1/environments/${environmentId}/restore-drill-policy`,
+      signal,
+    ),
+  updateRestoreDrillPolicy: (
+    environmentId: string,
+    body: { rto_target_seconds: number; max_age_days: number },
+  ) =>
+    putJSON<RestoreDrillPolicy>(
+      `/api/v1/environments/${environmentId}/restore-drill-policy`,
+      body,
+    ),
 };

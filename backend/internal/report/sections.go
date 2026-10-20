@@ -109,6 +109,8 @@ func planSections(ctx context.Context, source SectionSource, redaction *Redactio
 	if redaction != nil {
 		overview.RedactMetadata(redaction.Metadata)
 		overview.redactOverview(redaction.Level, rawDatabases)
+		overview.redactAccessReview(redaction.Level)
+		overview.redactPersonalData(redaction.Level)
 	}
 	if overview.TotalDatabases == 0 {
 		overview.TotalDatabases = plan.databases
@@ -245,6 +247,26 @@ func (p *sectionPlan) emitLines(ctx context.Context, emit func(Line) error) erro
 	}
 	if len(d.Growth) > 0 {
 		if err := out(growthLines(d.Growth, growthSubject(d))...); err != nil {
+			return err
+		}
+	}
+	if err := emitCostSection(d, out); err != nil {
+		return err
+	}
+	if err := emitRetentionSimulation(d, out); err != nil {
+		return err
+	}
+	if err := emitRestoreVerified(d, out); err != nil {
+		return err
+	}
+	if err := emitQualityContracts(d, out); err != nil {
+		return err
+	}
+	if err := emitPersonalDataSection(d, out); err != nil {
+		return err
+	}
+	if d.Type == "access_review" || d.AccessReview != nil {
+		if err := out(accessReviewLines(d)...); err != nil {
 			return err
 		}
 	}
@@ -452,6 +474,49 @@ func (p *sectionPlan) emitInventory(ctx context.Context, out func(...Line) error
 			primaryKey = "Sim"
 		}
 		if err := out(Line{fmt.Sprintf("%s.%s.%s | %d bytes | %d linhas estimadas | PK: %s", table.Database, table.Schema, table.Name, table.SizeBytes, table.Rows, primaryKey), "body"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func emitCostSection(d Document, out func(...Line) error) error {
+	if d.CostSummary == nil {
+		return nil
+	}
+	c := d.CostSummary
+	if err := out(Line{"Custo estimado", "heading"}); err != nil {
+		return err
+	}
+	if !c.Priced {
+		reason := c.Reason
+		if reason == "" {
+			reason = "não estimado — preço não configurado"
+		}
+		return out(Line{reason, "body"}, Line{"Valores são estimativas mensais a partir da tabela de preços; não substituem a fatura.", "body"})
+	}
+	if err := out(Line{fmt.Sprintf("Totais estimados/mês (%s): armazenamento %.2f | índice sem uso %.2f | bloat estimado %.2f | consulta %.2f",
+		c.Currency, c.StorageMonth, c.UnusedIndexMonth, c.BloatMonth, c.QueryMonth), "body"}); err != nil {
+		return err
+	}
+	if err := out(Line{"Hipótese: o preço configurado aproxima o custo variável de armazenamento, I/O e computação.", "body"},
+		Line{"Ganho previsto: reduzir desperdício listado abaixo pode baixar a fatura proporcionalmente (estimado).", "body"},
+		Line{"Ganho medido: use ações assistidas com medição antes/depois para comprovar.", "body"}); err != nil {
+		return err
+	}
+	// Strict redaction keeps only totals (CA-06).
+	if d.RedactionLevel == "strict" || len(c.Items) == 0 {
+		return out(Line{"Detalhe por objeto omitido neste nível de redação ou indisponível.", "body"})
+	}
+	if err := out(Line{"Principais desperdícios (estimado/mês)", "subheading"}); err != nil {
+		return err
+	}
+	for _, item := range c.Items {
+		amt := "não estimado"
+		if item.Amount != nil {
+			amt = fmt.Sprintf("%.2f", *item.Amount)
+		}
+		if err := out(Line{fmt.Sprintf("%s · %s · %s %s", item.Type, item.ObjectKey, amt, item.Label), "body"}); err != nil {
 			return err
 		}
 	}

@@ -33,6 +33,7 @@ type Document struct {
 	Tables          []Table
 	Findings        []Finding
 	Growth          []GrowthPoint
+	CostSummary     *CostSummary
 	Score           *int
 	ScoreConfidence float64
 	ScoreCategories []ScoreCategory
@@ -43,6 +44,96 @@ type Document struct {
 	Regressions     []Regression
 	Truncated       bool
 	RedactionLevel  string
+	// Spec 09 — retention/compression simulation summary for the technical PDF.
+	RetentionSimulation *RetentionSimulationSummary
+	// Spec 07 — access review evidence PDF.
+	AccessReview *AccessReviewSummary
+	// Spec 05 — personal-data map (categories/counts only; no sample values).
+	PersonalData *PersonalDataSummary
+	// Plan 08 — target restore drill summary.
+	RestoreVerified *RestoreVerifiedSummary
+	// Plan 03 — quality contracts section in the technical PDF.
+	QualityContracts *QualityContractsSummary
+}
+
+// QualityContractsSummary feeds the technical PDF (RF-09). Counts only.
+type QualityContractsSummary struct {
+	SamplingNote string
+	Items        []QualityContractLine
+}
+
+// QualityContractLine is one check result line (no domain lists, no timestamps).
+type QualityContractLine struct {
+	CheckKey   string
+	Result     string
+	Severity   string
+	SampleSize *int
+	Observed   string
+	Reason     string
+}
+
+type PersonalDataSummary struct {
+	TotalColumns  int
+	ByCategory    []PersonalDataCategoryCount
+	DetailColumns []PersonalDataColumnLine
+	JSONNote      string
+}
+
+type PersonalDataCategoryCount struct {
+	Category string
+	Count    int
+}
+
+type PersonalDataColumnLine struct {
+	Qualified, Category, Confidence, Method string
+	ReadCount                               int
+	HasRLS                                  bool
+}
+
+// AccessReviewSummary feeds the access_review PDF (RF-09).
+type AccessReviewSummary struct {
+	CampaignID     string
+	CampaignName   string
+	Status         string
+	DueAt          string
+	TotalItems     int
+	DecidedItems   int
+	PendingItems   int
+	DecidedPercent float64
+	Owners         []AccessReviewOwnerLine
+	PendingSamples []AccessReviewPendingLine
+}
+
+type AccessReviewOwnerLine struct {
+	TargetRole string
+	OwnerName  string
+	Contact    string // omitted under identifiers redaction
+}
+
+type AccessReviewPendingLine struct {
+	Account   string
+	Object    string
+	Privilege string
+	Origin    string
+}
+
+// RetentionSimulationSummary feeds the technical PDF section (RF-09).
+type RetentionSimulationSummary struct {
+	Applicable bool
+	Reason     string // e.g. "não aplicável"
+	Partial    bool
+	Items      []RetentionSimulationItem
+}
+
+// RetentionSimulationItem is one hypertable × scenario line in the PDF.
+type RetentionSimulationItem struct {
+	Hypertable string
+	Label      string
+	GBSaved    float64
+	Currency   string
+	MoneySaved *float64
+	Risks      []string
+	Confidence string
 }
 
 type Database struct {
@@ -100,6 +191,28 @@ type GrowthPoint struct {
 	SizeBytes int64
 	Tables    int
 }
+
+// CostSummary aggregates estimated monthly costs by type (RF-08).
+type CostSummary struct {
+	Priced           bool
+	Currency         string
+	Reason           string
+	StorageMonth     float64
+	UnusedIndexMonth float64
+	BloatMonth       float64
+	QueryMonth       float64
+	// Items are omitted under strict redaction (CA-06).
+	Items []CostItem
+}
+
+// CostItem is one ranked waste line for the technical PDF.
+type CostItem struct {
+	Type      string
+	ObjectKey string
+	Label     string
+	Amount    *float64
+}
+
 type ScoreCategory struct {
 	Category string
 	Score    int
@@ -304,6 +417,8 @@ func reportTypeLabel(kind string) string {
 		return "técnico"
 	case "table":
 		return "de tabela"
+	case "access_review":
+		return "de revisão de acessos"
 	default:
 		return kind
 	}

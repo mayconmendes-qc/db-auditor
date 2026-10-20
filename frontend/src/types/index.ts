@@ -7,8 +7,14 @@ export type NavigationSection =
   | "Inventário"
   | "Mapeamentos"
   | "Desvio de schema"
+  | "Linha do tempo"
   | "Comparar"
   | "Findings"
+  | "Digest"
+  | "Custo"
+  | "Análises de migration"
+  | "Revisão de acessos"
+  | "Dados pessoais"
   | "Contas"
   | "Acompanhamento"
   | "Ações assistidas"
@@ -247,6 +253,74 @@ export interface QualityRequest {
   date_ranges: Array<{ column: string; from: string; to: string }>;
 }
 
+export interface QualityContractCheck {
+  type: string;
+  column?: string;
+  columns?: string[];
+  max_null_pct?: number;
+  critical?: boolean;
+  ref_schema?: string;
+  ref_table?: string;
+  ref_column?: string;
+  allowed?: string[];
+  max_age_hours?: number;
+  max_change_pct?: number;
+  severity?: string;
+}
+
+export interface QualityContractDocument {
+  database: string;
+  schema: string;
+  table: string;
+  sample_limit: number;
+  schedule_profile?: string;
+  checks: QualityContractCheck[];
+}
+
+export interface QualityContractVersion {
+  id: string;
+  contract_id: string;
+  version_number: number;
+  document: QualityContractDocument;
+  sample_limit: number;
+  schedule_profile: string;
+  status: "proposed" | "approved" | "superseded";
+  authored_by: string;
+  authored_at: string;
+  approved_by?: string;
+  approved_at?: string;
+}
+
+export interface QualityContract {
+  id: string;
+  environment_id: string;
+  database: string;
+  schema: string;
+  table: string;
+  created_by: string;
+  created_at: string;
+  latest_version?: QualityContractVersion;
+  last_run?: {
+    id: string;
+    status: string;
+    coverage: string;
+    mode: string;
+    started_at: string;
+  };
+}
+
+export interface QualityContractTrendPoint {
+  check_key: string;
+  check_type: string;
+  result: string;
+  observed_pct?: number;
+  observed_count?: number;
+  sample_size?: number;
+  started_at: string;
+  run_id: string;
+  gap?: boolean;
+}
+
 export interface ActionMeasurement {
   id: string;
   finding_id: string;
@@ -307,6 +381,194 @@ export interface RegressionAlert {
   created_at: string;
 }
 
+export interface QueryDigestItem {
+  id: string;
+  digest_id: string;
+  classification: "regressao" | "nova" | "sumiu" | "melhora" | "estavel";
+  severity: string;
+  fingerprint: string;
+  query_id: string;
+  database_name: string;
+  referenced_objects: string[];
+  prior_calls: number;
+  current_calls: number;
+  prior_mean_ms: number;
+  current_mean_ms: number;
+  prior_total_ms: number;
+  current_total_ms: number;
+  mean_change_pct: number;
+  total_change_pct: number;
+  prior_share: number;
+  current_share: number;
+  finding_id?: string | null;
+  regression_alert_id?: string | null;
+  related_finding_ids: string[];
+  sort_rank: number;
+}
+
+export interface QueryDigestDelivery {
+  id: string;
+  digest_id: string;
+  destination_id?: string | null;
+  channel: string;
+  target_masked: string;
+  status: "pending" | "sent" | "failed";
+  attempt: number;
+  error_sanitized: string;
+  attempted_at: string;
+}
+
+export interface QueryDigest {
+  id: string;
+  environment_id: string;
+  state: "ok" | "no_comparable_window" | "not_applicable";
+  reason: string;
+  window_days: number;
+  prior_from?: string | null;
+  prior_to?: string | null;
+  current_from?: string | null;
+  current_to?: string | null;
+  workload_limit_n: number;
+  subwindow_note: string;
+  coverage_notes: string[];
+  calculation_version: string;
+  markdown?: string;
+  regression_count: number;
+  new_count: number;
+  gone_count: number;
+  improvement_count: number;
+  created_at: string;
+  items?: QueryDigestItem[];
+  deliveries?: QueryDigestDelivery[];
+}
+
+export interface QueryDigestConfig {
+  environment_id: string;
+  window_days: number;
+  thresholds: Record<string, unknown>;
+  delivery_enabled: boolean;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface NotificationDestination {
+  id: string;
+  environment_id: string;
+  channel: "email" | "webhook";
+  target_masked: string;
+  format: "generic" | "slack";
+  active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationDestinationInput {
+  channel: "email" | "webhook";
+  target: string;
+  format: "generic" | "slack";
+  active: boolean;
+}
+
+export interface AccessReviewOwner {
+  id: string;
+  environment_id: string;
+  target_role: string;
+  owner_user_id: string;
+  owner_username: string;
+  owner_role: string;
+  contact_name?: string;
+  contact_email?: string;
+  updated_at: string;
+}
+
+export interface AccessReviewOwnerInput {
+  target_role: string;
+  owner_user_id: string;
+  contact_name?: string;
+  contact_email?: string;
+}
+
+export interface AccessReviewCampaign {
+  id: string;
+  environment_id: string;
+  name: string;
+  scope?: unknown;
+  reference_run_id: string;
+  due_at: string;
+  status: "open" | "in_review" | "closed" | "overdue" | string;
+  created_by: string;
+  created_at: string;
+  closed_at?: string;
+  closed_by?: string;
+  total_items: number;
+  decided_items: number;
+  pending_items: number;
+  decided_percent: number;
+}
+
+export interface AccessReviewItem {
+  id: string;
+  campaign_id: string;
+  database_name: string;
+  account_name: string;
+  object_type: string;
+  object_name: string;
+  column_name?: string;
+  privilege: string;
+  origin_kind: string;
+  via_chain: string[];
+  origin_label: string;
+  highlights: string[];
+  owner_user_id?: string | null;
+  owner_username?: string;
+  decision?: string | null;
+  justification?: string;
+  decided_by?: string;
+  decided_at?: string | null;
+  pending: boolean;
+  /** Último login do agregado de logs (ADR-0001 D10); fonte explícita. */
+  last_login_at?: string | null;
+  last_login_source?: string;
+}
+
+export interface AccessReviewDecisionInput {
+  item_id: string;
+  decision: "approve" | "revoke" | "keep";
+  revoke_due_at?: string;
+  justification?: string;
+  supersedes_id?: string;
+}
+
+export interface AccessReviewDecision {
+  id: string;
+  campaign_id: string;
+  item_id: string;
+  decision: string;
+  revoke_due_at?: string | null;
+  justification: string;
+  decided_by: string;
+  decided_at: string;
+  supersedes_id?: string | null;
+  finding_action_id?: string | null;
+}
+
+export interface AccessReviewDiff {
+  previous_campaign_id?: string;
+  new_privileges: AccessReviewItem[];
+  removed_privileges: AccessReviewItem[];
+  changed_decisions: Array<{
+    item_key: string;
+    account_name: string;
+    object_name: string;
+    privilege: string;
+    previous_decision?: string | null;
+    current_decision?: string | null;
+  }>;
+  new_accounts: string[];
+  removed_accounts: string[];
+}
+
 export interface JobHealthItem {
   environment_id: string;
   environment_name?: string;
@@ -327,8 +589,80 @@ export interface Environment {
   engine: string;
   discovery_mode: string;
   active: boolean;
+  is_production?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SchemaDiffResult {
+  source_environment_id: string;
+  target_environment_id: string;
+  source_run_id: string;
+  target_run_id: string;
+  partial: boolean;
+  summary: CompareResult["summary"];
+  objects: ObjectDiff[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SchemaTimelineEvent {
+  id: string;
+  environment_id: string;
+  prior_audit_run_id?: string;
+  current_audit_run_id: string;
+  detected_at: string;
+  object_type: string;
+  object_key: string;
+  change_kind: string;
+  prior_fingerprint?: string;
+  current_fingerprint?: string;
+  changed_fields?: string[];
+  correlation: string;
+  annotation_id?: string;
+  registry_version?: string;
+  confidence: string;
+}
+
+export interface SchemaTimelineGap {
+  id: string;
+  environment_id: string;
+  prior_audit_run_id?: string;
+  current_audit_run_id?: string;
+  gap_from: string;
+  gap_to: string;
+  reason: string;
+}
+
+export interface SchemaTimelinePage {
+  environment_id: string;
+  from: string;
+  to: string;
+  events: SchemaTimelineEvent[];
+  gaps: SchemaTimelineGap[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MigrationRegistryItem {
+  id: string;
+  environment_id: string;
+  database_name: string;
+  tool: string;
+  schema_name: string;
+  table_name: string;
+  enabled: boolean;
+  updated_at: string;
+}
+
+export interface MigrationRegistryInput {
+  database_name?: string;
+  tool: string;
+  schema_name?: string;
+  table_name?: string;
+  enabled: boolean;
 }
 
 export interface EnvironmentsResponse {
@@ -882,13 +1216,19 @@ export interface ReportFilters {
   table?: string;
   severity?: string;
   redaction?: "none" | "identifiers" | "strict";
+  campaign_id?: string;
 }
 
 export interface ReportJob {
   id: string;
   environment_id: string;
   audit_run_id: string;
-  report_type: "executive" | "technical" | "table" | "architecture";
+  report_type:
+    | "executive"
+    | "technical"
+    | "table"
+    | "architecture"
+    | "access_review";
   format?: "pdf" | "markdown";
   filters: ReportFilters;
   requested_by: string;
@@ -1117,3 +1457,262 @@ export type InventoryObjectKind =
   | "views"
   | "functions"
   | "caggs";
+
+export interface EnvAPIToken {
+  id: string;
+  environment_id: string;
+  name: string;
+  public_prefix: string;
+  scopes: string[];
+  created_by?: string | null;
+  created_at: string;
+  expires_at: string;
+  revoked_at?: string | null;
+  last_used_at?: string | null;
+}
+
+export interface MigrationAnalysis {
+  id: string;
+  environment_id: string;
+  repository: string;
+  pr: string;
+  commit: string;
+  highest_severity: string;
+  rules_version: string;
+  pg_version: number;
+  context_mode: string;
+  audit_run_id?: string | null;
+  created_at: string;
+}
+
+export interface MigrationAnalysisItem {
+  file: string;
+  line: number;
+  code: string;
+  operation: string;
+  object: string;
+  lock: string;
+  rewrite_or_scan: string;
+  size_bytes?: number | null;
+  duration_estimate?: string;
+  severity: string;
+  confidence: string;
+  suppressed: boolean;
+  justification?: string;
+}
+
+export interface CostPriceVersion {
+  id: string;
+  environment_id: string;
+  version: number;
+  currency: string;
+  storage_gb_month: number;
+  io_per_million?: number | null;
+  io_per_gb_read?: number | null;
+  compute_vcpu_hour?: number | null;
+  instance_month?: number | null;
+  model_origin: string;
+  effective_from: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface CostPricesResponse {
+  current?: CostPriceVersion | null;
+  history: CostPriceVersion[];
+  currency?: string;
+  currency_locked: boolean;
+}
+
+export interface CostPriceTemplate {
+  id: string;
+  name: string;
+  currency: string;
+  storage_gb_month: number;
+  io_per_million: number;
+  io_per_gb_read: number;
+  compute_vcpu_hour: number;
+  instance_month: number;
+  model_origin: string;
+  notes: string;
+}
+
+export interface CostRankingItem {
+  type: string;
+  object_key: string;
+  database?: string;
+  schema?: string;
+  object?: string;
+  size_bytes?: number;
+  month_amount?: number | null;
+  currency?: string;
+  priced: boolean;
+  reason?: string;
+  formula?: string;
+  confidence: string;
+  price_version?: number;
+  price_effective?: string;
+  finding_id?: string;
+  finding_type?: string;
+  next_step?: string;
+  label: string;
+  fingerprint?: string;
+  share_of_time?: number;
+  delta_calls?: number;
+}
+
+export interface CostRankingResponse {
+  items: CostRankingItem[];
+  reason?: string;
+  priced: boolean;
+  currency?: string;
+  price_version?: number;
+  audit_run_id?: string;
+  completeness?: string;
+  totals?: {
+    storage_month: number;
+    unused_index_month: number;
+    bloat_month: number;
+    query_month: number;
+  };
+}
+
+export interface CostSeriesPoint {
+  audit_run_id: string;
+  at: string;
+  completeness: string;
+  currency?: string;
+  storage_month: number;
+  unused_index_month: number;
+  bloat_month: number;
+  query_month: number;
+  priced: boolean;
+  confidence?: string;
+  reason?: string;
+}
+
+export interface SimulationAgeBucket {
+  label: string;
+  count: number;
+  bytes: number;
+}
+
+export interface SimulationScenario {
+  label: string;
+  retention_days: number;
+  compress_after_days: number;
+  bytes_after: number;
+  bytes_saved: number;
+  gb_saved: number;
+  money_saved?: number | null;
+  risks: string[];
+  projection_30_gb: number;
+  projection_90_gb: number;
+  projection_180_gb: number;
+}
+
+export interface HypertableSimulationResponse {
+  applicable: boolean;
+  reason?: string;
+  partial: boolean;
+  retention_applicable: boolean;
+  observed_ratio: number;
+  ratio_confidence_low: boolean;
+  current_bytes: number;
+  compressed_pct: number;
+  age_buckets: SimulationAgeBucket[];
+  scenarios: SimulationScenario[];
+  risks: string[];
+  currency?: string;
+  price_version_id?: string;
+  price_effective_from?: string;
+  gain: {
+    hypothesis: string;
+    predicted: string;
+    measured: string;
+  };
+}
+
+export interface UnscannedChunksResponse {
+  applicable: boolean;
+  reason?: string;
+  comparable?: boolean;
+  approximate: boolean;
+  label: string;
+  items: string[];
+  not_collected?: string[];
+}
+
+export interface RetentionScenario {
+  id: string;
+  environment_id: string;
+  database_name: string;
+  schema_name: string;
+  hypertable_name: string;
+  label: string;
+  retention_days: number;
+  compress_after_days: number;
+  gb_saved: number;
+  currency?: string;
+  money_saved?: number | null;
+  risks: string[];
+  saved_by: string;
+  saved_at: string;
+}
+
+export interface RestoreDrillDivergence {
+  table: string;
+  kind: string;
+  severity: string;
+  expected?: number;
+  actual?: number;
+  detail?: string;
+  object_type?: string;
+}
+
+export interface RestoreDrillCheck {
+  name: string;
+  status: string;
+  duration_seconds: number;
+  detail?: string;
+}
+
+export interface RestoreDrill {
+  id: string;
+  environment_id: string;
+  kind: string;
+  artifact_sha256: string;
+  succeeded: boolean;
+  rto_seconds?: number | null;
+  prevalidate_seconds?: number | null;
+  verify_seconds?: number | null;
+  checks: RestoreDrillCheck[];
+  divergences: RestoreDrillDivergence[];
+  cli_version: string;
+  note?: string;
+  performed_at: string;
+  recorded_at: string;
+}
+
+export interface RestoreDrillPolicy {
+  environment_id: string;
+  rto_target_seconds: number;
+  max_age_days: number;
+  updated_by?: string;
+  updated_at: string;
+}
+
+export interface PiiMapItem {
+  id: string;
+  qualified: string;
+  category: string;
+  confidence: string;
+  method: string;
+  valid_percent: number;
+  sample_size: number;
+  read_accounts: number;
+  has_rls: boolean;
+  access_level: string;
+  review_decision?: string;
+  coverage_note?: string;
+}

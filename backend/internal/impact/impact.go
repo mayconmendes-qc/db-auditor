@@ -135,8 +135,51 @@ func For(rule string, evidence map[string]any, firstSeen, observedAt time.Time) 
 		}
 		return build("size_delta_bytes", delta, "bytes", previous, "bytes na coleta anterior", start, end,
 			thresholds{0.5, 0.2}, "Crescimento entre duas coletas completas sobre o tamanho anterior.")
+	case "cost.unused_index_waste", "cost.bloat_recoverable", "cost.query_expensive":
+		return costMoneyEstimate(rule, evidence, basis, firstSeen, observedAt)
 	}
 	return notEstimated("a regra não coleta métrica com denominador e período")
+}
+
+func costMoneyEstimate(rule string, evidence, basis map[string]any, firstSeen, observedAt time.Time) Estimate {
+	if reason, _ := evidence["cost_reason"].(string); reason != "" {
+		return notEstimated(reason)
+	}
+	amount, okAmt := number(basis["month_amount"])
+	if !okAmt {
+		if v, ok := number(evidence["month_amount"]); ok {
+			amount, okAmt = v, true
+		}
+	}
+	currency, _ := basis["currency"].(string)
+	if currency == "" {
+		currency, _ = evidence["currency"].(string)
+	}
+	if !okAmt || currency == "" {
+		return notEstimated("não estimado — preço não configurado")
+	}
+	unit := currency + "/mês"
+	start, okStart := when(basis["price_effective_from"])
+	if !okStart {
+		start = firstSeen
+		if start.IsZero() {
+			start = observedAt
+		}
+	}
+	end := observedAt
+	if end.IsZero() {
+		end = start
+	}
+	formula, _ := basis["formula"].(string)
+	if formula == "" {
+		formula, _ = evidence["cost_label"].(string)
+	}
+	den := 1.0
+	e := build("estimated_monthly_cost", amount, unit, den, "mês", start, end, thresholds{1000, 100}, formula)
+	if e.Basis == "" {
+		e.Basis = "Custo estimado/mês a partir da tabela de preços vigente (AN-03)."
+	}
+	return e
 }
 
 func build(metric string, value float64, unit string, denominator float64, denominatorUnit string, start, end time.Time, t thresholds, basis string) Estimate {

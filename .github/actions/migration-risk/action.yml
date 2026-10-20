@@ -1,0 +1,136 @@
+name: migration-risk
+description: Analisa migrations PostgreSQL com o CLI do db-auditor e atualiza um único comentário no PR
+inputs:
+  environment_id:
+    description: UUID do ambiente no auditor
+    required: true
+  api_url:
+    description: URL base da API do auditor
+    required: true
+  path:
+    description: Arquivo ou diretório de migrations
+    required: false
+    default: migrations
+  fail_on:
+    description: Severidade mínima para falhar o job
+    required: false
+    default: high
+  cli_version:
+    description: Tag da release do CLI (ex. v1.2.3). Vazio = latest.
+    required: false
+    default: ""
+  annotate_deploy_on_merge:
+    description: Se true e o evento for merge, registra anotação deployment
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Recusar DSN no runner
+      shell: bash
+      run: |
+        if [ -n "${AUDITOR_MIGRATION_RISK_DSN:-}" ] || [ -n "${AUDITOR_MIGRATION_RISK_DSN_FILE:-}" ]; then
+          echo "A Action migration-risk não aceita DSN (ADR-0001 D2). Use só AUDITOR_CLI_TOKEN." >&2
+          exit 2
+        fi
+        if [ -z "${AUDITOR_CLI_TOKEN:-}" ] && [ -z "${AUDITOR_CLI_TOKEN_FILE:-}" ]; then
+          echo "Defina AUDITOR_CLI_TOKEN (secret) ou AUDITOR_CLI_TOKEN_FILE." >&2
+          exit 2
+        fi
+
+    - name: Baixar CLI
+      shell: bash
+      env:
+        CLI_VERSION: ${{ inputs.cli_version }}
+      run: |
+        set -euo pipefail
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) ARCH=amd64 ;;
+          aarch64|arm64) ARCH=arm64 ;;
+          *) echo "arch não suportada: $ARCH" >&2; exit 2 ;;
+        esac
+        REPO="osmendes/db-auditor"
+        if [ -n "$CLI_VERSION" ]; then
+          TAG="$CLI_VERSION"
+        else
+          TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+        fi
+        BASE="https://github.com/${REPO}/releases/download/${TAG}"
+        ASSET="auditor-linux-${ARCH}"
+        curl -fsSL -o /tmp/auditor "$BASE/$ASSET"
+        curl -fsSL -o /tmp/SHA256SUMS "$BASE/SHA256SUMS"
+        (cd /tmp && grep " ${ASSET}$" SHA256SUMS | sha256sum -c -)
+        chmod +x /tmp/auditor
+
+    - name: Analisar migrations
+      id: analyze
+      shell: bash
+      env:
+        AUDITOR_API_URL: ${{ inputs.api_url }}
+      run: |
+        set +e
+        /tmp/auditor migration-risk \
+          --path "${{ inputs.path }}" \
+          --environment "${{ inputs.environment_id }}" \
+          --api-url "${{ inputs.api_url }}" \
+          --fail-on "${{ inputs.fail_on }}" \
+          --format md \
+          --submit \
+          --repository "${GITHUB_REPOSITORY}" \
+          --pr "${{ github.event.pull_request.number }}" \
+          --commit "${GITHUB_SHA}" \
+          > /tmp/migration-risk.md
+        CODE=$?
+        set -e
+        echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
+        if [ "$CODE" -eq 2 ] || [ "$CODE" -eq 4 ]; then
+          echo "Falha de uso/segurança (código $CODE)" >&2
+          exit "$CODE"
+        fi
+        if [ "$CODE" -eq 3 ]; then
+          echo "Contexto parcial ou erro de parse (código 3)" >&2
+        fi
+        if [ "$CODE" -eq 1 ]; then
+          echo "Gate de severidade (código 1)" >&2
+        fi
+        exit 0
+
+    - name: Comentário único no PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const body = fs.readFileSync('/tmp/migration-risk.md', 'utf8');
+          const marker = '<!-- db-auditor:migration-risk -->';
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            per_page: 100,
+          });
+          const existing = comments.find(c => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+
+    - name: Falhar o job conforme o código da CLI
+      shell: bash
+      run: |
+        CODE="${{ steps.analyze.outputs.exit_code }}"
+        if [ "$CODE" != "0" ]; then
+          exit "$CODE"
+        fi

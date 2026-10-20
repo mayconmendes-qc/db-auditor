@@ -162,7 +162,7 @@ Dentro de `backend/`, o que mais importa no dia a dia:
 
 Dentro de `frontend/`, o código das telas fica em `src/`.
 
-`docs/guia-do-usuario.md` e `docs/ops.md` são os dois textos principais. Os outros arquivos em `docs/` são notas de apoio.
+`docs/guia-do-usuario.md` e `docs/ops.md` são os dois textos principais. Os outros arquivos em `docs/` são notas de apoio (por exemplo [log-anomaly.md](docs/log-anomaly.md) para a CLI de anomalias e o envio do agregado de último login).
 
 ## Tecnologias
 

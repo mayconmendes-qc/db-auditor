@@ -63,6 +63,8 @@ func registerMonitoringRoutes(mux *http.ServeMux, store InventoryStore) {
 		actor := "local"
 		if user := requestIdentity(r); user != nil {
 			actor = user.Username
+		} else if tok := requestEnvToken(r); tok != nil {
+			actor = "env-token:" + tok.PublicPrefix
 		}
 		item, err := backend.CreateAuditAnnotation(r.Context(), env, body.AuditRunID, body.Kind, body.Note, actor, at)
 		if errors.Is(err, repository.ErrMonitoringScope) {

@@ -18,6 +18,7 @@ import { AssistedMeasurementCard } from "./parts/AssistedMeasurementCard";
 import { AssistedScanResults } from "./parts/AssistedScanResults";
 import { AssistedSetupCards } from "./parts/AssistedSetupCards";
 import { words } from "./parts/assistedActionLabels";
+import { QualityContractsPanel } from "./parts/QualityContractsPanel";
 
 export function AssistedActionsPage() {
   const { environmentId, environments, setEnvironmentId, openFinding } =
@@ -266,6 +267,14 @@ export function AssistedActionsPage() {
               setResult={setResult}
               busy={busy}
               saveIssue={saveIssue}
+            />
+            <QualityContractsPanel
+              environmentId={environmentId}
+              enabled={enabled}
+              database={database}
+              schema={schema}
+              table={table}
+              onError={setError}
             />
             <AssistedActionList
               actions={actions}

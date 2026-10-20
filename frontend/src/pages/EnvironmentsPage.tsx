@@ -13,6 +13,9 @@ import { formatBytes } from "../lib/format";
 import { labels } from "../lib/labels";
 import { nextSort } from "../lib/sort";
 import { api } from "../services/api";
+import { CostPricesCard } from "./parts/CostPricesCard";
+import { EnvAPITokenCard } from "./parts/EnvAPITokenCard";
+import { RestoreDrillsCard } from "./parts/RestoreDrillsCard";
 import {
   type EnvironmentsPageProps,
   useEnvironmentsPage,
@@ -41,6 +44,7 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
     setFilter,
     setLabelError,
     setLabelName,
+    setDetailError,
     setReloadKey,
     setSchemaSort,
     setSelectedId,
@@ -171,6 +175,31 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
         {selectedId ? (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-slate-100">Topologia</h2>
+            {api.hasRole("operator") ? (
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={
+                    sortedEnvironments?.find((e) => e.id === selectedId)
+                      ?.is_production === true
+                  }
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    void api
+                      .patchEnvironment(selectedId, {
+                        is_production: checked,
+                      })
+                      .then(() => setReloadKey((k) => k + 1))
+                      .catch((err: unknown) =>
+                        setDetailError(
+                          formatError(err, "Não foi possível marcar produção"),
+                        ),
+                      );
+                  }}
+                />
+                Ambiente de produção (afeta severidade de drift)
+              </label>
+            ) : null}
             <div className="w-full max-w-md">
               <Input
                 label="Filtrar databases e schemas"
@@ -281,6 +310,13 @@ export function EnvironmentsPage({ onNavigate }: EnvironmentsPageProps) {
                 </div>
               </div>
             </div>
+            {selectedId ? <CostPricesCard environmentId={selectedId} /> : null}
+            {selectedId ? (
+              <RestoreDrillsCard environmentId={selectedId} />
+            ) : null}
+            {api.hasRole("operator") && selectedId ? (
+              <EnvAPITokenCard environmentId={selectedId} />
+            ) : null}
           </section>
         ) : null}
       </div>

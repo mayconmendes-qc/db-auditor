@@ -18,6 +18,7 @@ import type {
 } from "../types";
 import { DashboardAnalytics } from "./parts/DashboardAnalytics";
 import { DashboardConnections } from "./parts/DashboardConnections";
+import { DashboardCost } from "./parts/DashboardCost";
 import { DashboardKpis } from "./parts/DashboardKpis";
 import { DashboardPriorities } from "./parts/DashboardPriorities";
 
@@ -212,6 +213,7 @@ export function DashboardPage() {
             setSection={setSection}
             openFinding={openFinding}
           />
+          <DashboardCost environmentId={environmentId} />
           <DashboardConnections
             connections={connections}
             setSection={setSection}

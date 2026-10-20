@@ -14,7 +14,8 @@ func TestReviewedSQLMatchesExecutedSQL(t *testing.T) {
 		"tables": tablesSQL, "columns": columnsSQL, "indexes": indexesSQL,
 		"constraints": constraintsSQL, "views": viewsSQL, "functions": functionsSQL,
 		"extensions": extensionsSQL, "effective_grants": effectiveGrantsSQL,
-		"dependencies": objectDependenciesSQL,
+		"dependencies":  objectDependenciesSQL,
+		"grant_origins": grantOriginsSQL, "column_grants": columnGrantsSQL,
 	}
 	for name, executed := range queries {
 		t.Run(name, func(t *testing.T) {

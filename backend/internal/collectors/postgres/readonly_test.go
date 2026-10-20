@@ -13,6 +13,7 @@ func TestCollectorSQLIsReadOnly(t *testing.T) {
 		indexesSQL, constraintsSQL, viewsSQL, functionsSQL, extensionsSQL,
 		sequencesSQL, triggersSQL, policiesSQL,
 		effectiveGrantsSQL, objectDependenciesSQL,
+		grantOriginsSQL, columnGrantsSQL, objectACLSQL, membershipReachSQL,
 		columnStatsSQL, workloadAvailableSQL, workloadSQL,
 	}
 	forbidden := []string{

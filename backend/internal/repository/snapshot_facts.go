@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/osmendes/db-auditor/internal/analyzer"
+	"github.com/osmendes/db-auditor/internal/digest"
 )
 
 // LoadSnapshotFacts loads every analyzer input from one explicitly selected run.
@@ -110,7 +112,12 @@ func (s *Store) LoadSnapshotFacts(ctx context.Context, environmentID, auditRunID
 		func() error {
 			rows, err := s.pool.Query(ctx, `SELECT h.database_name,h.schema_name,h.hypertable_name,h.num_chunks,h.total_size_bytes,
 COALESCE((SELECT d.time_interval FROM dimension_snapshot d WHERE d.audit_run_id=h.audit_run_id AND d.database_name=h.database_name AND d.schema_name=h.schema_name AND d.hypertable_name=h.hypertable_name AND COALESCE(d.time_interval,'')<>'' ORDER BY d.dimension_number LIMIT 1), ''),
-(SELECT count(*) FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND NOT c.is_compressed AND c.range_end IS NOT NULL AND c.range_end < now() - interval '1 day')
+(SELECT count(*) FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND NOT c.is_compressed AND c.range_end IS NOT NULL AND c.range_end < now() - interval '1 day'),
+h.compression_enabled,
+COALESCE((SELECT GREATEST(0, EXTRACT(EPOCH FROM (now() - min(c.range_end)))/86400)::int FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND c.range_end IS NOT NULL), 0),
+COALESCE((SELECT sum(c.total_size_bytes) FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND NOT c.is_compressed AND c.range_end IS NOT NULL AND c.range_end < now() - interval '30 days'), 0),
+COALESCE((SELECT count(*) FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND c.is_compressed AND c.before_compression_bytes > 0 AND c.after_compression_bytes > 0), 0),
+COALESCE((SELECT CASE WHEN sum(c.after_compression_bytes) > 0 THEN sum(c.before_compression_bytes)::float8 / sum(c.after_compression_bytes)::float8 ELSE 0 END FROM chunk_snapshot c WHERE c.audit_run_id=h.audit_run_id AND c.database_name=h.database_name AND c.schema_name=h.schema_name AND c.hypertable_name=h.hypertable_name AND c.is_compressed AND c.before_compression_bytes > 0 AND c.after_compression_bytes > 0), 0)
 FROM hypertable_snapshot h WHERE h.environment_id=$1::uuid AND h.audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
@@ -118,7 +125,8 @@ FROM hypertable_snapshot h WHERE h.environment_id=$1::uuid AND h.audit_run_id=$2
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.HypertableFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.Name, &x.NumChunks, &x.SizeBytes, &x.ChunkInterval, &x.UncompressedClosedChunks); err != nil {
+				if err := rows.Scan(&x.Database, &x.Schema, &x.Name, &x.NumChunks, &x.SizeBytes, &x.ChunkInterval, &x.UncompressedClosedChunks,
+					&x.CompressionEnabled, &x.ChunksOlderThanDays, &x.UncompressedOldBytes, &x.CompressedChunkCount, &x.ObservedCompressionRatio); err != nil {
 					return err
 				}
 				f.Hypertables = append(f.Hypertables, x)
@@ -144,16 +152,18 @@ FROM hypertable_snapshot h WHERE h.environment_id=$1::uuid AND h.audit_run_id=$2
 			return s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM audit_run_coverage WHERE audit_run_id=$1::uuid AND warning ILIKE '%truncated%')`, auditRunID).Scan(&f.ChunksTruncated)
 		},
 		func() error {
-			rows, err := s.pool.Query(ctx, `SELECT c.database_name,c.schema_name,c.view_name,COALESCE(c.materialization_schema,''),COALESCE(c.materialization_hypertable,''),c.materialized_only,EXISTS(SELECT 1 FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh' AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable))),c.view_definition,COALESCE(c.lag_interval,'') FROM continuous_aggregate_snapshot c WHERE c.environment_id=$1::uuid AND c.audit_run_id=$2::uuid`, environmentID, auditRunID)
+			rows, err := s.pool.Query(ctx, `SELECT c.database_name,c.schema_name,c.view_name,COALESCE(c.materialization_schema,''),COALESCE(c.materialization_hypertable,''),c.materialized_only,EXISTS(SELECT 1 FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh' AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable))),c.view_definition,COALESCE(c.lag_interval,''),COALESCE(c.source_hypertable_schema,''),COALESCE(c.source_hypertable_name,''),COALESCE((SELECT p.config_json FROM policy_snapshot p WHERE p.audit_run_id=c.audit_run_id AND p.database_name=c.database_name AND p.policy_type='refresh' AND ((p.hypertable_schema=c.schema_name AND p.hypertable_name=c.view_name) OR (p.hypertable_schema=c.materialization_schema AND p.hypertable_name=c.materialization_hypertable)) LIMIT 1),'') FROM continuous_aggregate_snapshot c WHERE c.environment_id=$1::uuid AND c.audit_run_id=$2::uuid`, environmentID, auditRunID)
 			if err != nil {
 				return err
 			}
 			defer rows.Close()
 			for rows.Next() {
 				var x analyzer.CAGGFact
-				if err := rows.Scan(&x.Database, &x.Schema, &x.ViewName, &x.MaterializationSchema, &x.MaterializationHypertable, &x.MaterializedOnly, &x.HasRefreshPolicy, &x.ViewDefinition, &x.Lag); err != nil {
+				var cfg string
+				if err := rows.Scan(&x.Database, &x.Schema, &x.ViewName, &x.MaterializationSchema, &x.MaterializationHypertable, &x.MaterializedOnly, &x.HasRefreshPolicy, &x.ViewDefinition, &x.Lag, &x.SourceSchema, &x.SourceName, &cfg); err != nil {
 					return err
 				}
+				x.RefreshWindowDays = refreshWindowDaysFromConfig(cfg)
 				f.CAGGs = append(f.CAGGs, x)
 			}
 			return rows.Err()
@@ -242,7 +252,73 @@ FROM workload_snapshot WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`,
 	if err = s.loadMaintenanceContext(ctx, environmentID, auditRunID, &f); err != nil {
 		return f, err
 	}
+	if price, err := s.CurrentCostPrice(ctx, environmentID); err == nil && price != nil {
+		f.CostPrice = &analyzer.CostPriceFact{
+			Version: price.Version, Currency: price.Currency, StorageGBMonth: price.StorageGBMonth,
+			IOPerMillion: price.IOPerMillion, IOPerGBRead: price.IOPerGBRead,
+			ComputeVCPUHour: price.ComputeVCPUHour, InstanceMonth: price.InstanceMonth,
+			EffectiveFrom: price.EffectiveFrom,
+		}
+	}
+	if rows, err := s.pool.Query(ctx, `
+SELECT database_name, schema_name, table_name, column_name, average_width, null_fraction
+FROM column_stat_snapshot
+WHERE environment_id=$1::uuid AND audit_run_id=$2::uuid`, environmentID, auditRunID); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c analyzer.ColumnStatFact
+			if scanErr := rows.Scan(&c.Database, &c.Schema, &c.TableName, &c.ColumnName, &c.AverageWidth, &c.NullFraction); scanErr != nil {
+				break
+			}
+			f.ColumnStats = append(f.ColumnStats, c)
+		}
+	}
+	if win, err := s.loadQueryCostWindowFact(ctx, environmentID); err == nil {
+		f.QueryCostWindow = win
+	}
+	if camps, err := s.LoadAccessReviewFacts(ctx, environmentID, auditRunID); err == nil {
+		f.AccessReviewCampaigns = camps
+	}
+	if pol, err := s.GetTargetRestorePolicy(ctx, environmentID); err == nil && pol != nil {
+		f.RestorePolicy = &analyzer.RestorePolicyFact{
+			RTOTargetSeconds: pol.RTOTargetSeconds,
+			MaxAgeDays:       pol.MaxAgeDays,
+		}
+	}
+	if last, err := s.LastSuccessfulTargetRestoreDrill(ctx, environmentID); err == nil && last != nil {
+		divN := 0
+		if len(last.Divergences) > 2 {
+			var arr []any
+			if json.Unmarshal(last.Divergences, &arr) == nil {
+				divN = len(arr)
+			}
+		}
+		f.LastRestoreDrill = &analyzer.RestoreDrillFact{
+			ID: last.ID, Succeeded: last.Succeeded, RTOSeconds: last.RTOSeconds,
+			PerformedAt: last.PerformedAt, DivergenceN: divN, ArtifactSHA: last.ArtifactSHA256,
+		}
+	}
 	return f, nil
+}
+
+// loadQueryCostWindowFact reuses digest window math for cost.query_expensive (L3).
+func (s *Store) loadQueryCostWindowFact(ctx context.Context, environmentID string) (*analyzer.QueryCostWindowFact, error) {
+	points, workload, err := s.loadDigestWindowInputs(ctx, environmentID, 14)
+	if err != nil {
+		return &analyzer.QueryCostWindowFact{OK: false, Reason: err.Error()}, nil
+	}
+	res := digest.ResolveWindow(points, workload, 14*24*time.Hour)
+	out := &analyzer.QueryCostWindowFact{OK: res.OK, Reason: res.Reason, TotalTimeMS: res.TotalTimeMS}
+	if !res.OK {
+		return out, nil
+	}
+	for _, d := range res.Deltas {
+		out.Deltas = append(out.Deltas, analyzer.QueryCostDeltaFact{
+			Fingerprint: d.Fingerprint, DatabaseName: d.DatabaseName,
+			DeltaCalls: d.DeltaCalls, DeltaTotalMS: d.DeltaTotalMS, DeltaBlocksRead: d.DeltaBlocksRead,
+		})
+	}
+	return out, nil
 }
 
 func (s *Store) loadMaintenanceContext(ctx context.Context, environmentID, auditRunID string, f *analyzer.SnapshotFacts) error {

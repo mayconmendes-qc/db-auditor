@@ -106,6 +106,7 @@ var coverageSnapshotTables = map[string]string{
 	"postgres.extensions": "extension_snapshot", "timescale.version": "timescale_version_snapshot",
 	"postgres.sequences": "sequence_snapshot", "postgres.triggers": "trigger_snapshot",
 	"postgres.policies": "rls_policy_snapshot", "postgres.effective_grants": "grant_snapshot", "postgres.account_roles": "account_role_snapshot",
+	"postgres.grant_origins":       "grant_origin_snapshot",
 	"postgres.object_dependencies": "object_dependency_snapshot",
 	"timescale.hypertables":        "hypertable_snapshot", "timescale.dimensions": "dimension_snapshot",
 	"timescale.chunks": "chunk_snapshot", "timescale.continuous_aggregates": "continuous_aggregate_snapshot",
