@@ -86,8 +86,8 @@ type PersonalDataCategoryCount struct {
 
 type PersonalDataColumnLine struct {
 	Qualified, Category, Confidence, Method string
-	ReadCount int
-	HasRLS bool
+	ReadCount                               int
+	HasRLS                                  bool
 }
 
 // AccessReviewSummary feeds the access_review PDF (RF-09).

@@ -31,7 +31,7 @@ func TestRetentionSimulationSectionTechnical(t *testing.T) {
 func TestRetentionSimulationNotApplicable(t *testing.T) {
 	d := Document{
 		Type: "technical", Environment: "pg", RunID: "run-1",
-		RunStarted: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		RunStarted:          time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
 		RetentionSimulation: &RetentionSimulationSummary{Applicable: false, Reason: "não aplicável"},
 	}
 	body := linesText(BuildLines(d))

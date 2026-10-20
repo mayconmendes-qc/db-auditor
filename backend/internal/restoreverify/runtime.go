@@ -63,8 +63,11 @@ func (r *ExecRuntime) Run(ctx context.Context, args ...string) (string, string, 
 type FakeRuntime struct {
 	Bin       string
 	Calls     [][]string
-	Responses map[string]struct{ Out, Err string; CodeErr error }
-	FailInfo  bool
+	Responses map[string]struct {
+		Out, Err string
+		CodeErr  error
+	}
+	FailInfo bool
 }
 
 func (f *FakeRuntime) Name() string {

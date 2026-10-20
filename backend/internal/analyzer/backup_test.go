@@ -8,8 +8,8 @@ import (
 func TestBackupDrillOverdue(t *testing.T) {
 	old := time.Now().UTC().Add(-31 * 24 * time.Hour)
 	out, err := BackupAnalyzer{}.Analyze(t.Context(), SnapshotFacts{
-		EnvironmentID: "env",
-		RestorePolicy: &RestorePolicyFact{RTOTargetSeconds: 600, MaxAgeDays: 30},
+		EnvironmentID:    "env",
+		RestorePolicy:    &RestorePolicyFact{RTOTargetSeconds: 600, MaxAgeDays: 30},
 		LastRestoreDrill: &RestoreDrillFact{ID: "d1", Succeeded: true, PerformedAt: old},
 	})
 	if err != nil {

@@ -12,7 +12,7 @@ func TestAccessReviewPDFIdentifierRedaction(t *testing.T) {
 		AccessReview: &AccessReviewSummary{
 			CampaignID: "camp-1", CampaignName: "Q1", Status: "open", DueAt: "2026-12-01",
 			TotalItems: 100, DecidedItems: 40, PendingItems: 60, DecidedPercent: 40,
-			Owners: []AccessReviewOwnerLine{{TargetRole: "app_report", OwnerName: "alice", Contact: "alice@example.com"}},
+			Owners:         []AccessReviewOwnerLine{{TargetRole: "app_report", OwnerName: "alice", Contact: "alice@example.com"}},
 			PendingSamples: []AccessReviewPendingLine{{Account: "app_etl", Object: "vendas.pedido", Privilege: "UPDATE", Origin: "direto"}},
 		},
 	}

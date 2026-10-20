@@ -60,15 +60,15 @@ type AgeBucket struct {
 
 // SimulationResult is the output of Simulate.
 type SimulationResult struct {
-	Partial             bool            `json:"partial"`
-	RetentionApplicable bool            `json:"retention_applicable"`
-	ObservedRatio       float64         `json:"observed_ratio"`
-	RatioConfidenceLow  bool            `json:"ratio_confidence_low"`
-	CurrentBytes        int64           `json:"current_bytes"`
-	CompressedPct       float64         `json:"compressed_pct"`
-	AgeBuckets          []AgeBucket     `json:"age_buckets"`
+	Partial             bool             `json:"partial"`
+	RetentionApplicable bool             `json:"retention_applicable"`
+	ObservedRatio       float64          `json:"observed_ratio"`
+	RatioConfidenceLow  bool             `json:"ratio_confidence_low"`
+	CurrentBytes        int64            `json:"current_bytes"`
+	CompressedPct       float64          `json:"compressed_pct"`
+	AgeBuckets          []AgeBucket      `json:"age_buckets"`
 	Scenarios           []ScenarioResult `json:"scenarios"`
-	Risks               []string        `json:"risks"`
+	Risks               []string         `json:"risks"`
 }
 
 // ScenarioResult is one scenario's projected savings.

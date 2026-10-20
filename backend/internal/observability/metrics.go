@@ -33,7 +33,6 @@ type Metrics struct {
 	migrationParseErrors atomic.Uint64
 	envTokenRequests     sync.Map // scope|result -> *atomic.Uint64
 
-
 	// Plan 04 — schema drift
 	schemaChangeEvents    sync.Map // kind -> *atomic.Uint64
 	alertDeliveriesFailed sync.Map // kind -> *atomic.Uint64
@@ -66,7 +65,6 @@ type Metrics struct {
 	qualityContractDurationNs sync.Map // result -> *atomic.Uint64 (sum)
 	qualityContractDurationN  sync.Map // result -> *atomic.Uint64 (count)
 }
-
 
 // DefaultMetrics is the process-wide registry.
 var DefaultMetrics = NewMetrics()
@@ -127,7 +125,6 @@ func (m *Metrics) IncMigrationParseError() {
 func (m *Metrics) IncEnvTokenRequest(scope, result string) {
 	m.incMap(&m.envTokenRequests, scope+"|"+result)
 }
-
 
 // IncQueryDigest records one generated digest by result state.
 func (m *Metrics) IncQueryDigest(result string) {
@@ -401,7 +398,6 @@ func (m *Metrics) Handler() http.HandlerFunc {
 				parts[0], parts[1], v.(*atomic.Uint64).Load())
 		}
 
-
 		b.WriteString("# HELP auditor_schema_change_events_total Schema timeline events by change kind.\n")
 		b.WriteString("# TYPE auditor_schema_change_events_total counter\n")
 		skeys := make([]string, 0)
@@ -476,7 +472,9 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		for _, k := range pkeys {
 			v, _ := m.piiScans.Load(k)
 			parts := strings.SplitN(k, "|", 2)
-			if len(parts) != 2 { continue }
+			if len(parts) != 2 {
+				continue
+			}
 			fmt.Fprintf(&b, "auditor_pii_scans_total{status=%q,content=%q} %d\n", parts[0], parts[1], v.(*atomic.Uint64).Load())
 		}
 		b.WriteString("# HELP auditor_pii_scan_ceilings_total PII scans stopped by duration or table ceiling.\n")

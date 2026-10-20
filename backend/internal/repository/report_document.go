@@ -375,7 +375,6 @@ func (r *ReportSections) loadQualityContracts(ctx context.Context, env string) *
 	return out
 }
 
-
 func (r *ReportSections) loadPersonalData(ctx context.Context, env string) *report.PersonalDataSummary {
 	totals, total, err := r.store.PIICategoryTotals(ctx, env)
 	if err != nil || total == 0 {
@@ -390,7 +389,7 @@ func (r *ReportSections) loadPersonalData(ctx context.Context, env string) *repo
 		for _, it := range items {
 			out.DetailColumns = append(out.DetailColumns, report.PersonalDataColumnLine{
 				Qualified: it.Qualified,
-				Category: it.Category, Confidence: it.Confidence, Method: it.Method,
+				Category:  it.Category, Confidence: it.Confidence, Method: it.Method,
 				ReadCount: it.ReadAccounts, HasRLS: it.HasRLS,
 			})
 		}

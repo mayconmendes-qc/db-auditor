@@ -43,13 +43,13 @@ type TargetRestorePolicy struct {
 
 // RestoreDrillContext is the CLI-facing context (no DSNs).
 type RestoreDrillContext struct {
-	SourceMajor        int                              `json:"source_major"`
-	AuditRunID         string                           `json:"audit_run_id,omitempty"`
-	TargetFingerprints []string                         `json:"target_fingerprints"`
-	Inventory          []restoreverify.InventoryObject  `json:"inventory"`
-	EstimatedRows      []restoreverify.TableEstimate    `json:"estimated_rows"`
+	SourceMajor        int                               `json:"source_major"`
+	AuditRunID         string                            `json:"audit_run_id,omitempty"`
+	TargetFingerprints []string                          `json:"target_fingerprints"`
+	Inventory          []restoreverify.InventoryObject   `json:"inventory"`
+	EstimatedRows      []restoreverify.TableEstimate     `json:"estimated_rows"`
 	WriteCounters      []restoreverify.TableWriteCounter `json:"write_counters"`
-	Partial            bool                             `json:"partial"`
+	Partial            bool                              `json:"partial"`
 }
 
 // RecordTargetRestoreDrillInput is the validated POST body.

@@ -15,47 +15,47 @@ import (
 
 // RetentionScenario is a saved what-if (spec 09).
 type RetentionScenario struct {
-	ID                 string    `json:"id"`
-	EnvironmentID      string    `json:"environment_id"`
-	DatabaseName       string    `json:"database_name"`
-	SchemaName         string    `json:"schema_name"`
-	HypertableName     string    `json:"hypertable_name"`
-	Label              string    `json:"label"`
-	RetentionDays      int       `json:"retention_days"`
-	CompressAfterDays  int       `json:"compress_after_days"`
-	AuditRunID         *string   `json:"audit_run_id,omitempty"`
-	CurrentBytes       int64     `json:"current_bytes"`
-	BytesAfter         int64     `json:"bytes_after"`
-	BytesSaved         int64     `json:"bytes_saved"`
-	GBSaved            float64   `json:"gb_saved"`
-	Currency           string    `json:"currency,omitempty"`
-	MoneySaved         *float64  `json:"money_saved,omitempty"`
-	PriceVersionID     *string   `json:"price_version_id,omitempty"`
+	ID                 string     `json:"id"`
+	EnvironmentID      string     `json:"environment_id"`
+	DatabaseName       string     `json:"database_name"`
+	SchemaName         string     `json:"schema_name"`
+	HypertableName     string     `json:"hypertable_name"`
+	Label              string     `json:"label"`
+	RetentionDays      int        `json:"retention_days"`
+	CompressAfterDays  int        `json:"compress_after_days"`
+	AuditRunID         *string    `json:"audit_run_id,omitempty"`
+	CurrentBytes       int64      `json:"current_bytes"`
+	BytesAfter         int64      `json:"bytes_after"`
+	BytesSaved         int64      `json:"bytes_saved"`
+	GBSaved            float64    `json:"gb_saved"`
+	Currency           string     `json:"currency,omitempty"`
+	MoneySaved         *float64   `json:"money_saved,omitempty"`
+	PriceVersionID     *string    `json:"price_version_id,omitempty"`
 	PriceEffectiveFrom *time.Time `json:"price_effective_from,omitempty"`
-	Risks              []string  `json:"risks"`
-	RatioConfidenceLow bool      `json:"ratio_confidence_low"`
-	ObservedRatio      *float64  `json:"observed_ratio,omitempty"`
-	Partial            bool      `json:"partial"`
-	SavedBy            string    `json:"saved_by"`
-	SavedAt            time.Time `json:"saved_at"`
+	Risks              []string   `json:"risks"`
+	RatioConfidenceLow bool       `json:"ratio_confidence_low"`
+	ObservedRatio      *float64   `json:"observed_ratio,omitempty"`
+	Partial            bool       `json:"partial"`
+	SavedBy            string     `json:"saved_by"`
+	SavedAt            time.Time  `json:"saved_at"`
 }
 
 // SaveRetentionScenarioInput is the write model for POST.
 type SaveRetentionScenarioInput struct {
-	DatabaseName      string
-	SchemaName        string
-	HypertableName    string
-	Label             string
-	RetentionDays     int
-	CompressAfterDays int
-	AuditRunID        string
-	Result            tsretention.SimulationResult
-	Scenario          tsretention.ScenarioResult
-	Currency          string
-	MoneySaved        *float64
-	PriceVersionID    string
+	DatabaseName       string
+	SchemaName         string
+	HypertableName     string
+	Label              string
+	RetentionDays      int
+	CompressAfterDays  int
+	AuditRunID         string
+	Result             tsretention.SimulationResult
+	Scenario           tsretention.ScenarioResult
+	Currency           string
+	MoneySaved         *float64
+	PriceVersionID     string
 	PriceEffectiveFrom *time.Time
-	SavedBy           string
+	SavedBy            string
 }
 
 // ListRetentionScenarios returns saved scenarios for an environment (newest first).

@@ -8,12 +8,12 @@ import (
 
 // RestoreDrillFact is the latest successful target restore drill (plan 08).
 type RestoreDrillFact struct {
-	ID           string
-	Succeeded    bool
-	RTOSeconds   *int
-	PerformedAt  time.Time
-	DivergenceN  int
-	ArtifactSHA  string
+	ID          string
+	Succeeded   bool
+	RTOSeconds  *int
+	PerformedAt time.Time
+	DivergenceN int
+	ArtifactSHA string
 }
 
 // RestorePolicyFact is the per-environment restore policy.

@@ -166,7 +166,6 @@ type QueryCostDeltaFact struct {
 	DeltaBlocksRead int64
 }
 
-
 // TableFact is a minimal table size fact for storage analysis.
 type TableFact struct {
 	Database       string     `json:"database"`

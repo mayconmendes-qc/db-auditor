@@ -123,16 +123,16 @@ func DefaultThresholds() Thresholds {
 
 // Options configures a local analysis run (no network).
 type Options struct {
-	Profile      string
-	Paths        []string // empty → stdin
-	TimeField    string   // generico
-	LevelField   string
-	MessageField string
-	Window       time.Duration
-	BaselineK    int
-	BaselineFrom time.Time // zero = use trailing K windows
-	BaselineTo   time.Time
-	FailOn       string
+	Profile          string
+	Paths            []string // empty → stdin
+	TimeField        string   // generico
+	LevelField       string
+	MessageField     string
+	Window           time.Duration
+	BaselineK        int
+	BaselineFrom     time.Time // zero = use trailing K windows
+	BaselineTo       time.Time
+	FailOn           string
 	Format           string // md|json
 	LastLoginOut     string // path or empty; "-" for stdout section only via report
 	CollectLastLogin bool   // also true when submitting (plan 10 L5); no network here

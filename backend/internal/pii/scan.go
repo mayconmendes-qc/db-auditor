@@ -20,40 +20,40 @@ const (
 
 type ColumnMeta struct {
 	Database, Schema, Table, Column, DataType string
-	NullFraction *float64
+	NullFraction                              *float64
 }
 
 type ColumnResult struct {
 	Database, Schema, Table, Column, DataType string
-	Category, Confidence, Method string
-	SampleSize, ValidCount, NonNullCount int
-	ValidPercent float64
-	NullFraction *float64
-	ReadAccounts int
-	ReadNames []string
-	HasRLS bool
-	AccessLevel, CoverageNote string
+	Category, Confidence, Method              string
+	SampleSize, ValidCount, NonNullCount      int
+	ValidPercent                              float64
+	NullFraction                              *float64
+	ReadAccounts                              int
+	ReadNames                                 []string
+	HasRLS                                    bool
+	AccessLevel, CoverageNote                 string
 }
 
 type ScanRequest struct {
-	Stages []int
-	Dictionary []DictionaryEntry
-	Columns []ColumnMeta
-	Scope config.Scope
-	DSN string
-	ContentEnabled bool
-	Deadline time.Time
+	Stages          []int
+	Dictionary      []DictionaryEntry
+	Columns         []ColumnMeta
+	Scope           config.Scope
+	DSN             string
+	ContentEnabled  bool
+	Deadline        time.Time
 	ValidateContent ContentValidator
 }
 
 type ContentValidator func(ctx context.Context, dsn, database, schema, table, column string, limit int) (valid, nonNull, sample int, err error)
 
 type ScanOutcome struct {
-	Results []ColumnResult
+	Results                                         []ColumnResult
 	TablesAnalyzed, ColumnsAnalyzed, ContentColumns int
-	Status string
-	Missing []string
-	CoverageNote, Error string
+	Status                                          string
+	Missing                                         []string
+	CoverageNote, Error                             string
 }
 
 func ClassifyMetadata(columns []ColumnMeta, dict []DictionaryEntry, scope config.Scope) ScanOutcome {

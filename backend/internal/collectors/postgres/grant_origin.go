@@ -190,10 +190,10 @@ type aclGrant struct {
 }
 
 type reachEdge struct {
-	granted  string
-	setOK    bool
-	inherit  bool
-	adminOK  bool
+	granted string
+	setOK   bool
+	inherit bool
+	adminOK bool
 }
 
 // CollectGrantOrigins resolves effective privilege origins for one database.

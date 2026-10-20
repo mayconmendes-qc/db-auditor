@@ -14,12 +14,12 @@ type SnapshotColumn struct {
 
 // SnapshotConstraint is a PK/unique/FK from the latest complete collection.
 type SnapshotConstraint struct {
-	Name                string
-	Type                string // p, u, f
-	ConstrainedColumns  []string
-	ReferencedSchema    string
-	ReferencedTable     string
-	ReferencedColumns   []string
+	Name               string
+	Type               string // p, u, f
+	ConstrainedColumns []string
+	ReferencedSchema   string
+	ReferencedTable    string
+	ReferencedColumns  []string
 }
 
 // ProposalInput feeds RF-03 generation.

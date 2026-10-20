@@ -32,14 +32,14 @@ var (
 var emailLoose = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 type AccessReviewOwner struct {
-	ID           string `json:"id"`
-	Environment  string `json:"environment_id"`
-	TargetRole   string `json:"target_role"`
-	OwnerUserID  string `json:"owner_user_id"`
-	OwnerName    string `json:"owner_username"`
-	OwnerRole    string `json:"owner_role"`
-	ContactName  string `json:"contact_name,omitempty"`
-	ContactEmail string `json:"contact_email,omitempty"`
+	ID           string    `json:"id"`
+	Environment  string    `json:"environment_id"`
+	TargetRole   string    `json:"target_role"`
+	OwnerUserID  string    `json:"owner_user_id"`
+	OwnerName    string    `json:"owner_username"`
+	OwnerRole    string    `json:"owner_role"`
+	ContactName  string    `json:"contact_name,omitempty"`
+	ContactEmail string    `json:"contact_email,omitempty"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
@@ -51,21 +51,21 @@ type AccessReviewOwnerInput struct {
 }
 
 type AccessReviewCampaign struct {
-	ID              string          `json:"id"`
-	EnvironmentID   string          `json:"environment_id"`
-	Name            string          `json:"name"`
-	Scope           json.RawMessage `json:"scope"`
-	ReferenceRunID  string          `json:"reference_run_id"`
-	DueAt           time.Time       `json:"due_at"`
-	Status          string          `json:"status"`
-	CreatedBy       string          `json:"created_by"`
-	CreatedAt       time.Time       `json:"created_at"`
-	ClosedAt        *time.Time      `json:"closed_at,omitempty"`
-	ClosedBy        string          `json:"closed_by,omitempty"`
-	TotalItems      int             `json:"total_items"`
-	DecidedItems    int             `json:"decided_items"`
-	PendingItems    int             `json:"pending_items"`
-	DecidedPercent  float64         `json:"decided_percent"`
+	ID             string          `json:"id"`
+	EnvironmentID  string          `json:"environment_id"`
+	Name           string          `json:"name"`
+	Scope          json.RawMessage `json:"scope"`
+	ReferenceRunID string          `json:"reference_run_id"`
+	DueAt          time.Time       `json:"due_at"`
+	Status         string          `json:"status"`
+	CreatedBy      string          `json:"created_by"`
+	CreatedAt      time.Time       `json:"created_at"`
+	ClosedAt       *time.Time      `json:"closed_at,omitempty"`
+	ClosedBy       string          `json:"closed_by,omitempty"`
+	TotalItems     int             `json:"total_items"`
+	DecidedItems   int             `json:"decided_items"`
+	PendingItems   int             `json:"pending_items"`
+	DecidedPercent float64         `json:"decided_percent"`
 }
 
 type AccessReviewItem struct {
@@ -84,11 +84,11 @@ type AccessReviewItem struct {
 	OwnerUserID  *string  `json:"owner_user_id,omitempty"`
 	OwnerName    string   `json:"owner_username,omitempty"`
 	// Latest decision fields (nullable when pending).
-	Decision       *string    `json:"decision,omitempty"`
-	Justification  string     `json:"justification,omitempty"`
-	DecidedBy      string     `json:"decided_by,omitempty"`
-	DecidedAt      *time.Time `json:"decided_at,omitempty"`
-	Pending        bool       `json:"pending"`
+	Decision      *string    `json:"decision,omitempty"`
+	Justification string     `json:"justification,omitempty"`
+	DecidedBy     string     `json:"decided_by,omitempty"`
+	DecidedAt     *time.Time `json:"decided_at,omitempty"`
+	Pending       bool       `json:"pending"`
 	// Last login from log aggregate (ADR-0001 D10); source is always "log" when set.
 	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
 	LastLoginSource string     `json:"last_login_source,omitempty"`
@@ -116,34 +116,34 @@ type AccessReviewDecisionInput struct {
 }
 
 type AccessReviewDecision struct {
-	ID             string     `json:"id"`
-	CampaignID     string     `json:"campaign_id"`
-	ItemID         string     `json:"item_id"`
-	Decision       string     `json:"decision"`
-	RevokeDueAt    *time.Time `json:"revoke_due_at,omitempty"`
-	Justification  string     `json:"justification"`
-	DecidedBy      string     `json:"decided_by"`
-	DecidedAt      time.Time  `json:"decided_at"`
-	SupersedesID   *string    `json:"supersedes_id,omitempty"`
-	FindingActionID *string   `json:"finding_action_id,omitempty"`
+	ID              string     `json:"id"`
+	CampaignID      string     `json:"campaign_id"`
+	ItemID          string     `json:"item_id"`
+	Decision        string     `json:"decision"`
+	RevokeDueAt     *time.Time `json:"revoke_due_at,omitempty"`
+	Justification   string     `json:"justification"`
+	DecidedBy       string     `json:"decided_by"`
+	DecidedAt       time.Time  `json:"decided_at"`
+	SupersedesID    *string    `json:"supersedes_id,omitempty"`
+	FindingActionID *string    `json:"finding_action_id,omitempty"`
 }
 
 type AccessReviewDiff struct {
-	PreviousCampaignID string              `json:"previous_campaign_id,omitempty"`
-	NewPrivileges      []AccessReviewItem  `json:"new_privileges"`
-	RemovedPrivileges  []AccessReviewItem  `json:"removed_privileges"`
+	PreviousCampaignID string                     `json:"previous_campaign_id,omitempty"`
+	NewPrivileges      []AccessReviewItem         `json:"new_privileges"`
+	RemovedPrivileges  []AccessReviewItem         `json:"removed_privileges"`
 	ChangedDecisions   []AccessReviewDiffDecision `json:"changed_decisions"`
-	NewAccounts        []string            `json:"new_accounts"`
-	RemovedAccounts    []string            `json:"removed_accounts"`
+	NewAccounts        []string                   `json:"new_accounts"`
+	RemovedAccounts    []string                   `json:"removed_accounts"`
 }
 
 type AccessReviewDiffDecision struct {
-	ItemKey    string  `json:"item_key"`
-	Account    string  `json:"account_name"`
-	Object     string  `json:"object_name"`
-	Privilege  string  `json:"privilege"`
-	Previous   *string `json:"previous_decision,omitempty"`
-	Current    *string `json:"current_decision,omitempty"`
+	ItemKey   string  `json:"item_key"`
+	Account   string  `json:"account_name"`
+	Object    string  `json:"object_name"`
+	Privilege string  `json:"privilege"`
+	Previous  *string `json:"previous_decision,omitempty"`
+	Current   *string `json:"current_decision,omitempty"`
 }
 
 type CreateAccessReviewCampaignInput struct {
@@ -1025,7 +1025,7 @@ func (s *Store) BuildAccessReviewSummary(ctx context.Context, env, campaignID st
 	}
 	sum := &report.AccessReviewSummary{
 		CampaignID: camp.ID, CampaignName: camp.Name, Status: camp.Status,
-		DueAt: camp.DueAt.UTC().Format(time.RFC3339),
+		DueAt:      camp.DueAt.UTC().Format(time.RFC3339),
 		TotalItems: camp.TotalItems, DecidedItems: camp.DecidedItems,
 		PendingItems: camp.PendingItems, DecidedPercent: camp.DecidedPercent,
 	}

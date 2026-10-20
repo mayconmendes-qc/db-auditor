@@ -10,13 +10,13 @@ import (
 )
 
 const (
-	retentionMissingMinBytes      = 10 * 1024 * 1024 * 1024 // 10 GB — valor inicial, calibrar
-	compressionMissingMinBytes    = 5 * 1024 * 1024 * 1024  // 5 GB
-	compressionMissingAgeDays     = 30
-	compressionMissingSizeShare   = 0.50
-	compressionRatioLowThreshold  = 2.0
-	compressionRatioLowMinChunks  = 5
-	retentionOldChunkDays         = 365
+	retentionMissingMinBytes     = 10 * 1024 * 1024 * 1024 // 10 GB — valor inicial, calibrar
+	compressionMissingMinBytes   = 5 * 1024 * 1024 * 1024  // 5 GB
+	compressionMissingAgeDays    = 30
+	compressionMissingSizeShare  = 0.50
+	compressionRatioLowThreshold = 2.0
+	compressionRatioLowMinChunks = 5
+	retentionOldChunkDays        = 365
 )
 
 // TimescaleRetentionAnalyzer emits timescale.retention_* and timescale.compression_* (spec 09).
@@ -100,12 +100,12 @@ func (TimescaleRetentionAnalyzer) Analyze(_ context.Context, facts SnapshotFacts
 				SchemaName:    ht.Schema,
 				ObjectName:    ht.Name,
 				Evidence: map[string]any{
-					"size_bytes":              ht.SizeBytes,
-					"uncompressed_old_bytes":  ht.UncompressedOldBytes,
-					"uncompressed_old_share":  math.Round(uncompressedOldShare*1000) / 1000,
-					"compression_enabled":     ht.CompressionEnabled,
-					"has_compression_policy":  hasCompression[key],
-					"hypothesis":              "Compressão após N dias pode reduzir armazenamento; valide a taxa observada antes de aplicar.",
+					"size_bytes":             ht.SizeBytes,
+					"uncompressed_old_bytes": ht.UncompressedOldBytes,
+					"uncompressed_old_share": math.Round(uncompressedOldShare*1000) / 1000,
+					"compression_enabled":    ht.CompressionEnabled,
+					"has_compression_policy": hasCompression[key],
+					"hypothesis":             "Compressão após N dias pode reduzir armazenamento; valide a taxa observada antes de aplicar.",
 				},
 				DedupKey: DedupKey("timescale.compression_missing", key, title),
 			})

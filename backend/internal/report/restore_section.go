@@ -54,7 +54,7 @@ func emitRestoreVerified(d Document, out func(...Line) error) error {
 		lines = append(lines, Line{"Ensaio em atraso em relação ao prazo do ambiente.", "body"})
 	}
 	if d.RedactionLevel != "strict" && rv.Note != "" {
-		lines = append(lines, Line{"Nota: "+rv.Note, "body"})
+		lines = append(lines, Line{"Nota: " + rv.Note, "body"})
 	}
 	return out(lines...)
 }

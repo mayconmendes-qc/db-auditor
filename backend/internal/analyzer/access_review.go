@@ -14,7 +14,7 @@ type AccessReviewAnalyzer struct{}
 func (AccessReviewAnalyzer) Name() string { return "access_review" }
 
 const (
-	accessReviewInactiveDays     = 90  // valor inicial, calibrar
+	accessReviewInactiveDays      = 90 // valor inicial, calibrar
 	accessReviewOverduePendingPct = 10 // valor inicial, calibrar
 )
 
@@ -30,17 +30,17 @@ type AccessReviewCampaignFact struct {
 }
 
 type AccessReviewItemFact struct {
-	ID           string
-	AccountName  string
-	ObjectType   string
-	ObjectName   string
-	ColumnName   string
-	Privilege    string
-	OriginKind   string
-	Highlights   []string
-	Decision     string // empty = pending
-	RevokeDueAt  *time.Time
-	FindingActionID string
+	ID                    string
+	AccountName           string
+	ObjectType            string
+	ObjectName            string
+	ColumnName            string
+	Privilege             string
+	OriginKind            string
+	Highlights            []string
+	Decision              string // empty = pending
+	RevokeDueAt           *time.Time
+	FindingActionID       string
 	PrivilegeStillPresent bool // set when a later complete run still has the privilege
 	// Optional last-login from log aggregate (ADR-0001 D10); empty source = none.
 	LastLoginAt     *time.Time

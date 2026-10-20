@@ -25,21 +25,21 @@ type timescaleSimulationStore interface {
 }
 
 type simulationAPIResponse struct {
-	Applicable          bool                        `json:"applicable"`
-	Reason              string                      `json:"reason,omitempty"`
-	Partial             bool                        `json:"partial"`
-	RetentionApplicable bool                        `json:"retention_applicable"`
-	ObservedRatio       float64                     `json:"observed_ratio"`
-	RatioConfidenceLow  bool                        `json:"ratio_confidence_low"`
-	CurrentBytes        int64                       `json:"current_bytes"`
-	CompressedPct       float64                     `json:"compressed_pct"`
-	AgeBuckets          []tsretention.AgeBucket     `json:"age_buckets"`
-	Scenarios           []simulationScenarioAPI     `json:"scenarios"`
-	Risks               []string                    `json:"risks"`
-	Currency            string                      `json:"currency,omitempty"`
-	PriceVersionID      string                      `json:"price_version_id,omitempty"`
-	PriceEffectiveFrom  *time.Time                  `json:"price_effective_from,omitempty"`
-	Gain                simulationGainAPI           `json:"gain"`
+	Applicable          bool                          `json:"applicable"`
+	Reason              string                        `json:"reason,omitempty"`
+	Partial             bool                          `json:"partial"`
+	RetentionApplicable bool                          `json:"retention_applicable"`
+	ObservedRatio       float64                       `json:"observed_ratio"`
+	RatioConfidenceLow  bool                          `json:"ratio_confidence_low"`
+	CurrentBytes        int64                         `json:"current_bytes"`
+	CompressedPct       float64                       `json:"compressed_pct"`
+	AgeBuckets          []tsretention.AgeBucket       `json:"age_buckets"`
+	Scenarios           []simulationScenarioAPI       `json:"scenarios"`
+	Risks               []string                      `json:"risks"`
+	Currency            string                        `json:"currency,omitempty"`
+	PriceVersionID      string                        `json:"price_version_id,omitempty"`
+	PriceEffectiveFrom  *time.Time                    `json:"price_effective_from,omitempty"`
+	Gain                simulationGainAPI             `json:"gain"`
 	Policies            []repository.HypertablePolicy `json:"policies,omitempty"`
 }
 

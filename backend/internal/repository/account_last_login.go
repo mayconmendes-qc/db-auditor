@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	AccountLastLoginSourceLog = "log"
+	AccountLastLoginSourceLog  = "log"
 	MaxAccountLastLoginEntries = 5000
 )
 

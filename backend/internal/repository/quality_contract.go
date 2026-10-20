@@ -14,39 +14,39 @@ import (
 )
 
 var (
-	ErrQualityContractNotFound      = errors.New("quality contract not found")
+	ErrQualityContractNotFound         = errors.New("quality contract not found")
 	ErrQualityContractVersionImmutable = errors.New("quality contract version is immutable")
-	ErrQualityContractBadState      = errors.New("quality contract invalid state transition")
-	ErrQualityContractNoSnapshot    = errors.New("complete snapshot required for proposal")
-	ErrQualityContractDisabled      = errors.New("data quality feature disabled")
-	ErrQualityContractConflict      = errors.New("quality contract conflict")
+	ErrQualityContractBadState         = errors.New("quality contract invalid state transition")
+	ErrQualityContractNoSnapshot       = errors.New("complete snapshot required for proposal")
+	ErrQualityContractDisabled         = errors.New("data quality feature disabled")
+	ErrQualityContractConflict         = errors.New("quality contract conflict")
 )
 
 type QualityContract struct {
-	ID            string     `json:"id"`
-	EnvironmentID string     `json:"environment_id"`
-	Database      string     `json:"database"`
-	Schema        string     `json:"schema"`
-	Table         string     `json:"table"`
-	CreatedBy     string     `json:"created_by"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LatestVersion *QualityContractVersion `json:"latest_version,omitempty"`
+	ID            string                     `json:"id"`
+	EnvironmentID string                     `json:"environment_id"`
+	Database      string                     `json:"database"`
+	Schema        string                     `json:"schema"`
+	Table         string                     `json:"table"`
+	CreatedBy     string                     `json:"created_by"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	LatestVersion *QualityContractVersion    `json:"latest_version,omitempty"`
 	LastRun       *QualityContractRunSummary `json:"last_run,omitempty"`
 }
 
 type QualityContractVersion struct {
-	ID              string             `json:"id"`
-	ContractID      string             `json:"contract_id"`
-	VersionNumber   int                `json:"version_number"`
+	ID              string              `json:"id"`
+	ContractID      string              `json:"contract_id"`
+	VersionNumber   int                 `json:"version_number"`
 	Document        dqcontract.Document `json:"document"`
-	SourceYAML      string             `json:"source_yaml,omitempty"`
-	SampleLimit     int                `json:"sample_limit"`
-	ScheduleProfile string             `json:"schedule_profile"`
-	Status          string             `json:"status"`
-	AuthoredBy      string             `json:"authored_by"`
-	AuthoredAt      time.Time          `json:"authored_at"`
-	ApprovedBy      *string            `json:"approved_by,omitempty"`
-	ApprovedAt      *time.Time         `json:"approved_at,omitempty"`
+	SourceYAML      string              `json:"source_yaml,omitempty"`
+	SampleLimit     int                 `json:"sample_limit"`
+	ScheduleProfile string              `json:"schedule_profile"`
+	Status          string              `json:"status"`
+	AuthoredBy      string              `json:"authored_by"`
+	AuthoredAt      time.Time           `json:"authored_at"`
+	ApprovedBy      *string             `json:"approved_by,omitempty"`
+	ApprovedAt      *time.Time          `json:"approved_at,omitempty"`
 }
 
 type QualityContractRunSummary struct {
@@ -58,20 +58,20 @@ type QualityContractRunSummary struct {
 }
 
 type QualityContractRun struct {
-	ID            string                  `json:"id"`
-	EnvironmentID string                  `json:"environment_id"`
-	ContractID    *string                 `json:"contract_id,omitempty"`
-	VersionID     *string                 `json:"version_id,omitempty"`
-	Mode          string                  `json:"mode"`
-	Status        string                  `json:"status"`
-	Coverage      string                  `json:"coverage"`
-	SkipReason    string                  `json:"skip_reason,omitempty"`
-	SampleLimit   int                     `json:"sample_limit"`
-	Actor         string                  `json:"actor"`
-	StartedAt     time.Time               `json:"started_at"`
-	FinishedAt    *time.Time              `json:"finished_at,omitempty"`
+	ID            string                   `json:"id"`
+	EnvironmentID string                   `json:"environment_id"`
+	ContractID    *string                  `json:"contract_id,omitempty"`
+	VersionID     *string                  `json:"version_id,omitempty"`
+	Mode          string                   `json:"mode"`
+	Status        string                   `json:"status"`
+	Coverage      string                   `json:"coverage"`
+	SkipReason    string                   `json:"skip_reason,omitempty"`
+	SampleLimit   int                      `json:"sample_limit"`
+	Actor         string                   `json:"actor"`
+	StartedAt     time.Time                `json:"started_at"`
+	FinishedAt    *time.Time               `json:"finished_at,omitempty"`
 	Results       []dqcontract.CheckResult `json:"results"`
-	Report        dqcontract.RunReport    `json:"report"`
+	Report        dqcontract.RunReport     `json:"report"`
 }
 
 type QualityContractTrendPoint struct {
@@ -679,14 +679,14 @@ func (s *Store) upsertContractViolationFindings(ctx context.Context, env, contra
 		f, err := s.UpsertFinding(ctx, UpsertFindingParams{
 			EnvironmentID: env, FindingType: dqcontract.FindingType, Severity: r.Severity,
 			Title: title, Summary: summary, ObjectType: "table",
-			ObjectKey: doc.Database + "." + doc.Schema + "." + doc.Table,
+			ObjectKey:    doc.Database + "." + doc.Schema + "." + doc.Table,
 			DatabaseName: doc.Database, SchemaName: doc.Schema, ObjectName: doc.Table,
 			Evidence: ev, DedupKey: dedup, RuleID: dqcontract.FindingType, RuleVersion: dqcontract.RuleVersion,
 			Category: dqcontract.Category, Confidence: 0.7,
-			Impact: "Contagens amostrais indicam desvio do contrato declarado.",
-			Risk: "Dados fora do contrato podem propagar erros silenciosos.",
+			Impact:         "Contagens amostrais indicam desvio do contrato declarado.",
+			Risk:           "Dados fora do contrato podem propagar erros silenciosos.",
 			Recommendation: "Investigue a origem; o auditor não corrige dados.",
-			Validation: "Reexecute o contrato com amostra comparável após a correção externa.",
+			Validation:     "Reexecute o contrato com amostra comparável após a correção externa.",
 		})
 		if err != nil {
 			return err

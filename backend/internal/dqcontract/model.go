@@ -28,12 +28,12 @@ const (
 	ModeOnDemand = "on_demand"
 	ModeCLI      = "cli"
 
-	CheckNulls       = "nulls"
-	CheckUniqueness  = "uniqueness"
-	CheckOrphan      = "orphan"
-	CheckDomain      = "domain"
-	CheckFreshness   = "freshness"
-	CheckVolume      = "volume"
+	CheckNulls      = "nulls"
+	CheckUniqueness = "uniqueness"
+	CheckOrphan     = "orphan"
+	CheckDomain     = "domain"
+	CheckFreshness  = "freshness"
+	CheckVolume     = "volume"
 
 	SeverityInfo     = "info"
 	SeverityLow      = "low"
@@ -58,39 +58,39 @@ type Document struct {
 
 // Check is one declarative quality check.
 type Check struct {
-	Type          string   `json:"type" yaml:"type"`
-	Column        string   `json:"column,omitempty" yaml:"column,omitempty"`
-	Columns       []string `json:"columns,omitempty" yaml:"columns,omitempty"`
-	MaxNullPct    *float64 `json:"max_null_pct,omitempty" yaml:"max_null_pct,omitempty"`
-	Critical      bool     `json:"critical,omitempty" yaml:"critical,omitempty"`
-	RefSchema     string   `json:"ref_schema,omitempty" yaml:"ref_schema,omitempty"`
-	RefTable      string   `json:"ref_table,omitempty" yaml:"ref_table,omitempty"`
-	RefColumn     string   `json:"ref_column,omitempty" yaml:"ref_column,omitempty"`
-	Allowed       []string `json:"allowed,omitempty" yaml:"allowed,omitempty"`
-	Min           *float64 `json:"min,omitempty" yaml:"min,omitempty"`
-	Max           *float64 `json:"max,omitempty" yaml:"max,omitempty"`
-	MinDate       string   `json:"min_date,omitempty" yaml:"min_date,omitempty"`
-	MaxDate       string   `json:"max_date,omitempty" yaml:"max_date,omitempty"`
-	TolerancePct  float64  `json:"tolerance_pct,omitempty" yaml:"tolerance_pct,omitempty"`
-	MaxAgeHours   *float64 `json:"max_age_hours,omitempty" yaml:"max_age_hours,omitempty"`
-	MaxChangePct  *float64 `json:"max_change_pct,omitempty" yaml:"max_change_pct,omitempty"`
-	Severity      string   `json:"severity,omitempty" yaml:"severity,omitempty"`
+	Type         string   `json:"type" yaml:"type"`
+	Column       string   `json:"column,omitempty" yaml:"column,omitempty"`
+	Columns      []string `json:"columns,omitempty" yaml:"columns,omitempty"`
+	MaxNullPct   *float64 `json:"max_null_pct,omitempty" yaml:"max_null_pct,omitempty"`
+	Critical     bool     `json:"critical,omitempty" yaml:"critical,omitempty"`
+	RefSchema    string   `json:"ref_schema,omitempty" yaml:"ref_schema,omitempty"`
+	RefTable     string   `json:"ref_table,omitempty" yaml:"ref_table,omitempty"`
+	RefColumn    string   `json:"ref_column,omitempty" yaml:"ref_column,omitempty"`
+	Allowed      []string `json:"allowed,omitempty" yaml:"allowed,omitempty"`
+	Min          *float64 `json:"min,omitempty" yaml:"min,omitempty"`
+	Max          *float64 `json:"max,omitempty" yaml:"max,omitempty"`
+	MinDate      string   `json:"min_date,omitempty" yaml:"min_date,omitempty"`
+	MaxDate      string   `json:"max_date,omitempty" yaml:"max_date,omitempty"`
+	TolerancePct float64  `json:"tolerance_pct,omitempty" yaml:"tolerance_pct,omitempty"`
+	MaxAgeHours  *float64 `json:"max_age_hours,omitempty" yaml:"max_age_hours,omitempty"`
+	MaxChangePct *float64 `json:"max_change_pct,omitempty" yaml:"max_change_pct,omitempty"`
+	Severity     string   `json:"severity,omitempty" yaml:"severity,omitempty"`
 }
 
 // CheckResult is the persisted outcome of one check (counts only).
 type CheckResult struct {
-	CheckKey           string   `json:"check_key"`
-	CheckType          string   `json:"check_type"`
-	ColumnName         string   `json:"column_name"`
-	Result             string   `json:"result"`
-	Reason             string   `json:"reason,omitempty"`
-	Severity           string   `json:"severity"`
-	ObservedCount      *int     `json:"observed_count,omitempty"`
-	ObservedPct        *float64 `json:"observed_pct,omitempty"`
-	SampleSize         *int     `json:"sample_size,omitempty"`
-	SampleMethod       string   `json:"sample_method,omitempty"`
-	FreshnessAgeHours  *float64 `json:"freshness_age_hours,omitempty"`
-	SamplingNote       string   `json:"sampling_note,omitempty"`
+	CheckKey          string   `json:"check_key"`
+	CheckType         string   `json:"check_type"`
+	ColumnName        string   `json:"column_name"`
+	Result            string   `json:"result"`
+	Reason            string   `json:"reason,omitempty"`
+	Severity          string   `json:"severity"`
+	ObservedCount     *int     `json:"observed_count,omitempty"`
+	ObservedPct       *float64 `json:"observed_pct,omitempty"`
+	SampleSize        *int     `json:"sample_size,omitempty"`
+	SampleMethod      string   `json:"sample_method,omitempty"`
+	FreshnessAgeHours *float64 `json:"freshness_age_hours,omitempty"`
+	SamplingNote      string   `json:"sampling_note,omitempty"`
 }
 
 // SamplingNote is shown whenever a count comes from a sample (RNF-06).

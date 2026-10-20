@@ -216,7 +216,6 @@ func sameMechanism(a, b string) bool {
 	return na == nb
 }
 
-
 func (s *Store) schemaDiffMappings(ctx context.Context, sourceEnv, targetEnv string) ([]schemadiff.NameMapping, error) {
 	if sourceEnv == targetEnv {
 		return nil, nil

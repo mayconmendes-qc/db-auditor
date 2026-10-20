@@ -95,7 +95,7 @@ func BuildPIIFindings(envID, runID string, columns []PIIColumnFact) []Finding {
 					"access_note": map[bool]string{true: "nível tabela", false: c.AccessLevel}[c.AccessLevel == "nivel_tabela"],
 				},
 				DedupKey: DedupKey("pii.no_rls_hypothesis", tableKey, hypTitle),
-				RuleID: "pii.no_rls_hypothesis", RuleVersion: "1", Category: "security",
+				RuleID:   "pii.no_rls_hypothesis", RuleVersion: "1", Category: "security",
 			})
 		}
 	}
