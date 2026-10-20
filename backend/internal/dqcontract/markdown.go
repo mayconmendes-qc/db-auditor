@@ -29,12 +29,12 @@ type RunReport struct {
 func RenderMarkdown(rep RunReport) string {
 	var b strings.Builder
 	b.WriteString("# Contratos de qualidade\n\n")
-	b.WriteString(fmt.Sprintf("- Ambiente: `%s`\n", rep.EnvironmentID))
-	b.WriteString(fmt.Sprintf("- Tabela: `%s.%s.%s`\n", rep.Database, rep.Schema, rep.Table))
-	b.WriteString(fmt.Sprintf("- Modo: %s · estado: %s · cobertura: %s\n", rep.Mode, rep.Status, rep.Coverage))
-	b.WriteString(fmt.Sprintf("- Amostra (contrato): %d\n", rep.SampleLimit))
+	fmt.Fprintf(&b, "- Ambiente: `%s`\n", rep.EnvironmentID)
+	fmt.Fprintf(&b, "- Tabela: `%s.%s.%s`\n", rep.Database, rep.Schema, rep.Table)
+	fmt.Fprintf(&b, "- Modo: %s · estado: %s · cobertura: %s\n", rep.Mode, rep.Status, rep.Coverage)
+	fmt.Fprintf(&b, "- Amostra (contrato): %d\n", rep.SampleLimit)
 	if !rep.StartedAt.IsZero() {
-		b.WriteString(fmt.Sprintf("- Início: %s\n", rep.StartedAt.UTC().Format(time.RFC3339)))
+		fmt.Fprintf(&b, "- Início: %s\n", rep.StartedAt.UTC().Format(time.RFC3339))
 	}
 	b.WriteString("\n| Checagem | Resultado | Severidade | Contagem / %% | Amostra | Motivo |\n")
 	b.WriteString("|---|---|---|---|---|---|\n")
@@ -57,9 +57,9 @@ func RenderMarkdown(rep RunReport) string {
 			sample = r.SampleMethod
 		}
 		label := r.CheckKey
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n",
 			escapeMD(label), escapeMD(r.Result), escapeMD(r.Severity),
-			escapeMD(count), escapeMD(sample), escapeMD(r.Reason)))
+			escapeMD(count), escapeMD(sample), escapeMD(r.Reason))
 	}
 	b.WriteString("\n")
 	note := rep.SamplingNote

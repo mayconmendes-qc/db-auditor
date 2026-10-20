@@ -483,14 +483,14 @@ func FormatRetentionScenariosCSV(items []RetentionScenario) string {
 			money = fmt.Sprintf("%.2f", *it.MoneySaved)
 		}
 		risks := strings.Join(it.Risks, "|")
-		b.WriteString(fmt.Sprintf("%s,%s,%s,%s,%d,%d,%.4f,%s,%s,%s,%t,%s\n",
+		fmt.Fprintf(&b, "%s,%s,%s,%s,%d,%d,%.4f,%s,%s,%s,%t,%s\n",
 			csvEscape(it.DatabaseName), csvEscape(it.SchemaName), csvEscape(it.HypertableName),
 			csvEscape(it.Label), it.RetentionDays, it.CompressAfterDays, it.GBSaved,
 			csvEscape(it.Currency), money, csvEscape(risks), it.Partial,
 			it.SavedAt.UTC().Format(time.RFC3339),
-		))
+		)
 	}
-	b.WriteString(fmt.Sprintf("# export_complete,%d\n", len(items)))
+	fmt.Fprintf(&b, "# export_complete,%d\n", len(items))
 	return b.String()
 }
 
