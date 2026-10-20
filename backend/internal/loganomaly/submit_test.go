@@ -47,9 +47,10 @@ func TestSubmitLastLoginBodyOnlyRoleAndTime(t *testing.T) {
 	if err := ValidateLastLoginOnlyRoleAndTime(gotBody); err != nil {
 		t.Fatal(err)
 	}
-	for _, banned := range []string{"1.2.3.4", "@", "database", "application", "email", "template"} {
-		if strings.Contains(strings.ToLower(string(gotBody)), banned) && banned != "database" {
-			// "database" might appear in error paths; ensure not as a JSON key.
+	lower := strings.ToLower(string(gotBody))
+	for _, banned := range []string{"1.2.3.4", "@", "application", "email", "template"} {
+		if strings.Contains(lower, banned) {
+			t.Fatalf("banned token %q present in body", banned)
 		}
 	}
 	var probe map[string]json.RawMessage

@@ -99,10 +99,9 @@ func TestNewErrorTemplateMedium(t *testing.T) {
 			if a.Severity != SeverityMedium {
 				t.Fatalf("severity=%s want medium", a.Severity)
 			}
-			if ContainsSensitiveLeak(a.Template, "secret_table") {
-				// table name may remain as fixed token — that's OK for identifiers that aren't literals.
-				// Spec cares about emails/IPs/params; relation name is structural.
-			}
+			// Relation names may remain as fixed tokens; the spec cares about
+			// emails/IPs/params, so a table identifier is not treated as a leak.
+			_ = ContainsSensitiveLeak(a.Template, "secret_table")
 		}
 	}
 	if !found {

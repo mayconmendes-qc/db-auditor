@@ -98,7 +98,7 @@ func FreeDiskBytes(path string) (int64, error) {
 	if err := syscall.Statfs(path, &st); err != nil {
 		return 0, err
 	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
+	return int64(st.Bavail) * int64(st.Bsize), nil //nolint:gosec // G115: free disk bytes fit int64 for drill sizing checks.
 }
 
 type PrevalidateInput struct {

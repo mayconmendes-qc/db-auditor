@@ -56,6 +56,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so golangci-lint --new-from-rev can reach the PR base.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -96,7 +99,10 @@ jobs:
         with:
           version: latest
           working-directory: backend
-          only-new-issues: true
+          # GitHub refuses PR diffs over 20k lines, which breaks only-new-issues.
+          # Compare against the merge-base via git instead.
+          only-new-issues: false
+          args: --new-from-rev=${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
 
       - name: Prove gosec fails a new finding
         working-directory: backend

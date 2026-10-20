@@ -259,7 +259,7 @@ func (m *Metrics) ObserveQualityContractCheck(result string, d time.Duration) {
 	if d < 0 {
 		d = 0
 	}
-	m.addMap(&m.qualityContractDurationNs, result, uint64(d.Nanoseconds()))
+	m.addMap(&m.qualityContractDurationNs, result, uint64(d.Nanoseconds())) //nolint:gosec // G115: negative durations are clamped above.
 	m.incMap(&m.qualityContractDurationN, result)
 }
 

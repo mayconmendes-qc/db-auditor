@@ -48,7 +48,7 @@ func (c *APIClient) Do(ctx context.Context, method, path string, body io.Reader)
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body) //nolint:gosec // G704: BaseURL is operator AUDITOR_API_URL; path is a fixed CLI route.
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (c *APIClient) Do(ctx context.Context, method, path string, body io.Reader)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := c.HTTPClient.Do(req)
+	resp, err := c.HTTPClient.Do(req) //nolint:gosec // G704: request URL built from operator-configured BaseURL.
 	if err != nil {
 		return nil, fmt.Errorf("%s", config.SanitizeError(err))
 	}

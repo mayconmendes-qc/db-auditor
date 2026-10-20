@@ -35,7 +35,7 @@ func digitsOnly(s string) []byte {
 	out := make([]byte, 0, len(s))
 	for _, r := range s {
 		if unicode.IsDigit(r) {
-			out = append(out, byte(r-'0'))
+			out = append(out, byte(r-'0')) //nolint:gosec // G115: r is a verified Unicode digit.
 		}
 	}
 	return out

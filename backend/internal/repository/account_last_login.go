@@ -47,7 +47,7 @@ func (s *Store) UpsertAccountLastLogins(ctx context.Context, env string, tokenID
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx) //nolint:errcheck
 
 	upserted := 0
 	for _, e := range entries {

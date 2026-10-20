@@ -32,10 +32,10 @@ type MarkdownInput struct {
 func RenderMarkdown(in MarkdownInput) string {
 	var b strings.Builder
 	b.WriteString("# Digest de consultas\n\n")
-	b.WriteString(fmt.Sprintf("- **Ambiente:** %s (`%s`)\n", sanitizeText(in.EnvironmentName), in.EnvironmentID))
-	b.WriteString(fmt.Sprintf("- **Estado:** %s\n", in.State))
+	fmt.Fprintf(&b, "- **Ambiente:** %s (`%s`)\n", sanitizeText(in.EnvironmentName), in.EnvironmentID)
+	fmt.Fprintf(&b, "- **Estado:** %s\n", in.State)
 	if in.Reason != "" {
-		b.WriteString(fmt.Sprintf("- **Motivo:** %s\n", sanitizeText(in.Reason)))
+		fmt.Fprintf(&b, "- **Motivo:** %s\n", sanitizeText(in.Reason))
 	}
 	if in.State == "ok" {
 		b.WriteString(fmt.Sprintf("- **Janela anterior:** %s → %s (coletas `%s` … `%s`)\n",

@@ -53,7 +53,7 @@ func (r *ExecRuntime) Available(ctx context.Context) error {
 }
 
 func (r *ExecRuntime) Run(ctx context.Context, args ...string) (string, string, error) {
-	cmd := exec.CommandContext(ctx, r.Binary, args...)
+	cmd := exec.CommandContext(ctx, r.Binary, args...) //nolint:gosec // G204: Binary is podman/docker chosen by the operator; args are drill-controlled.
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()

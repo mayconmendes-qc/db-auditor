@@ -158,7 +158,7 @@ func (l *lexer) dollarOrSymbol(start, line int) token {
 			l.line += strings.Count(body, "\n")
 			return token{kind: tokDollar, val: "?", line: line, start: start}
 		}
-		if !(unicode.IsLetter(rune(ch)) || unicode.IsDigit(rune(ch)) || ch == '_') {
+		if !unicode.IsLetter(rune(ch)) && !unicode.IsDigit(rune(ch)) && ch != '_' {
 			break
 		}
 		i++

@@ -462,7 +462,7 @@ func (s *Store) ExecuteQualityContractRun(ctx context.Context, env, dsn, actor, 
 	}
 	var doc dqcontract.Document
 	var cid, vid *string
-	sampleLimit := dqcontract.DefaultSampleLimit
+	var sampleLimit int
 	if contractID != "" {
 		var v *QualityContractVersion
 		var err error

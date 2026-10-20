@@ -149,9 +149,7 @@ func RunCheck(ctx context.Context, t *TargetConn, check Check, vol VolumeContext
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(CheckTimeoutSec)*time.Second)
 	defer cancel()
 	defer func() {
-		if recover() != nil {
-			// defensive; callers also wrap
-		}
+		_ = recover() // defensive; callers also wrap
 	}()
 	switch check.Type {
 	case CheckNulls:

@@ -151,7 +151,7 @@ func (e *Ephemeral) StageBackup(hostPath string) (string, error) {
 		if rerr != nil {
 			return "", rerr
 		}
-		if werr := os.WriteFile(dst, data, 0o600); werr != nil {
+		if werr := os.WriteFile(dst, data, 0o600); werr != nil { //nolint:gosec // G703: dst is under Ephemeral.WorkDir with filepath.Base.
 			return "", werr
 		}
 	}
@@ -175,6 +175,6 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, 0o600)
+		return os.WriteFile(target, data, 0o600) //nolint:gosec // G703: target is under dst joined with a path relative to src.
 	})
 }

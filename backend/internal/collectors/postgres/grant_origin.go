@@ -338,7 +338,7 @@ func expandReachablePrivileges(eff []effRow, acls map[aclKey][]aclGrant, reach m
 			}
 			for login, edges := range reach {
 				for _, e := range edges {
-					if e.granted != g.grantee || !(e.setOK || e.inherit || e.adminOK) {
+					if e.granted != g.grantee || (!e.setOK && !e.inherit && !e.adminOK) {
 						continue
 					}
 					sk := keyOf(login, k.objectType, k.objectName, k.privilege)
@@ -369,10 +369,10 @@ func resolveOrigin(account, objectType, objectName, privilege string, acls map[a
 		if owner == "" {
 			owner = g.owner
 		}
-		switch {
-		case g.grantee == account:
+		switch g.grantee {
+		case account:
 			direct = true
-		case g.grantee == "":
+		case "":
 			pub = true
 		default:
 			grantedRoles = append(grantedRoles, g.grantee)
