@@ -40,7 +40,11 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 10s --health-timeout 5s --health-retries 12
       mongodb:
+        # mongo:8 refuses to start on Linux kernels ≥6.19 without this
+        # TCMalloc/rseq workaround (SERVER-121912 / SERVER-125742).
         image: mongo:8
+        env:
+          GLIBC_TUNABLES: "glibc.pthread.rseq=1"
         ports:
           - 27017:27017
         options: >-
