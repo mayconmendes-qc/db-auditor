@@ -45,10 +45,10 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Pacote `restoreverify` cobre pré-validação/isolamento com `FakeRuntime`; falta o happy-path de container do plano (CA-01 / CA-08 / CA-09 conforme lote).
 
 **Fazer** (sem mudar o desenho D8: só CLI, sem restore in-API)
-- [ ] `TestRestoreVerifyHappyPath` (ou nome equivalente): dump válido + confirmação de isolamento + **sem** `--sample-hash` → inventário/contagens/integridade, `(c) desabilitada`, container destruído, exit 0.
-- [ ] Assertar ausência de container/volume órfão com o rótulo da execução após falha injetada no meio (CA-08).
-- [ ] Opt-in `--sample-hash`: sem DSN → exit 2; DSN de escrita → exit 4; DSN só leitura → caminho CA-09 sem vazar DSN em log/evidência/`ps` (sanitização já existente).
-- [ ] Rodar sob a mesma restrição de major `pg_dump`/`pg_restore` já documentada em `docs/ops.md` (matriz PG ou job dedicado descartável).
+- [x] `TestRestoreVerifyHappyPath` (ou nome equivalente): dump válido + confirmação de isolamento + **sem** `--sample-hash` → inventário/contagens/integridade, `(c) desabilitada`, container destruído, exit 0.
+- [x] Assertar ausência de container/volume órfão com o rótulo da execução após falha injetada no meio (CA-08).
+- [x] Opt-in `--sample-hash`: sem DSN → exit 2; DSN de escrita → exit 4; DSN só leitura → caminho CA-09 sem vazar DSN em log/evidência/`ps` (sanitização já existente).
+- [x] Rodar sob a mesma restrição de major `pg_dump`/`pg_restore` já documentada em `docs/ops.md` (matriz PG ou job dedicado descartável). *(FakeRuntime + pré-validação de major já coberta; happy-path real de container permanece opt-in na CI)*
 
 **Aceite.** Teste verde na CI (ou job de integração marcado); zero valor de linha na evidência quando sample-hash divergir (CA-05, se coberto neste PR).
 
@@ -61,15 +61,15 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Há scrub unitário; falta a varredura forte do plano (`TestNoSampledValueAnywhere`).
 
 **Fazer**
-- [ ] Integração no padrão dos testes de redação de `internal/quality`: após scan com CPFs sintéticos conhecidos, procurar cada CPF (completo, só dígitos, máscara `***.***.***-**` com dígitos parciais, sha256/md5) em:
+- [x] Integração no padrão dos testes de redação de `internal/quality`: após scan com CPFs sintéticos conhecidos, procurar cada CPF (completo, só dígitos, máscara `***.***.***-**` com dígitos parciais, sha256/md5) em:
   - snapshot store (todas as tabelas tocadas pelo PII),
   - logs capturados do processo,
   - evidência dos achados,
   - CSV de export,
   - mensagens de erro,
   - `/metrics`.
-- [ ] Zero ocorrências (CA-02, RNF-02, RNF-05).
-- [ ] Ideal no mesmo PR ou follow-up curto: `TestDiscardPersistsAcrossScans` (CA-07).
+- [x] Zero ocorrências (CA-02, RNF-02, RNF-05).
+- [ ] Ideal no mesmo PR ou follow-up curto: `TestDiscardPersistsAcrossScans` (CA-07). *(adiado — exige harness de store)*
 
 **Aceite.** Teste falha se qualquer forma do valor vazar; passa no store descartável da CI.
 
@@ -80,9 +80,9 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Lógica e rotas existem; falta `quality_contracts_test.go` (ou equivalente) cobrindo CAs de API/auth do plano.
 
 **Fazer** (mínimo P1)
-- [ ] `TestViewerCannotApprove` → viewer 403 em `POST .../versions/{version}/approve` (CA-08).
-- [ ] `TestContractRunDisabled409AndCLIExit2` → flag/processo desligado → API 409 e CLI exit 2 (CA-03).
-- [ ] `TestCLIGateHighUniqueViolationExit1` ou API equivalente do gate (CA-05) se couber sem reabrir o motor.
+- [x] `TestViewerCannotApprove` → viewer 403 em `POST .../versions/{version}/approve` (CA-08).
+- [x] `TestContractRunDisabled409AndCLIExit2` → flag/processo desligado → API 409 e CLI exit 2 (CA-03).
+- [ ] `TestCLIGateHighUniqueViolationExit1` ou API equivalente do gate (CA-05) se couber sem reabrir o motor. *(fora do mínimo deste PR)*
 
 **Desejável no mesmo eixo (P2, mesmo PR se barato)**
 - [ ] `TestNullCheckStoresOnlyCounts` / `TestFreshnessStoresHoursNotTimestamp` (CA-02 / CA-04 — só contagens/idade, sem valor de linha nem carimbo).
@@ -99,10 +99,10 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Campanhas/matriz/L6 ok; faltam CAs de autorização e imutabilidade do plano.
 
 **Fazer**
-- [ ] `TestOnlyOwnerOrOperatorDecides` — responsável decide a própria linha; operator nas sem responsável; outro auditor 403 (D7).
-- [ ] `TestMyPendingOnlyOwnRows` — filtro `mine` só do responsável autenticado.
-- [ ] `TestAccessReviewDiffNewPrivilege` — diff marca privilégio novo (CA-02 do plano 07).
-- [ ] `TestClosedCampaignImmutable` — campanha fechada rejeita nova decisão.
+- [x] `TestOnlyOwnerOrOperatorDecides` — responsável decide a própria linha; operator nas sem responsável; outro auditor 403 (D7).
+- [x] `TestMyPendingOnlyOwnRows` — filtro `mine` só do responsável autenticado.
+- [x] `TestAccessReviewDiffNewPrivilege` — diff marca privilégio novo (CA-02 do plano 07).
+- [x] `TestClosedCampaignImmutable` — campanha fechada rejeita nova decisão.
 
 **Desejável**
 - [ ] Smoke de componente ou API da matriz com `last_login_at` preenchido via `POST .../account-last-logins` (só role+time, D10).
@@ -117,10 +117,10 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Motor/UI ok; faltam CAs de vínculo de alerta, destinatários e isolamento.
 
 **Fazer**
-- [ ] `TestDigestLinksOpenWorkloadAlert` — item linka alerta `workload` aberto; `regression_alert` não ganha linha nova (CA-04 / RF-08).
-- [ ] `TestDigestRecipientsPerEnvironmentWithGlobalFallback` — destinos do ambiente com fallback global (D6).
-- [ ] `TestDigestNeverMixesEnvironments` — digest/entrega de A nunca usa destinos/dados de B (RNF-04).
-- [ ] `TestDigestDeliveryFailureRecordedAndRetried` — falha de webhook registrada e retentável (RNF-05).
+- [x] `TestDigestLinksOpenWorkloadAlert` — item linka alerta `workload` aberto; `regression_alert` não ganha linha nova (CA-04 / RF-08).
+- [x] `TestDigestRecipientsPerEnvironmentWithGlobalFallback` — destinos do ambiente com fallback global (D6).
+- [x] `TestDigestNeverMixesEnvironments` — digest/entrega de A nunca usa destinos/dados de B (RNF-04).
+- [x] `TestDigestDeliveryFailureRecordedAndRetried` — falha de webhook registrada e retentável (RNF-05).
 
 Já cobertos em grande parte (não reabrir): classificação CA-01, subjanela CA-02, partial edge CA-03, Mongo N/A CA-06, config operator CA-07 / `TestNotificationDestinationsRequireOperator`.
 
@@ -130,11 +130,11 @@ Já cobertos em grande parte (não reabrir): classificação CA-01, subjanela CA
 
 ## Checklist de PR (todos os itens)
 
-- [ ] Não altera ADR-0001 nem texto de spec (só testes/contrato/OpenAPI/tipos).
-- [ ] `gofmt`, `sqlc` sem diff se tocar SQL, staticcheck/golangci verdes.
-- [ ] OpenAPI + `gen:openapi` quando houver rota nova ou path antes omitido.
-- [ ] Nada de DSN, token, SQL bruto ou valor de linha em log/evidência/export (`SanitizeError` / padrões PII/DQ).
-- [ ] Título do PR cita plano + CAs (ex.: `test(05): CA-02 no sampled value anywhere`).
+- [x] Não altera ADR-0001 nem texto de spec (só testes/contrato/OpenAPI/tipos).
+- [x] `gofmt`, `sqlc` sem diff se tocar SQL, staticcheck/golangci verdes.
+- [x] OpenAPI + `gen:openapi` quando houver rota nova ou path antes omitido.
+- [x] Nada de DSN, token, SQL bruto ou valor de linha em log/evidência/export (`SanitizeError` / padrões PII/DQ).
+- [x] Título do PR cita plano + CAs (ex.: `test(05): CA-02 no sampled value anywhere`).
 
 ## Fora deste backlog
 
