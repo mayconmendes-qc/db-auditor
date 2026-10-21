@@ -1302,6 +1302,112 @@
         }
       }
     },
+    "/api/v1/environments/{id}/restore-drill-context": {
+      "get": {
+        "description": "Contexto do ensaio de restauração para o CLI (fingerprints, inventário, estimativas). Sem DSN. Token restore:write ou role autenticada com acesso ao ambiente.",
+        "responses": {
+          "200": {
+            "description": "contexto (pode ser partial)"
+          },
+          "400": {
+            "description": "ambiente inválido"
+          },
+          "403": {
+            "description": "sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/restore-drill-policy": {
+      "get": {
+        "description": "Política de RTO-alvo e prazo máximo entre ensaios do ambiente.",
+        "responses": {
+          "200": {
+            "description": "política"
+          },
+          "400": {
+            "description": "ambiente inválido"
+          },
+          "403": {
+            "description": "sem permissão"
+          }
+        }
+      },
+      "put": {
+        "description": "Atualiza RTO-alvo e max_age_days; exige operator.",
+        "responses": {
+          "200": {
+            "description": "política atualizada"
+          },
+          "400": {
+            "description": "política inválida"
+          },
+          "403": {
+            "description": "somente operator"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/restore-drills": {
+      "get": {
+        "description": "Lista ensaios target_restore_drill do ambiente (mais recentes primeiro).",
+        "responses": {
+          "200": {
+            "description": "items + total"
+          },
+          "400": {
+            "description": "ambiente inválido"
+          },
+          "403": {
+            "description": "sem permissão"
+          }
+        }
+      },
+      "post": {
+        "description": "Registra evidência target_restore_drill. Recusa campos de valor de linha. Token restore:write ou role com acesso.",
+        "responses": {
+          "201": {
+            "description": "ensaio registrado"
+          },
+          "400": {
+            "description": "evidência inválida ou campo não permitido"
+          },
+          "403": {
+            "description": "sem permissão"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/restore-drills/{drill}": {
+      "get": {
+        "description": "Detalhe de um ensaio de restauração.",
+        "parameters": [
+          {
+            "name": "drill",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ensaio"
+          },
+          "400": {
+            "description": "identificador inválido"
+          },
+          "403": {
+            "description": "sem permissão"
+          },
+          "404": {
+            "description": "ensaio não encontrado"
+          }
+        }
+      }
+    },
     "/api/v1/environments/{id}/rules": {
       "get": {
         "responses": {

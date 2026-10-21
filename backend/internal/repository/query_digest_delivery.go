@@ -98,9 +98,9 @@ func (s *Store) DeliverQueryDigest(ctx context.Context, d *QueryDigest) error {
 // RetryFailedQueryDigestDeliveries re-attempts failed deliveries for digests
 // that were never ClaimAlert-ed (dedup_key = digest id).
 func (s *Store) RetryFailedQueryDigestDeliveries(ctx context.Context, env string) error {
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT d.id::text FROM query_digest d
-JOIN query_digest_delivery del ON del.digest_id=d.id
-WHERE d.environment_id=$1::uuid AND del.status='failed'
+	rows, err := s.pool.Query(ctx, `SELECT d.id::text FROM query_digest d
+WHERE d.environment_id=$1::uuid
+AND EXISTS (SELECT 1 FROM query_digest_delivery del WHERE del.digest_id=d.id AND del.status='failed')
 AND NOT EXISTS (SELECT 1 FROM alert_delivery a WHERE a.environment_id=d.environment_id AND a.dedup_key=d.id::text)
 ORDER BY d.created_at DESC LIMIT 20`, env)
 	if err != nil {

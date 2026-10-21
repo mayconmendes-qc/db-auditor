@@ -2,6 +2,8 @@
 
 Planos de implementação das 10 specs de [`docs/spec/`](../spec/README.md). Cada plano tem o **mesmo número e nome** da spec. Base lida: `main` em `b1a93cf`. Estes documentos não trazem código de produção.
 
+**Gaps pós-merge do v1 (só contrato/testes, sem reabrir desenho):** [`docs/backlog-gaps-v1.md`](../backlog-gaps-v1.md).
+
 **Decisões de arquitetura:** [ADR-0001](../adr/0001-decisoes-v1-features.md) (Aceita, 2026-10-18). Os planos citam as decisões como **ADR-0001 Dn**. Specs, planos e ADR estão alinhados. Quando houver divergência, vale a ADR.
 
 Cada plano contém:

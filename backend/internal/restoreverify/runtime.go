@@ -67,6 +67,8 @@ type FakeRuntime struct {
 		Out, Err string
 		CodeErr  error
 	}
+	// Match, if set, runs before Responses. handled=true short-circuits.
+	Match    func(args []string) (stdout, stderr string, err error, handled bool)
 	FailInfo bool
 }
 
@@ -86,6 +88,11 @@ func (f *FakeRuntime) Available(context.Context) error {
 
 func (f *FakeRuntime) Run(_ context.Context, args ...string) (string, string, error) {
 	f.Calls = append(f.Calls, append([]string{}, args...))
+	if f.Match != nil {
+		if out, errStr, err, handled := f.Match(args); handled {
+			return out, errStr, err
+		}
+	}
 	key := strings.Join(args, " ")
 	if f.Responses != nil {
 		if resp, ok := f.Responses[key]; ok {

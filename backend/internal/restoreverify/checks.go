@@ -136,6 +136,17 @@ type SampleHashOutcome struct {
 	SourceUnavailable  bool
 }
 
+// sourceConn is the subset of *pgx.Conn used by sample-hash; tests stub it.
+type sourceConn interface {
+	Close(ctx context.Context) error
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// connectSource is overridden in tests to inject write-refusal / read-only stubs.
+var connectSource = func(ctx context.Context, dsn string) (sourceConn, error) {
+	return postgres.ConnectReadOnly(ctx, dsn)
+}
+
 func VerifySampleHashOptIn(ctx context.Context, e *Ephemeral, optIn bool, sourceDSN string, estimates []TableEstimate, counters []TableWriteCounter) SampleHashOutcome {
 	start := time.Now()
 	out := SampleHashOutcome{Check: CheckResult{Name: "sample_hash", Status: StatusDisabled, Detail: "opt-in não solicitado"}}
@@ -149,7 +160,7 @@ func VerifySampleHashOptIn(ctx context.Context, e *Ephemeral, optIn bool, source
 		out.Check.Duration = int(time.Since(start).Seconds())
 		return out
 	}
-	src, err := postgres.ConnectReadOnly(ctx, sourceDSN)
+	src, err := connectSource(ctx, sourceDSN)
 	if err != nil {
 		out.Check.Duration = int(time.Since(start).Seconds())
 		if strings.Contains(err.Error(), "write or administration privilege") {
@@ -231,7 +242,7 @@ func selectHashTables(estimates []TableEstimate, counters []TableWriteCounter) [
 	return out
 }
 
-func aggregateSampleHash(ctx context.Context, conn *pgx.Conn, schema, table string) (string, error) {
+func aggregateSampleHash(ctx context.Context, conn sourceConn, schema, table string) (string, error) {
 	sql := fmt.Sprintf(`SELECT md5(COALESCE(string_agg(row_hash, '' ORDER BY row_hash), '')) FROM (SELECT md5(t::text) AS row_hash FROM %s.%s t ORDER BY md5(t::text) LIMIT %d) s`, quoteIdent(schema), quoteIdent(table), SampleHashLimit)
 	var hash string
 	if err := conn.QueryRow(ctx, sql).Scan(&hash); err != nil {

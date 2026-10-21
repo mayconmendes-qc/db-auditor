@@ -17,13 +17,14 @@ import (
 type accessReviewStub struct {
 	stubStore
 	fakeAuthStore
-	owners    []repository.AccessReviewOwner
-	campaigns []repository.AccessReviewCampaign
-	items     []repository.AccessReviewItem
-	decisions []repository.AccessReviewDecision
-	createErr error
-	decideErr error
-	ops       []string
+	owners     []repository.AccessReviewOwner
+	campaigns  []repository.AccessReviewCampaign
+	items      []repository.AccessReviewItem
+	decisions  []repository.AccessReviewDecision
+	createErr  error
+	decideErr  error
+	ops        []string
+	lastFilter repository.AccessReviewMatrixFilter
 }
 
 func (s *accessReviewStub) ListAccessReviewOwners(context.Context, string) ([]repository.AccessReviewOwner, error) {
@@ -63,8 +64,19 @@ func (s *accessReviewStub) GetAccessReviewCampaign(_ context.Context, _, id stri
 	}
 	return nil, repository.ErrAccessReviewNotFound
 }
-func (s *accessReviewStub) ListAccessReviewMatrix(context.Context, string, string, repository.AccessReviewMatrixFilter) ([]repository.AccessReviewItem, int, error) {
-	return s.items, len(s.items), nil
+func (s *accessReviewStub) ListAccessReviewMatrix(_ context.Context, _, _ string, f repository.AccessReviewMatrixFilter) ([]repository.AccessReviewItem, int, error) {
+	s.lastFilter = f
+	items := s.items
+	if f.MineUser != "" {
+		filtered := make([]repository.AccessReviewItem, 0, len(items))
+		for _, it := range items {
+			if it.OwnerUserID != nil && *it.OwnerUserID == f.MineUser {
+				filtered = append(filtered, it)
+			}
+		}
+		items = filtered
+	}
+	return items, len(items), nil
 }
 func (s *accessReviewStub) CloseAccessReviewCampaign(_ context.Context, _, id, actor string) (*repository.AccessReviewCampaign, error) {
 	for i := range s.campaigns {
@@ -79,9 +91,34 @@ func (s *accessReviewStub) CloseAccessReviewCampaign(_ context.Context, _, id, a
 	}
 	return nil, repository.ErrAccessReviewNotFound
 }
-func (s *accessReviewStub) PostAccessReviewDecisions(_ context.Context, _, _, actor, _, _ string, in []repository.AccessReviewDecisionInput) ([]repository.AccessReviewDecision, error) {
+func (s *accessReviewStub) PostAccessReviewDecisions(_ context.Context, _, campaignID, actor, actorID, actorRole string, in []repository.AccessReviewDecisionInput) ([]repository.AccessReviewDecision, error) {
 	if s.decideErr != nil {
 		return nil, s.decideErr
+	}
+	for i := range s.campaigns {
+		if s.campaigns[i].ID == campaignID && s.campaigns[i].Status == "closed" {
+			return nil, repository.ErrAccessReviewClosed
+		}
+	}
+	itemByID := make(map[string]repository.AccessReviewItem, len(s.items))
+	for _, it := range s.items {
+		itemByID[it.ID] = it
+	}
+	for _, d := range in {
+		it, ok := itemByID[d.ItemID]
+		if !ok {
+			continue
+		}
+		allowed := false
+		switch {
+		case it.OwnerUserID == nil || *it.OwnerUserID == "":
+			allowed = actorRole == "operator"
+		case actorID != "" && *it.OwnerUserID == actorID:
+			allowed = actorRole == "auditor" || actorRole == "operator"
+		}
+		if !allowed {
+			return nil, repository.ErrAccessReviewNotOwner
+		}
 	}
 	out := make([]repository.AccessReviewDecision, 0, len(in))
 	for _, d := range in {
@@ -122,12 +159,16 @@ func itoa(n int) string {
 
 func accessReviewHandler(t *testing.T, stub *accessReviewStub, role string) http.Handler {
 	t.Helper()
-	mux := http.NewServeMux()
-	registerAccessReviewRoutes(mux, stub)
-	user := &repository.AuditorUser{
+	return accessReviewHandlerWithUser(t, stub, &repository.AuditorUser{
 		ID: "00000000-0000-4000-8000-0000000000a1", Username: "u-" + role, Role: role,
 		Environments: []string{"00000000-0000-4000-8000-0000000000e1"},
-	}
+	})
+}
+
+func accessReviewHandlerWithUser(t *testing.T, stub *accessReviewStub, user *repository.AuditorUser) http.Handler {
+	t.Helper()
+	mux := http.NewServeMux()
+	registerAccessReviewRoutes(mux, stub)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), identityKey{}, user))
 		mux.ServeHTTP(w, r)
@@ -242,5 +283,167 @@ func TestAccessReviewDiffEndpoint(t *testing.T) {
 	}
 	if len(diff.NewPrivileges) != 1 || diff.NewPrivileges[0].Privilege != "UPDATE" {
 		t.Fatalf("diff: %+v", diff)
+	}
+}
+
+const (
+	arEnv        = "00000000-0000-4000-8000-0000000000e1"
+	arCampaign   = "00000000-0000-4000-8000-0000000000c1"
+	arOwnerID    = "00000000-0000-4000-8000-0000000000a1"
+	arOtherID    = "00000000-0000-4000-8000-0000000000a2"
+	arItemOwned  = "00000000-0000-4000-8000-0000000000i1"
+	arItemOrphan = "00000000-0000-4000-8000-0000000000i2"
+)
+
+func TestOnlyOwnerOrOperatorDecides(t *testing.T) {
+	owner := arOwnerID
+	stub := &accessReviewStub{
+		campaigns: []repository.AccessReviewCampaign{{ID: arCampaign, Status: "open"}},
+		items: []repository.AccessReviewItem{
+			{ID: arItemOwned, OwnerUserID: &owner, AccountName: "app_report", Privilege: "SELECT"},
+			{ID: arItemOrphan, OwnerUserID: nil, AccountName: "app_etl", Privilege: "UPDATE"},
+		},
+	}
+	decisionsURL := "/api/v1/environments/" + arEnv + "/access-reviews/" + arCampaign + "/decisions"
+
+	t.Run("owner_decides_own_row", func(t *testing.T) {
+		h := accessReviewHandlerWithUser(t, stub, &repository.AuditorUser{
+			ID: arOwnerID, Username: "owner", Role: "auditor", Environments: []string{arEnv},
+		})
+		body := `{"decisions":[{"item_id":"` + arItemOwned + `","decision":"approve"}]}`
+		req := httptest.NewRequest(http.MethodPost, decisionsURL, strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("operator_decides_unowned_row", func(t *testing.T) {
+		h := accessReviewHandlerWithUser(t, stub, &repository.AuditorUser{
+			ID: "00000000-0000-4000-8000-0000000000a9", Username: "op", Role: "operator", Environments: []string{arEnv},
+		})
+		body := `{"decisions":[{"item_id":"` + arItemOrphan + `","decision":"approve"}]}`
+		req := httptest.NewRequest(http.MethodPost, decisionsURL, strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("other_auditor_forbidden", func(t *testing.T) {
+		before := len(stub.decisions)
+		h := accessReviewHandlerWithUser(t, stub, &repository.AuditorUser{
+			ID: arOtherID, Username: "other", Role: "auditor", Environments: []string{arEnv},
+		})
+		body := `{"decisions":[{"item_id":"` + arItemOwned + `","decision":"approve"}]}`
+		req := httptest.NewRequest(http.MethodPost, decisionsURL, strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if len(stub.decisions) != before {
+			t.Fatalf("decision must not be stored on 403")
+		}
+	})
+}
+
+func TestMyPendingOnlyOwnRows(t *testing.T) {
+	ownerA, ownerB := arOwnerID, arOtherID
+	stub := &accessReviewStub{
+		campaigns: []repository.AccessReviewCampaign{{ID: arCampaign, Status: "open"}},
+		items: []repository.AccessReviewItem{
+			{ID: arItemOwned, OwnerUserID: &ownerA, AccountName: "mine", Privilege: "SELECT", Pending: true},
+			{ID: arItemOrphan, OwnerUserID: &ownerB, AccountName: "theirs", Privilege: "UPDATE", Pending: true},
+		},
+	}
+	h := accessReviewHandlerWithUser(t, stub, &repository.AuditorUser{
+		ID: arOwnerID, Username: "owner", Role: "auditor", Environments: []string{arEnv},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/"+arEnv+"/access-reviews/"+arCampaign+"/matrix?mine=true&pending=true", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if stub.lastFilter.MineUser != arOwnerID {
+		t.Fatalf("MineUser=%q want %s", stub.lastFilter.MineUser, arOwnerID)
+	}
+	var page struct {
+		Items []repository.AccessReviewItem `json:"items"`
+		Page  struct {
+			Total int `json:"total"`
+		} `json:"page"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Page.Total != 1 || len(page.Items) != 1 || page.Items[0].AccountName != "mine" {
+		t.Fatalf("expected only owned rows, got %+v", page)
+	}
+}
+
+func TestAccessReviewDiffNewPrivilege(t *testing.T) {
+	stub := &accessReviewStub{
+		items: []repository.AccessReviewItem{{
+			AccountName: "app_etl", ObjectName: "vendas.pedido", Privilege: "UPDATE",
+			Highlights: []string{"new_since_previous"},
+		}},
+	}
+	h := accessReviewHandler(t, stub, "auditor")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/environments/"+arEnv+"/access-reviews/"+arCampaign+"/diff", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var diff repository.AccessReviewDiff
+	if err := json.NewDecoder(rec.Body).Decode(&diff); err != nil {
+		t.Fatal(err)
+	}
+	if len(diff.NewPrivileges) != 1 {
+		t.Fatalf("new_privileges=%d want 1", len(diff.NewPrivileges))
+	}
+	np := diff.NewPrivileges[0]
+	if np.AccountName != "app_etl" || np.Privilege != "UPDATE" {
+		t.Fatalf("new privilege: %+v", np)
+	}
+	found := false
+	for _, h := range np.Highlights {
+		if h == "new_since_previous" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("missing new_since_previous highlight: %+v", np.Highlights)
+	}
+}
+
+func TestClosedCampaignImmutable(t *testing.T) {
+	stub := &accessReviewStub{
+		campaigns: []repository.AccessReviewCampaign{{ID: arCampaign, Status: "closed"}},
+	}
+	h := accessReviewHandler(t, stub, "operator")
+	decisionsURL := "/api/v1/environments/" + arEnv + "/access-reviews/" + arCampaign + "/decisions"
+	body := `{"decisions":[{"item_id":"` + arItemOwned + `","decision":"approve"}]}`
+	req := httptest.NewRequest(http.MethodPost, decisionsURL, strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("decide on closed: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(stub.decisions) != 0 {
+		t.Fatalf("no decisions on closed campaign, got %d", len(stub.decisions))
+	}
+
+	closeURL := "/api/v1/environments/" + arEnv + "/access-reviews/" + arCampaign + "/close"
+	req = httptest.NewRequest(http.MethodPost, closeURL, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("close twice: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

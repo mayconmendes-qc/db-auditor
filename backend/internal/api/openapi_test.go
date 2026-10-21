@@ -90,6 +90,15 @@ func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
 			registered[base+"/{job}/retry post"] = true
 			registered[base+"/{job}/download get"] = true
 		}
+		if strings.Contains(text, "registerRestoreDrillRoutes") {
+			base := "/api/v1/environments/{id}"
+			registered[base+"/restore-drill-context get"] = true
+			registered[base+"/restore-drills post"] = true
+			registered[base+"/restore-drills get"] = true
+			registered[base+"/restore-drills/{drill} get"] = true
+			registered[base+"/restore-drill-policy get"] = true
+			registered[base+"/restore-drill-policy put"] = true
+		}
 	}
 	for key := range registered {
 		parts := strings.SplitN(key, " ", 2)

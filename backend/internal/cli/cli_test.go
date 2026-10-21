@@ -136,3 +136,20 @@ func TestAPIClientSubmitLastLoginBody(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestContractRunDisabled409AndCLIExit2(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.Contains(r.URL.Path, "/quality-contracts/") {
+			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":{"code":"conflict","message":"Diagnóstico de dados desativado."}}`))
+	}))
+	defer srv.Close()
+
+	client := NewAPIClient(srv.URL, "dba_tok", time.Second)
+	_, code := dqRunRemote(context.Background(), client, "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", nil, "high")
+	if code != ExitUsage {
+		t.Fatalf("CA-03: CLI exit=%d want ExitUsage(2)", code)
+	}
+}
