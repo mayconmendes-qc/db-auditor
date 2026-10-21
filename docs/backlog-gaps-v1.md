@@ -26,15 +26,15 @@ Um PR por item (ou G1+G2 juntos se o OpenAPI for pré-requisito trivial do happy
 **Problema.** Handlers em `backend/internal/api/restore_drills.go` existem; rotas **não** estão em `backend/api/openapi.json` (DoD do plano: rota documentada + `openapi_test.go` + `bun run gen:openapi`).
 
 **Fazer**
-- [ ] Documentar em `backend/api/openapi.json`:
+- [x] Documentar em `backend/api/openapi.json`:
   - `GET /api/v1/environments/{id}/restore-drill-context`
   - `POST /api/v1/environments/{id}/restore-drills`
   - `GET /api/v1/environments/{id}/restore-drills`
   - `GET /api/v1/environments/{id}/restore-drills/{drill}`
   - `GET /api/v1/environments/{id}/restore-drill-policy`
   - `PUT /api/v1/environments/{id}/restore-drill-policy`
-- [ ] Incluir os paths na lista exigida por `backend/internal/api/openapi_test.go` (se aplicável).
-- [ ] Regenerar `frontend/src/types/openapi.ts` (`bun run gen:openapi`) sem diff residual.
+- [x] Incluir os paths na lista exigida por `backend/internal/api/openapi_test.go` (se aplicável).
+- [x] Regenerar `frontend/src/types/openapi.ts` (`bun run gen:openapi`) sem diff residual.
 
 **Aceite.** `go test ./internal/api -run OpenAPI` e job Frontend OpenAPI sem diff. Nenhuma mudança de comportamento da API.
 
