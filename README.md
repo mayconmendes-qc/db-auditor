@@ -1,99 +1,139 @@
 # DB Auditor
 
-O DB Auditor olha para um banco de dados e conta, em linguagem clara, o que encontrou: o que existe, o que parece em risco e o que mudou desde a última vez.
+O DB Auditor é um aplicativo que **olha para o seu banco de dados sem alterar nada** e mostra, em português e com telas simples, o que existe, o que merece atenção e o que mudou desde a última visita.
 
-Ele foi feito para quem cuida de bancos PostgreSQL, TimescaleDB ou do catálogo do MongoDB e precisa de um panorama confiável — sem abrir dezenas de consultas à mão e sem medo de alterar alguma coisa por engano.
+Ele funciona com **PostgreSQL**, **TimescaleDB** e com o catálogo do **MongoDB** (coleções e índices; o auditor não lê o conteúdo dos documentos).
+
+> Em uma frase: o auditor só observa. Ele não apaga dados, não revoga acessos e não executa manutenção no banco analisado. Um aviso é um convite para a equipe investigar — nunca uma ordem automática.
+
+---
+
+## Comece em 5 minutos
+
+Se você só quer ver o sistema funcionando no seu computador, siga estes passos. Não é preciso saber programar.
+
+### O que você precisa ter instalado
+
+Só uma destas opções:
+
+| Opção | Como conferir se já está instalada |
+| --- | --- |
+| **Podman** + Compose | No terminal: `podman --version` e `podman compose version` |
+| **Docker** + Compose | No terminal: `docker --version` e `docker compose version` |
+
+Não é necessário instalar Go, Node, Bun nem PostgreSQL na máquina: o projeto sobe tudo dentro de containers.
+
+**Exemplos de instalação**
+
+- Fedora / RHEL: `sudo dnf install podman podman-compose`
+- macOS (Homebrew): `brew install podman` ou instale o [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Outros sistemas: use o instalador oficial do Podman ou do Docker
+
+Se for usar **Docker**, avise o projeto uma vez (ou grave no ambiente):
+
+```bash
+make up COMPOSE="docker compose"
+```
+
+### Passo a passo
+
+1. **Baixe o projeto** (se ainda não tiver a pasta no computador):
+
+   ```bash
+   git clone https://github.com/osmendes/db-auditor.git
+   cd db-auditor
+   ```
+
+2. **Crie o arquivo de configuração** a partir do modelo:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Abra o arquivo `.env`** em qualquer editor de texto e ajuste pelo menos estes valores:
+
+   | O que é | Variável | O que fazer |
+   | --- | --- | --- |
+   | Senha do banco interno do auditor | `POSTGRES_PASSWORD` | Troque `change-me-locally` por uma senha sua |
+   | Usuário do primeiro login | `AUDITOR_BOOTSTRAP_USER` | O exemplo é `admin` |
+   | Senha do primeiro login | `AUDITOR_BOOTSTRAP_PASSWORD` | Precisa ter **no mínimo 16 caracteres**. O exemplo local é `db-auditor-local-1` |
+   | Nome da empresa (aparece na tela) | `AUDITOR_COMPANY_NAME` | Ex.: `Minha Empresa` |
+
+   Para só experimentar, os valores de exemplo do `.env.example` já funcionam em máquina local. Troque as senhas antes de expor o serviço na internet.
+
+4. **Suba o sistema**:
+
+   ```bash
+   make up
+   ```
+
+   Na primeira vez pode demorar alguns minutos (baixa imagens e monta os containers). Quando terminar, o terminal mostra os endereços da API e das telas.
+
+5. **Abra no navegador**: [http://localhost:5173](http://localhost:5173)
+
+   Entre com o usuário e a senha do passo 3.
+
+6. **(Opcional)** Confira se a API está saudável:
+
+   ```bash
+   make smoke
+   ```
+
+   Se aparecer `smoke ok`, a parte de servidor respondeu bem.
+
+### Comandos úteis do dia a dia
+
+| Quero… | Comando |
+| --- | --- |
+| Parar tudo | `make down` |
+| Ver o que está acontecendo | `make logs` |
+| Ver se os containers estão no ar | `make ps` |
+| Recomeçar do zero em desenvolvimento | `make reset-volume` (apaga dados internos — **não use** onde já há coletas importantes) |
+
+---
+
+## Depois do login: o que fazer
+
+1. Escolha um **ambiente** no seletor (cada ambiente é um banco configurado).
+2. Em **Execuções**, inicie uma auditoria (se o seu papel permitir).
+3. Aguarde a coleta terminar e confira se a cobertura foi completa, parcial ou se falhou.
+4. Explore o **Dashboard**, o **Inventário** e os **Achados**.
+5. Quando quiser um resumo para compartilhar, use **Relatórios** (PDF).
+
+Guia completo das telas: [docs/guia-do-usuario.md](docs/guia-do-usuario.md).
+
+---
 
 ## Qual problema ele resolve
 
-Bancos crescem, ganham tabelas, índices, permissões e rotinas. Com o tempo fica difícil responder perguntas simples:
+Bancos crescem: tabelas, índices, permissões e rotinas se acumulam. Com o tempo fica difícil responder:
 
-- O que existe neste ambiente, e quanto espaço isso ocupa?
-- Há sinais de risco, como permissão ampla, índice sem uso ou rotina privilegiada?
-- Isso piorou ou melhorou em relação à coleta anterior?
+- O que existe neste ambiente e quanto espaço ocupa?
+- Há sinais de risco (permissão ampla, índice sem uso, rotina privilegiada)?
+- Isso piorou ou melhorou desde a última coleta?
 - Dá para mostrar um resumo para quem não lê SQL?
 
 O DB Auditor faz uma **coleta somente leitura**, guarda o retrato e mostra o resultado em telas: painel, inventário, achados, comparação entre execuções e relatório em PDF.
 
-Um achado é um **sinal para investigar**, não uma ordem para mudar o banco. A pessoa responsável confirma antes de agir. O auditor não apaga dados, não revoga acessos e não executa manutenção no banco analisado.
+---
 
 ## O que você consegue fazer
 
 - Entrar com uma conta e escolher o ambiente.
 - Rodar uma auditoria e ver se a coleta foi completa, parcial ou falhou.
 - Percorrer tabelas, índices, visões, funções e, no TimescaleDB, tabelas temporais e agregados.
-- No MongoDB, ver coleções e índices. O auditor não lê os documentos.
+- No MongoDB, ver coleções e índices (sem ler documentos).
 - Ler achados com o que foi observado, a evidência e um próximo passo sugerido.
 - Comparar duas execuções, acompanhar regressões e baixar um PDF.
-- Opcionalmente, pedir um código do aplicativo autenticador (TOTP) para contas de operador.
+- Opcionalmente, exigir código do autenticador (TOTP) para contas de operador.
 
-Os endereços e senhas dos bancos analisados ficam na configuração do servidor. Eles não são digitados na tela e não aparecem nos relatórios.
+Os endereços e senhas dos bancos analisados ficam na configuração do servidor. Eles **não** são digitados na tela e **não** aparecem nos relatórios.
 
-Quem vai usar o dia a dia pode seguir o [guia do usuário](docs/guia-do-usuario.md). Quem instala, faz backup ou coloca no ar segue o [guia de operação](docs/ops.md).
+---
 
-## O que precisa estar instalado
+## Ligar um banco para ser auditado
 
-No computador onde o sistema vai rodar, basta **Podman** ou **Docker**, com **Compose**. Não é preciso instalar Go, Node ou banco na máquina: o projeto sobe as peças dentro de containers.
-
-No Fedora ou RHEL, por exemplo:
-
-```bash
-sudo dnf install podman podman-compose
-```
-
-Se usar Docker, os mesmos comandos `make` funcionam. Antes, avise o projeto:
-
-```bash
-make up COMPOSE="docker compose"
-```
-
-Você pode gravar essa escolha no ambiente, para não repetir em todo comando.
-
-## Como colocar para funcionar
-
-1. Copie o modelo de configuração:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Abra o arquivo `.env` e troque pelo menos estes valores:
-
-   | O que é | Variável | O que fazer |
-   | --- | --- | --- |
-   | Senha do banco interno do auditor | `POSTGRES_PASSWORD` | Use uma senha sua. O exemplo `change-me-locally` não deve ir para um servidor exposto. |
-   | Usuário do primeiro acesso | `AUDITOR_BOOTSTRAP_USER` | O exemplo é `admin`. |
-   | Senha do primeiro acesso | `AUDITOR_BOOTSTRAP_PASSWORD` | Precisa ter **no mínimo 16 caracteres**. O exemplo local é `db-auditor-local-1`. Troque antes de expor o serviço. |
-   | Nome da empresa | `AUDITOR_COMPANY_NAME` | Aparece debaixo do título DB Auditor. O padrão é `db-auditor`. |
-
-3. Suba o sistema:
-
-   ```bash
-   make up
-   ```
-
-4. Abra no navegador: <http://localhost:5173>
-
-   Entre com o usuário e a senha do passo 2.
-
-5. Se quiser só conferir se a API respondeu:
-
-   ```bash
-   make smoke
-   ```
-
-Para parar: `make down`. Para ver o que está acontecendo: `make logs`.
-
-### Primeiro acesso, em poucas regras
-
-- A conta de operador só é criada se ainda não existir nenhuma conta.
-- Mudar o `.env` **depois** não troca uma senha que já foi gravada.
-- A sessão dura até 8 horas. Recarregar a página não pede login de novo enquanto ela valer.
-- Se todas as contas de operador se perderem, não apague os usuários. Siga o procedimento de recuperação no [guia de operação](docs/ops.md#recuperar-o-acesso-de-operador).
-
-### Ligar um banco para ser auditado
-
-No mesmo `.env`, dê nome aos ambientes que a tela vai mostrar. Isso vale na primeira criação do banco interno. Use um UUID em cada id. O exemplo já traz dois, para você trocar:
+Ainda no arquivo `.env`, preencha os ambientes que a tela vai mostrar. Use uma conta **somente leitura** no banco de destino.
 
 ```bash
 AUDITOR_COMPANY_NAME=Nome da empresa
@@ -110,43 +150,54 @@ AUDITOR_TARGET_1_PASSWORD=senha-desse-usuario
 AUDITOR_TARGET_1_SSLMODE=verify-full
 ```
 
-O segundo espaço segue o mesmo desenho (`AUDITOR_TARGET_2_...`), até o espaço 20. Se nenhum id for preenchido, uma instalação nova cria dois ambientes de demonstração.
+O segundo espaço segue o mesmo padrão (`AUDITOR_TARGET_2_...`), até o espaço 20. Se nenhum id for preenchido, uma instalação nova cria dois ambientes de demonstração.
 
-Um volume que já existe não apaga ambientes antigos. Se você mantiver o mesmo id e mudar só o nome, a API atualiza o nome na próxima subida. Um id novo cria outro ambiente. Para recomeçar do zero em desenvolvimento, `make reset-volume` apaga o banco interno — não use isso onde já há coletas.
+**Importante**
 
-Use uma conta **somente leitura**. O padrão de TLS é `verify-full` (confere o certificado). Informe o endereço em `AUDITOR_TARGET_ALLOWED_HOSTS`; sem isso, o auditor recusa a conexão. Conexão sem essa verificação só é aceita se o host estiver, de propósito, em `AUDITOR_TARGET_INSECURE_HOSTS`. Deixe essa lista vazia, a menos que a política da rede exija o contrário.
+- Informe o endereço em `AUDITOR_TARGET_ALLOWED_HOSTS`. Sem isso, o auditor recusa a conexão.
+- O padrão de TLS é `verify-full` (confere o certificado).
+- Depois de salvar o `.env`: `make down && make up`.
+- Um volume que já existe não apaga ambientes antigos. O mesmo id com nome novo só atualiza o nome; um id novo cria outro ambiente.
+- Não rode `make reset-volume` numa instalação que já tem coletas: isso apaga o banco interno (snapshots, achados e relatórios).
 
-Depois de salvar o `.env`:
+Para publicar em um servidor de verdade (domínio, HTTPS, backup), use o [guia de operação](docs/ops.md) e o exemplo em `deploy/env.prod.example`.
 
-```bash
-make down && make up
-```
+---
 
-Não rode `make reset-volume` numa instalação que já tem coletas. Esse comando apaga o banco interno: snapshots, achados e relatórios.
-
-Para um servidor de verdade (domínio, HTTPS, backup), use o [guia de operação](docs/ops.md) e o exemplo em `deploy/env.prod.example`.
-
-> **Atenção: porta 9090 (métricas).** A API expõe `GET /metrics` em `:9090` **sem autenticação**: os contadores revelam volume de execuções, erros e rotas. O Compose não publica essa porta no host, e o Caddy não encaminha `/metrics`. O scrape fica em `api:9090`, dentro da rede do Compose. Não acrescente `9090:9090` (nem `127.0.0.1:9090:9090` num host compartilhado) em `ports:` e não abra 9090 no firewall da VPS. Detalhes no [guia de operação](docs/ops.md).
-
-### Endereços neste computador
+## Endereços neste computador
 
 | O quê | Onde abrir |
 | --- | --- |
-| Telas | <http://localhost:5173> |
-| API | <http://localhost:8080> |
-| Saúde da API | <http://localhost:8080/api/v1/status> |
+| Telas (interface) | [http://localhost:5173](http://localhost:5173) |
+| API | [http://localhost:8080](http://localhost:8080) |
+| Saúde da API | [http://localhost:8080/api/v1/status](http://localhost:8080/api/v1/status) |
 
-A tela fala com a API pelo mesmo endereço do navegador. Isso é o que mantém o login no cookie. Não aponte o navegador direto para outra origem sem ajustar `AUDITOR_CORS_ORIGINS`.
+A tela fala com a API pelo mesmo endereço do navegador (isso mantém o login no cookie).
 
-As métricas internas não ficam publicadas na sua máquina. Elas só existem na rede dos containers.
+> **Atenção — porta 9090 (métricas):** a API expõe métricas em `:9090` **sem autenticação**. O Compose **não** publica essa porta no seu computador. Não acrescente `9090:9090` em `ports:` e não abra essa porta no firewall. Detalhes no [guia de operação](docs/ops.md).
+
+---
+
+## Se algo der errado
+
+| Sintoma | O que tentar |
+| --- | --- |
+| Porta já em uso (`address already in use`) | No `.env`, mude `FRONTEND_HTTP_PORT` (ex.: `5174`) ou `AUDITOR_HTTP_PORT` e rode `make up` de novo |
+| Página não abre | Confira `make ps` e `make logs`. Espere a primeira subida terminar |
+| Login não funciona | Confira `AUDITOR_BOOTSTRAP_USER` e `AUDITOR_BOOTSTRAP_PASSWORD` no `.env`. A senha precisa ter 16+ caracteres. Mudar o `.env` **depois** da primeira criação **não** troca a senha já gravada |
+| Ambiente não aparece | Peça ao operador para conferir o acesso da sua conta, ou confira se os `AUDITOR_TARGET_*` foram preenchidos antes da primeira subida |
+| Coleta falha | Verifique conectividade, usuário somente leitura, `AUDITOR_TARGET_ALLOWED_HOSTS` e TLS |
+| Perdeu todas as contas de operador | Não apague usuários. Siga a recuperação no [guia de operação](docs/ops.md#recuperar-o-acesso-de-operador) |
+
+---
 
 ## Pastas do projeto
 
 ```text
 .
-├── backend/       o programa que coleta, analisa e guarda os resultados
-├── frontend/      as telas do navegador
-├── deploy/        como publicar em um servidor, com proxy e scripts de backup
+├── backend/       programa que coleta, analisa e guarda os resultados
+├── frontend/      telas do navegador
+├── deploy/        publicação em servidor (proxy, HTTPS, backup)
 ├── docs/          guias para usar e operar
 ├── compose.yaml   sobe banco interno, API e telas juntos
 ├── Makefile       atalhos: subir, parar, testar
@@ -154,54 +205,52 @@ As métricas internas não ficam publicadas na sua máquina. Elas só existem na
 └── README.md      este texto
 ```
 
-Dentro de `backend/`, o que mais importa no dia a dia:
+Textos principais:
 
-- `cmd/` — ponto de entrada do programa
-- `migrations/` — evolução do banco interno, aplicada pela própria API
-- `sql/` — consultas versionadas
+- [Guia do usuário](docs/guia-do-usuario.md) — dia a dia nas telas
+- [Guia de operação](docs/ops.md) — instalar, backup, produção
 
-Dentro de `frontend/`, o código das telas fica em `src/`.
-
-`docs/guia-do-usuario.md` e `docs/ops.md` são os dois textos principais. Os outros arquivos em `docs/` são notas de apoio (por exemplo [log-anomaly.md](docs/log-anomaly.md) para a CLI de anomalias e o envio do agregado de último login).
+---
 
 ## Tecnologias
 
 | Peça | Para quê |
 | --- | --- |
 | Go | API e regras de análise |
-| PostgreSQL | banco interno, onde ficam contas, coletas e achados |
-| MongoDB (driver) | leitura do catálogo de coleções e índices, quando o ambiente é MongoDB |
+| PostgreSQL | banco interno (contas, coletas, achados) |
+| MongoDB (driver) | leitura do catálogo, quando o ambiente é MongoDB |
 | React, TypeScript e Vite | telas |
 | Tailwind CSS | visual das telas |
 | Bun | instalar e verificar o frontend |
 | Podman ou Docker Compose | subir tudo sem instalar as linguagens na máquina |
-| Caddy | entregar o site com HTTPS na instalação de produção |
+| Caddy | HTTPS na instalação de produção |
+
+---
 
 ## Como contribuir
 
 Toda ajuda é bem-vinda: texto mais claro, correção, teste ou função nova.
 
-1. Crie um ramo a partir de `main` com um nome curto, por exemplo `docs/ajuste-do-guia`.
-2. Faça a mudança pequena e fácil de revisar.
-3. **Nunca** envie o arquivo `.env`, senha, chave ou connection string. O modelo certo é o `.env.example`, com valores falsos.
-4. Se a mudança mexe em comportamento, rode as verificações:
+1. Crie um ramo a partir de `main` (ex.: `docs/ajuste-do-guia`).
+2. Faça uma mudança pequena e fácil de revisar.
+3. **Nunca** envie o arquivo `.env`, senha, chave ou connection string. Use só o `.env.example` com valores falsos.
+4. Se a mudança mexe em comportamento, rode:
 
    ```bash
    make backend-fmt backend-check backend-test
    make frontend-check frontend-typecheck frontend-test
    ```
 
-   A CI roda os testes de integração do backend em PostgreSQL 14, 15, 16, 17 e 18
-   (detalhes em [docs/ops.md](docs/ops.md#matriz-de-versões-do-postgresql-na-ci-134)).
+5. Abra um Pull Request e diga o que mudou e por quê.
 
-5. Abra um Pull Request neste repositório. No texto, diga o que mudou e por quê. Se existir uma issue, cite o número.
+Não é obrigatório conhecer toda a arquitetura para melhorar documentação ou um texto da tela. Em dúvida de produto, comece pelo [guia do usuário](docs/guia-do-usuario.md).
 
-Não é obrigatório saber toda a arquitetura para corrigir documentação ou um texto da tela. Se a dúvida for de produto, comece pelo [guia do usuário](docs/guia-do-usuario.md).
+---
 
 ## Cuidados que valem para todo mundo
 
 - O banco analisado é só de leitura. Recomendações não são executadas sozinhas.
 - Segredos ficam fora do Git.
 - Senhas e endereços de conexão não devem aparecer em logs.
-- Listas de bancos e schemas podem limitar o que entra na coleta. O que está na denylist nunca entra.
-- Um PDF pedido fica guardado por 30 dias. O registro de que ele foi pedido permanece.
+- Listas de bancos e schemas podem limitar o que entra na coleta.
+- Um PDF pedido fica guardado por 30 dias; o registro do pedido permanece.
